@@ -40,13 +40,25 @@
 `define NUM_FU_LOAD xx
 `define NUM_FU_STORE xx
 
+typedef logic [$clog2(`ROB_SZ)-1:0] ROB_IDX;
+typedef logic [$clog2(`ROB_SZ+1)-1:0] ROB_CNT;
+typedef logic [$clog2(`PHYS_REG_SZ_R10K)-1:0] PRF_IDX;
 // number of mult stages (2, 4) (you likely don't need 8)
 `define MULT_STAGES 4
 
 ///////////////////////////////
 // ---- Basic Constants ---- //
 ///////////////////////////////
-
+    typedef struct packed {
+        ADDR    pc;
+        logic   valid;
+        logic [`TAG_CNT-1:0] t;
+        logic [`TAG_CNT-1:0] told;
+        logic ready_retire;//how many inst can we retire per cycle?
+        ROB_IDX index;
+        logic [2:0] func_type;// TBD
+        REG_IDX  dest_reg_idx; 
+    } ROB_ENTRY;
 // NOTE: the global CLOCK_PERIOD is defined in the Makefile
 
 // useful boolean single-bit definitions
