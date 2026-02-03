@@ -21,15 +21,15 @@
 // this is *your* processor, you decide these values (try analyzing which is best!)
 
 // superscalar width
-`define N 1
+`define N 3
 `define CDB_SZ `N // This MUST match your superscalar width
 
 // sizes
-`define ROB_SZ xx
+`define ROB_SZ 32
 `define RS_SZ xx
 `define PHYS_REG_SZ_P6 32
 `define PHYS_REG_SZ_R10K (32 + `ROB_SZ)
-
+`define TAG_CNT $clog2(`PHYS_REG_SZ_R10K)
 // worry about these later
 `define BRANCH_PRED_SZ xx
 `define LSQ_SZ xx
@@ -117,6 +117,8 @@ typedef struct packed {
     logic [12-`ICACHE_LINE_BITS:0] tags;
     logic                          valid;
 } ICACHE_TAG;
+
+
 
 ///////////////////////////////
 // ---- Exception Codes ---- //
@@ -288,7 +290,7 @@ typedef enum logic [2:0] {
  */
 
 /**
- * IF_ID Packet:
+ * IF_ID Packet:ADDR
  * Data exchanged from the IF to the ID stage
  */
 typedef struct packed {
