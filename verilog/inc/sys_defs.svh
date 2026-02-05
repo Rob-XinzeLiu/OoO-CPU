@@ -21,7 +21,7 @@
 // this is *your* processor, you decide these values (try analyzing which is best!)
 
 // superscalar width
-`define N 3
+`define N 2
 `define CDB_SZ `N // This MUST match your superscalar width
 
 // sizes
