@@ -50,8 +50,6 @@ module testbnech;
         t_from_freelist[0] = 5;
         told_from_mt[0]    = 1;
         dest_reg_in[0]     = 5'd3;
-        @(negedge clock);
-        dispatched_inst_cnt = 0;
 
         @(negedge clock);
 
@@ -75,7 +73,15 @@ module testbnech;
         dest_reg_in[1]     = 5'd9;
 
         @(negedge clock)
+        mispredicted = 1;
+        dispatched_inst_cnt = 0;
+        mispredicted_tag = 7;
+
+
+        @(negedge clock)
         // Deassert everything
+        mispredicted = 0;
+        mispredicted_tag = 0;
         dispatched_inst_cnt = 0;
         cdb[0].valid = 0;
 
