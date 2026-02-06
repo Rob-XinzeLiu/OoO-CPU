@@ -8,20 +8,19 @@ module ROB(
     input PRF_IDX mispredicted_tag,
     input PRF_IDX t_from_freelist [`N-1:0],
     input PRF_IDX told_from_mt [`N-1:0],
-    input PRF_IDX ready_retire_tag [`N-1:0],
     input X_C_PACKET cdb [`N-1:0],// add a cdb packet
     //input ADDR pc,
     //input logic [2:0] fu_type,//we can seperate it into logic   is_store; is_load; is_wfi
-    input REG_IDX  dest_reg_idx [`N-1:0],
+    input REG_IDX  dest_reg_in [`N-1:0],
     //input rob complete index
     //input rob recover index(the tail/rob index when the mispredicted branch was dispatched into ROB)
     //there should be a dispatch to issue packet, and this will at least be the input of rob and rs 
     //there should be a retire packet, this will be the output of rob
     //we should output head and tail pointers for debug purpose, also for branch revovery
-    output logic ready_dispatch,//replace with space avail
-    output logic [`TAG_CNT-1:0] told_to_freelist,//retire
-    output logic [`TAG_CNT-1:0] t_to_amt,//retire
-    output REG_IDX  dest_reg_idx [`N-1:0],//to AMT
+    //output logic ready_dispatch,//replace with space avail
+    output PRF_IDX told_to_freelist [`N-1:0],//retire
+    output PRF_IDX t_to_amt [`N-1:0],//retire
+    output REG_IDX  dest_reg_out [`N-1:0],//to AMT
     output ROB_CNT space_avail//to dispatch
 );
 
@@ -41,7 +40,6 @@ module ROB(
     ROB_IDX head_ptr, next_head_ptr;
     ROB_IDX tail_ptr, next_tail_ptr;// let tail pointer point to next free slot
     ROB_CNT rob_count, next_rob_count;//how many entries used
-    ROB_CNT space_avail;
     //retire
     logic retire_1, retire_2;
     assign retire_1 = (rob_array[head_ptr].ready_retire && !rob_array[head_ptr + 1 ].ready_retire);
@@ -72,22 +70,28 @@ module ROB(
 //////////////////////                         ////////////////////////
 ///////////////////////////////////////////////////////////////////////
 
-    if(retire_2)begin
-        for(int i = 0; i < `N; ++i)begin
-            told_to_freelist[i] = rob_array[head_ptr+i].told;
-            t_to_amt[i] = rob_array[head_ptr+i].t;
-            next_rob_array[head_ptr+i].ready_retire = 1'b0; 
-        end
-        next_head_ptr = head_ptr + 2;
-        next_rob_count = rob_count - 2;
+        if(retire_2)begin
+            for(int i = 0; i < `N; ++i)begin
+                told_to_freelist[i] = rob_array[head_ptr+i].told;
+                t_to_amt[i] = rob_array[head_ptr+i].t;
+                next_rob_array[head_ptr+i].ready_retire = 1'b0; 
+                dest_reg_out[i] = rob_array[head_ptr+i].dest_reg_idx;
+            end
+            next_head_ptr = head_ptr + 2;
+            next_rob_count = rob_count - 2;
 
-    end else if(retire_1)begin
-        told_to_freelist[0] = rob_array[head_ptr].told;
-        t_to_amt[0] = rob_array[head_ptr].t;
-        next_head_ptr = head_ptr + 1;
-        next_rob_count = rob_count - 1;
-        next_rob_array[head_ptr].ready_retire = 1'b0;
-    end
+        end else if(retire_1)begin
+            told_to_freelist[0] = rob_array[head_ptr].told;
+            t_to_amt[0] = rob_array[head_ptr].t;
+            dest_reg_out[0] = rob_array[head_ptr].dest_reg_idx;
+            next_head_ptr = head_ptr + 1;
+            next_rob_count = rob_count - 1;
+            next_rob_array[head_ptr].ready_retire = 1'b0;
+        end else begin
+            told_to_freelist    = '{default: '0};
+            t_to_amt            = '{default: '0};
+            dest_reg_out        = '{default: '0};
+        end
        
 
 ///////////////////////////////////////////////////////////////////////
@@ -97,8 +101,8 @@ module ROB(
 ///////////////////////////////////////////////////////////////////////
 
         for(int i = 0; i < `ROB_SZ; i ++) begin
-            if(is_younger(i, head_ptr, tail_ptr)) begin
-                if(rob_array[i].t == cdb[0].ready_retire_tag || rob_array[i].t == cdb[1].ready_retire_tag) begin
+            if(is_younger(i, head_ptr, tail_ptr)) begin                                         // We can't check is_younger when the ROB is empty
+                if(rob_array[i].t == cdb[0].ready_retire_tag && cdb[0].valid || rob_array[i].t == cdb[1].ready_retire_tag && cdb[1].valid) begin    // cdb[0].ready_retire_tag can't be reset to 0
                     next_rob_array[i].ready_retire = 1'b1;
                 end
             end
@@ -139,7 +143,7 @@ module ROB(
 //////////////////////  Enqueue(Dispatch)      ////////////////////////
 //////////////////////                         ////////////////////////
 ///////////////////////////////////////////////////////////////////////
-        if(dispatched_inst_cnt > 0) begin
+        if(dispatched_inst_cnt > 0 && !mispredicted) begin              // Just in case that we dispatch when it's mispredicted
             for(int k = 0; k < dispatched_inst_cnt; k++) begin
                 // next_rob_array[tail_ptr + k].valid = 1'b1;
                 next_rob_array[tail_ptr + k].t = t_from_freelist[k];
@@ -147,9 +151,9 @@ module ROB(
                 next_rob_array[tail_ptr + k].ready_retire = 1'b0;
                 // next_rob_array[tail_ptr + k].is_load = (fu_type == 3'b001) ? 1'b1 : 1'b0;
                 // next_rob_array[tail_ptr + k].is_store = (fu_type == 3'b010) ? 1'b1 : 1'b0;
-                next_rob_array[tail_ptr + k].dest_reg_idx = dest_reg_idx[k];
+                next_rob_array[tail_ptr + k].dest_reg_idx = dest_reg_in[k];
             end
-            next_tail_ptr = tail_ptr + dispatched_inst_cnt;
+            next_tail_ptr = tail_ptr + dispatched_inst_cnt;             // We need a logic to stop enqueing (maybe in dispatcher)
             next_rob_count = next_rob_count + dispatched_inst_cnt;
         end
     end
@@ -163,14 +167,13 @@ module ROB(
         if (reset) begin
            head_ptr <= '0;
            tail_ptr <= '0;
-           rob_cnt <= '0;
-           space_avail <= '0;
-           rob_array <= '0;
+           rob_count <= '0;
+           rob_array <= '{default: '0};
         end
         else begin
            head_ptr <= next_head_ptr;
            tail_ptr <= next_tail_ptr;
-           rob_cnt <= next_rob_cnt;
+           rob_count <= next_rob_count;
            rob_array <= next_rob_array;
         end
     end

@@ -25,7 +25,7 @@
 `define CDB_SZ `N // This MUST match your superscalar width
 
 // sizes
-`define ROB_SZ 32
+`define ROB_SZ 8
 `define RS_SZ xx
 `define PHYS_REG_SZ_P6 32
 `define PHYS_REG_SZ_R10K (32 + `ROB_SZ)
@@ -49,16 +49,6 @@ typedef logic [$clog2(`PHYS_REG_SZ_R10K)-1:0] PRF_IDX;
 ///////////////////////////////
 // ---- Basic Constants ---- //
 ///////////////////////////////
-    typedef struct packed {
-        ADDR    pc;
-        logic   valid;
-        logic [`TAG_CNT-1:0] t;
-        logic [`TAG_CNT-1:0] told;
-        logic ready_retire;//how many inst can we retire per cycle?
-        ROB_IDX index;
-        logic [2:0] func_type;// TBD
-        REG_IDX  dest_reg_idx; 
-    } ROB_ENTRY;
 // NOTE: the global CLOCK_PERIOD is defined in the Makefile
 
 // useful boolean single-bit definitions
@@ -395,6 +385,11 @@ typedef struct packed {
     logic   illegal;
     logic   valid;
 } COMMIT_PACKET;
+
+typedef struct packed{
+    PRF_IDX ready_retire_tag;
+    logic   valid;
+} X_C_PACKET;
 
 
 `endif // __SYS_DEFS_SVH__
