@@ -61,7 +61,7 @@ module testbnech;
 
         // 2️⃣ Complete the OLDER instruction
         cdb[0].valid            = 1;
-        cdb[0].ready_retire_tag = 5;  // tag of first instruction
+        cdb[0].complete_index   = 0;
 
         @(negedge clock);
         dispatched_inst_cnt = 2;

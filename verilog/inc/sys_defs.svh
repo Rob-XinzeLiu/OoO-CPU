@@ -387,8 +387,8 @@ typedef struct packed {
 } COMMIT_PACKET;
 
 typedef struct packed{
-    PRF_IDX ready_retire_tag;
     logic   valid;
+    ROB_IDX complete_index;
 } X_C_PACKET;
 
 

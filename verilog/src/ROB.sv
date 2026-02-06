@@ -21,7 +21,8 @@ module ROB(
     output PRF_IDX told_to_freelist [`N-1:0],//retire
     output PRF_IDX t_to_amt [`N-1:0],//retire
     output REG_IDX  dest_reg_out [`N-1:0],//to AMT
-    output ROB_CNT space_avail//to dispatch
+    output ROB_CNT space_avail,//to dispatch
+    output ROB_IDX rob_index [`N-1:0]
 );
 
     typedef struct packed {
@@ -44,15 +45,17 @@ module ROB(
     logic retire_1, retire_2;
     assign retire_1 = (rob_array[head_ptr].ready_retire && !rob_array[head_ptr + 1 ].ready_retire);
     assign retire_2 = (rob_array[head_ptr].ready_retire && rob_array[head_ptr + 1 ].ready_retire );
+    assign rob_index[0] = tail_ptr;
+    assign rob_index[1] = tail_ptr + 1'b1;
 
     //function for branch recovery
-    function automatic logic is_younger(ROB_IDX current_idx, ROB_IDX head, ROB_IDX tail);
-        if(head < tail) begin
-            return current_idx < tail && current_idx >= head;
-        end else begin
-            return current_idx >= head || current_idx < tail;
-        end
-    endfunction
+    // function automatic logic is_younger(ROB_IDX current_idx, ROB_IDX head, ROB_IDX tail);
+    //     if(head < tail) begin
+    //         return current_idx < tail && current_idx >= head;
+    //     end else begin
+    //         return current_idx >= head || current_idx < tail;
+    //     end
+    // endfunction
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
 //////////////////////  Combinational Logic    ////////////////////////
@@ -100,11 +103,9 @@ module ROB(
 //////////////////////                          ///////////////////////
 ///////////////////////////////////////////////////////////////////////
 
-        for(int i = 0; i < `ROB_SZ; i ++) begin
-            if(is_younger(i, head_ptr, tail_ptr)) begin                                         // We can't check is_younger when the ROB is empty
-                if(rob_array[i].t == cdb[0].ready_retire_tag && cdb[0].valid || rob_array[i].t == cdb[1].ready_retire_tag && cdb[1].valid) begin    // cdb[0].ready_retire_tag can't be reset to 0
-                    next_rob_array[i].ready_retire = 1'b1;
-                end
+        for(int i = 0; i < `N; i++) begin
+            if(cdb[i].valid) begin
+                next_rob_array[cdb[i].complete_index].ready_retire = 1'b1;
             end
         end
 
