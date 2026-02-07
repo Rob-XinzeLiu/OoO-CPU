@@ -1,11 +1,10 @@
 `include "sys_defs.svh"
-`include "ROB.svh"
 module ROB(
     input logic clock,
     input logic reset,
     input logic [1:0] dispatched_inst_cnt,//from dispatch
     input logic  mispredicted,
-    input PRF_IDX mispredicted_tag,
+    input ROB_IDX mispredicted_index,
     input PRF_IDX t_from_freelist [`N-1:0],
     input PRF_IDX told_from_mt [`N-1:0],
     input X_C_PACKET cdb [`N-1:0],// add a cdb packet
@@ -116,13 +115,7 @@ module ROB(
 //////////////////////                         ////////////////////////
 ///////////////////////////////////////////////////////////////////////
         if(mispredicted) begin
-            ROB_IDX mispred_idx;
             // ROB_CNT flushed_count = 0;
-            for(int i = 0; i < `ROB_SZ; i++) begin
-                if(rob_array[i].t == mispredicted_tag) begin
-                    mispred_idx = i;
-                end
-            end  
             // for(int j =0; j < `ROB_SZ; j++) begin
             //     if(is_younger(j, mispred_idx, next_tail_ptr)) begin
             //         next_rob_array[j].valid = 1'b0;
@@ -130,8 +123,8 @@ module ROB(
             //         flushed_count = flushed_count + 1;
             //     end
             // end
-            next_tail_ptr = mispred_idx + 1;
-            next_rob_count = ROB_CNT'(ROB_IDX'(mispred_idx - head_ptr) + 1'b1) ;
+            next_tail_ptr = mispredicted_index + 1;
+            next_rob_count = ROB_CNT'(ROB_IDX'(mispredicted_index - head_ptr) + 1'b1) ;
         end
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
