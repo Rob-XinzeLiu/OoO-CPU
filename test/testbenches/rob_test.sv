@@ -16,7 +16,7 @@ module testbench;
     ROB_IDX     rob_index[`N-1:0];
 
 
-    ROB dut (
+    rob dut (
         .clock(clock), .reset(reset), .mispredicted(mispredicted),
         .dispatched_inst_cnt(dispatched_inst_cnt),
         .mispredicted_index(mispredicted_index),
