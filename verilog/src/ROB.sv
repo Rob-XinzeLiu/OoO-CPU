@@ -1,5 +1,5 @@
 `include "sys_defs.svh"
-module ROB(
+module rob(
     input logic clock,
     input logic reset,
     input logic [1:0] dispatched_inst_cnt,//from dispatch
