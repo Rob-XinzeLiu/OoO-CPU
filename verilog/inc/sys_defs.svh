@@ -387,6 +387,32 @@ typedef struct packed {
 } COMMIT_PACKET;
 
 typedef struct packed{
+    INST            inst;
+    logic           valid;
+    logic [6:0]     opcode;
+    PRF_IDX         T;
+    PRF_IDX         t1;
+    PRF_IDX         t2;
+    ADDR            PC;
+    ADDR            NPC;
+    ALU_OPA_SELECT  opa_select;
+    ALU_OPB_SELECT  opb_select;
+    logic           has_dest;
+    ALU_FUNC        alu_func;
+    logic           mult;
+    logic           rd_mem;
+    logic           wr_mem;
+    logic           cond_branch;
+    logic           uncond_branch;
+    logic           csr_op;
+    logic           halt;
+    logic           illegal;
+} D_S_PACKET;
+
+
+
+
+typedef struct packed{
     logic   valid;
     ROB_IDX complete_index;
 } X_C_PACKET;
