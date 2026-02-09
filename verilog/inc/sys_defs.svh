@@ -407,6 +407,7 @@ typedef struct packed{
     logic           csr_op;
     logic           halt;
     logic           illegal;
+    // TODO: Add B-mask reg
 } D_S_PACKET;
 
 
@@ -415,6 +416,7 @@ typedef struct packed{
 typedef struct packed{
     logic   valid;
     ROB_IDX complete_index;
+    PRF_IDX complete_tag;
 } X_C_PACKET;
 
 

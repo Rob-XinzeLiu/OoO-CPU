@@ -19,9 +19,10 @@ module rob(
     //output logic ready_dispatch,//replace with space avail
     output PRF_IDX told_to_freelist [`N-1:0],//retire
     output PRF_IDX t_to_amt [`N-1:0],//retire
-    output REG_IDX  dest_reg_out [`N-1:0],//to AMT
+    // output REG_IDX  dest_reg_out [`N-1:0],//to AMT
     output ROB_CNT space_avail,//to dispatch
     output ROB_IDX rob_index [`N-1:0]
+    // TODO: Add checkpoint_id for the branch stack
 );
 
     typedef struct packed {
@@ -77,7 +78,7 @@ module rob(
                 told_to_freelist[i] = rob_array[head_ptr+i].told;
                 t_to_amt[i] = rob_array[head_ptr+i].t;
                 next_rob_array[head_ptr+i].ready_retire = 1'b0; 
-                dest_reg_out[i] = rob_array[head_ptr+i].dest_reg_idx;
+                //  dest_reg_out[i] = rob_array[head_ptr+i].dest_reg_idx;
             end
             next_head_ptr = head_ptr + 2;
             next_rob_count = rob_count - 2;
@@ -85,14 +86,14 @@ module rob(
         end else if(retire_1)begin
             told_to_freelist[0] = rob_array[head_ptr].told;
             t_to_amt[0] = rob_array[head_ptr].t;
-            dest_reg_out[0] = rob_array[head_ptr].dest_reg_idx;
+            //  dest_reg_out[0] = rob_array[head_ptr].dest_reg_idx;
             next_head_ptr = head_ptr + 1;
             next_rob_count = rob_count - 1;
             next_rob_array[head_ptr].ready_retire = 1'b0;
         end else begin
             told_to_freelist    = '{default: '0};
             t_to_amt            = '{default: '0};
-            dest_reg_out        = '{default: '0};
+            //  dest_reg_out        = '{default: '0};
         end
        
 
