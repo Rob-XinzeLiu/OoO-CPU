@@ -9,13 +9,12 @@ module testbench;
     REG_IDX     dest_reg_in[`N-1:0];
     X_C_PACKET  cdb[`N-1:0];
 
+    // DUT Outputs
     PRF_IDX     told_to_freelist[`N-1:0];
-    PRF_IDX     t_to_amt[`N-1:0];
-    REG_IDX     dest_reg_out[`N-1:0];
     ROB_CNT     space_avail;
     ROB_IDX     rob_index[`N-1:0];
 
-
+    // Instantiate the rob
     rob dut (
         .clock(clock), .reset(reset), .mispredicted(mispredicted),
         .dispatched_inst_cnt(dispatched_inst_cnt),
@@ -25,16 +24,10 @@ module testbench;
         .cdb(cdb),
         .dest_reg_in(dest_reg_in),
         .told_to_freelist(told_to_freelist),
-        .t_to_amt(t_to_amt),
-        .dest_reg_out(dest_reg_out),
         .space_avail(space_avail),
         .rob_index(rob_index)
     );
 
-
-    always #(`CLOCK_PERIOD/2.0) clock = ~clock;
-
-    // Reset task
     task reset_dut();
         clock = 0; reset = 1;
         mispredicted = 0; dispatched_inst_cnt = 0;
@@ -46,63 +39,21 @@ module testbench;
         $display(">>> System Reset Done.");
     endtask
 
-    // Dipatch 2 instrucitons
-    task dispatch_2way(
-        input  PRF_IDX t0, input PRF_IDX to0, input REG_IDX d0,
-        input  PRF_IDX t1, input PRF_IDX to1, input REG_IDX d1,
-        output ROB_IDX idx0, output ROB_IDX idx1
-    );
-        dispatched_inst_cnt = 2;
-        t_from_freelist[0] = t0; told_from_mt[0] = to0; dest_reg_in[0] = d0;
-        t_from_freelist[1] = t1; told_from_mt[1] = to1; dest_reg_in[1] = d1;
-        
-        #1; 
-        idx0 = rob_index[0];
-        idx1 = rob_index[1];
-        
-        @(negedge clock);
-        dispatched_inst_cnt = 0;
-    endtask
+    always #(`CLOCK_PERIOD/2.0) clock = ~clock;
 
+    bit test_failed = 0; 
 
-    ROB_IDX inst_idx[8]; // Track index
-    bit testing = 0;
+    always @(posedge clock) begin
+        if (!reset) begin
+            if (rob_index[0] !== dut.tail_ptr || rob_index[1] != dut.tail_ptr + 1'b1) begin
+                $error("Bug: rob_index is incorrect!");
+                test_failed = 1;
+            end 
+        end
+    end
 
-    initial begin
+    initial begin 
         reset_dut();
-
-        $display("\nCase 1: Dispatch 2 and Retire");
-        dispatch_2way(10, 5, 1, 11, 6, 2, inst_idx[0], inst_idx[1]);
-        
-        // CDB broadcasts 2 complete instructions
-        cdb[0].valid = 1; cdb[0].complete_index = inst_idx[0];
-        cdb[1].valid = 1; cdb[1].complete_index = inst_idx[1];
-        @(negedge clock);
-        cdb[0].valid = 0; cdb[1].valid = 0;
-
-        assert(told_to_freelist[0] == 5 && told_to_freelist[1] == 6) else begin
-            $error("Bug: Sent a wrong tag to the freelist");
-            testing = 1;
-        end
-
-        assert(t_to_amt[0] == 10 && t_to_amt[1] == 11) else begin
-            $error("Bug: Sent a wrong tag to amt");
-            testing = 1;
-        end
-        assert(dest_reg_out[0] == 1 && dest_reg_out[1] == 2) else begin
-            $error("Bug: Sent a wrong tag as a dest_reg");
-            testing = 1;
-        end
-        $display("\n told_to_freelist[0] = %0d, told_to_freelist[1] = %0d, t_to_amt[0] = %0d, t_to_amt[1] = %0d", told_to_freelist[0], told_to_freelist[1], t_to_amt[0], t_to_amt[1]);
-
-        // Check retirement
-        repeat(2) @(negedge clock);
-
-        assert(dut.head_ptr == 2) else begin
-            $error("Bug: Retire-2 failed using complete_index!");
-            testing = 1;
-        end
-
         $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
                      $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
             for(int i = 0; i < `ROB_SZ; i++) begin
@@ -110,56 +61,81 @@ module testbench;
                     i, dut.rob_array[i].t, dut.rob_array[i].told, 
                     dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
             end
-        
-        @(negedge clock);
-        reset_dut();
 
-        $display("\nCase 2: Misprediction Recovery via Index");
-        dispatch_2way(20, 15, 3, 21, 16, 4, inst_idx[2], inst_idx[3]);
+        // --- Case 1: Standard 2-way Dispatch & Retire ---
+        $display("\nCase 1: Dispatch 2 and Retire (Check Data Integrity)");
+        dispatched_inst_cnt = 2;
+        t_from_freelist[0] = 10; told_from_mt[0] = 5; dest_reg_in[0] = 1;
+        t_from_freelist[1] = 11; told_from_mt[1] = 6; dest_reg_in[1] = 2;
+        @(negedge clock);
+        dispatched_inst_cnt = 0; 
+
+        cdb[0].valid = 1; cdb[0].complete_index = 0; 
+        cdb[1].valid = 1; cdb[1].complete_index = 1;
+        @(negedge clock);
         
-        // Assume inst_idx[2] is a mispredict instruction
+        assert(told_to_freelist[0] == 5 && told_to_freelist[1] == 6) else begin
+            $error("Case 1 Fail: Retirement Told tags mismatch! Got %0d, %0d", told_to_freelist[0], told_to_freelist[1]);
+            test_failed = 1; 
+        end
+
+        cdb[0].valid = 0; cdb[1].valid = 0;
+        repeat(2) @(negedge clock); 
+        assert(dut.head_ptr == 2) else begin 
+            $error("Case 1 Fail: Head pointer did not advance to 2!"); 
+            test_failed = 1; 
+        end
+
+
+        // --- Case 2: Misprediction Recovery via Index ---
+        $display("\nCase 2: Branch Misprediction (Flush youngest instructions)");
+    
+        dispatched_inst_cnt = 2;
+        t_from_freelist[0] = 20; told_from_mt[0] = 15;
+        t_from_freelist[1] = 21; told_from_mt[1] = 16;
+        @(negedge clock);
+        dispatched_inst_cnt = 0;
+
         mispredicted = 1;
-        mispredicted_index = inst_idx[2]; 
+        mispredicted_index = 2; 
         @(negedge clock);
         mispredicted = 0;
 
-    
-        assert(dut.tail_ptr == (inst_idx[2] + 1'b1)) else begin
-            $error("Bug: Mispredict Tail recovery failed!");                                  // Check new tail position
-            testing = 1;
+
+        // ASSERTION: Tail should be at mispredicted_index + 1
+        assert(dut.tail_ptr == 3) else begin 
+            $error("Case 2 Fail: Tail recovery incorrect! Got %0d, expected 3", dut.tail_ptr); 
+            test_failed = 1; 
+        end
+        // Since Head=2 and Tail=3, rob_count must be 1 (only the branch remains)
+        assert(dut.rob_count == 1) else begin 
+            $error("Case 2 Fail: rob_count mismatch after recovery!"); 
+            test_failed = 1; 
         end
 
-        assert(dut.rob_count == (ROB_CNT'(inst_idx[2] - dut.head_ptr) + 1'b1)) else begin
-            $error("Bug: rob_count incorrect after recovery!");     // Check new rob_count
-            testing = 1;
-        end
 
-        $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
-                     $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
-            for(int i = 0; i < `ROB_SZ; i++) begin
-                $display("ROB[%0d]: T=%0d | Told=%0d | Dest=%0d | Ready=%b",
-                    i, dut.rob_array[i].t, dut.rob_array[i].told, 
-                    dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
-            end
-        @(negedge clock);
+        // --- Case 3: In-Order Retirement Check ---
+        $display("\nCase 3: Out-of-Order Completion (Younger ready, Older not)");
         reset_dut();
 
-        $display("\nCase 3: The younger instruction is complete, we check that it won't if the older one hasn't retired");
-        dispatch_2way(10, 5, 1, 11, 6, 2, inst_idx[0], inst_idx[1]);
-        
-        // CDB broadcasts 1 complete instructions
-        cdb[1].valid = 1; cdb[1].complete_index = inst_idx[1];
+        dispatched_inst_cnt = 2;
+        t_from_freelist[0] = 30; told_from_mt[0] = 20;
+        t_from_freelist[1] = 31; told_from_mt[1] = 21;
         @(negedge clock);
-        cdb[0].valid = 0; cdb[1].valid = 0;
+        dispatched_inst_cnt = 0;
 
-        // Check retirement
+
+        // CDB completes index 1 (younger)
+        cdb[0].valid = 1; cdb[0].complete_index = 1; 
+        @(negedge clock);
+        cdb[1].valid = 0;
+        
         repeat(2) @(negedge clock);
-        assert(dut.head_ptr == 0 && dut.tail_ptr == 2) else begin
-            $error("Bug: Retire the younger instruciton!");
-            testing = 1;
+        // ASSERTION: Head must NOT move if the oldest instruction isn't ready
+        assert(dut.head_ptr == 0 && dut.tail_ptr == 2 && dut.rob_array[0].ready_retire == 0) else begin 
+            $error("Case 3 Fail: Head cannot move if the older instruction hasn't retired"); 
+            test_failed = 1; 
         end
-
-
         $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
                      $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
             for(int i = 0; i < `ROB_SZ; i++) begin
@@ -168,39 +144,60 @@ module testbench;
                     dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
             end
 
-        @(negedge clock);
+        // --- Case 4: Full ROB & Wrap-around Check ---
+        $display("\nCase 4: Fill ROB to test pointer wrap-around");
+        reset_dut();
+        
+        // Loop to fill the buffer (Assuming ROB_SZ is 32)
+        for(int i = 0; i < `ROB_SZ; i += 2) begin
+            dispatched_inst_cnt = 2;
+            t_from_freelist[0] = i; t_from_freelist[1] = i+1;
+            @(negedge clock);
+        end
+        dispatched_inst_cnt = 0;
+
+        // ASSERTION: Tail must wrap back to 0 if ROB is full
+        assert(dut.tail_ptr == 0) else begin 
+            $error("Case 4 Fail: Tail pointer wrap-around failed!"); 
+            test_failed = 1; 
+        end
+        assert(space_avail == 0) else begin 
+            $error("Case 4 Fail: space_avail should be 0!"); 
+            test_failed = 1; 
+        end
+
+        // --- Case 5: Standard 1-way Dispatch & Retire ---
         reset_dut();
 
-        $display("\nCase 4: Check the head_ptr, tail_ptr and space_avail calculations");
-        for(int i = 0; i < `ROB_SZ; i += 2) begin
-            dispatch_2way(10+i, 5+i, 1+i, 11+i, 6+i, 2+i, inst_idx[i], inst_idx[i+1]);
-        end
-
-        assert(dut.tail_ptr == 0) else begin
-            $error("Bug: tail_ptr on a wrong entry");
-            testing = 1;
-        end
-
-        assert(dut.rob_count == `ROB_SZ) else begin
-            $error("Bug: wrong space_avail");
-            testing = 1;
-        end
-
-
-        $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
-                     $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
-            for(int i = 0; i < `ROB_SZ; i++) begin
-                $display("ROB[%0d]: T=%0d | Told=%0d | Dest=%0d | Ready=%b",
-                    i, dut.rob_array[i].t, dut.rob_array[i].told, 
-                    dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
-            end
-
-        cdb[0].valid = 1; cdb[0].complete_index = inst_idx[0];
-        cdb[1].valid = 1; cdb[1].complete_index = inst_idx[1];
+        $display("\nCase 5: Dispatch 1 and Retire (Check Data Integrity)");
+        dispatched_inst_cnt = 1;
+        t_from_freelist[0] = 10; told_from_mt[0] = 5; dest_reg_in[0] = 1;
         @(negedge clock);
-        dispatch_2way(3, 2, 9, 2, 1, 10, inst_idx[0], inst_idx[1]);
-        
+        dispatched_inst_cnt = 0;
 
+
+        cdb[0].valid = 1; cdb[0].complete_index = 0; 
+        $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
+                     $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
+            for(int i = 0; i < `ROB_SZ; i++) begin
+                $display("ROB[%0d]: T=%0d | Told=%0d | Dest=%0d | Ready=%b",
+                    i, dut.rob_array[i].t, dut.rob_array[i].told, 
+                    dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
+            end
+        @(negedge clock);
+
+        
+        assert(told_to_freelist[0] == 5) else begin
+            $error("Case 5 Fail: Retirement Told tags mismatch! Got %0d", told_to_freelist[0]);
+            test_failed = 1; 
+        end
+
+        cdb[0].valid = 0; cdb[1].valid = 0;
+        repeat(2) @(negedge clock); 
+        assert(dut.head_ptr == 1) else begin 
+            $error("Case 5 Fail: Head pointer did not advance to 1!"); 
+            test_failed = 1; 
+        end
 
         $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
                      $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
@@ -209,31 +206,49 @@ module testbench;
                     i, dut.rob_array[i].t, dut.rob_array[i].told, 
                     dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
             end
-        
-        assert(dut.tail_ptr == 2) else begin
-            $error("Bug: tail_ptr on a wrong entry");
-            testing = 1;
+
+        // --- Case 6: Clear ready_retire in rob when we dispatch new instructions ---
+        reset_dut();
+
+        $display("\nCase 6: Clear ready_retire in rob when we retire instructions");
+        dispatched_inst_cnt = 1;
+        t_from_freelist[0] = 10; told_from_mt[0] = 5; dest_reg_in[0] = 1;
+        @(negedge clock);
+        dispatched_inst_cnt = 0;
+
+
+        cdb[0].valid = 1; cdb[0].complete_index = 0; 
+        @(negedge clock);
+
+        cdb[0].valid = 0; cdb[1].valid = 0;
+        repeat(2) @(negedge clock); 
+
+        $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
+                     $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
+            for(int i = 0; i < `ROB_SZ; i++) begin
+                $display("ROB[%0d]: T=%0d | Told=%0d | Dest=%0d | Ready=%b",
+                    i, dut.rob_array[i].t, dut.rob_array[i].told, 
+                    dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
+            end
+
+
+        assert(dut.rob_array[0].ready_retire == 1'b0) else begin
+            $error("Case 6 Fail: Didn't clear the ready_retire bit");
+            test_failed = 1; 
         end
 
-        assert(dut.head_ptr == 2) else begin
-            $error("Bug: head_ptr on a wrong entry");
-            testing = 1;
-        end
 
+        // --- Final Result ---
         #500;
-        $display("\n###############################");
-        if(testing == 0) begin
-            $display("##   ALL TESTS PASSED (STYLE OK) ##");
+        $display("\n############################################");
+        if(test_failed == 0) begin
+            $display("##   ALL TESTS PASSED! ##");
         end else begin
-            $display("##   Wrong!!! ##");
+            $display("##   VERIFICATION FAILED! BUGS DETECTED   ##");
         end
-        $display("###############################");
+        $display("############################################");
         $finish;
     end
 
+
 endmodule
-
-
-
-
-

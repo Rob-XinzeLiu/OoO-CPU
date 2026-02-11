@@ -1,0 +1,7 @@
+Modules to graded:
+1. rob.sv (working module)
+2. rs.sv
+3. freelist.sv 
+4. maptable.sv
+
+To run the testbnech, simply type make rob.out in the terminal.

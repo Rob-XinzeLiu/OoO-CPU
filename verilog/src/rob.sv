@@ -18,7 +18,6 @@ module rob(
     //we should output head and tail pointers for debug purpose, also for branch revovery
     //output logic ready_dispatch,//replace with space avail
     output PRF_IDX told_to_freelist [`N-1:0],//retire
-    output PRF_IDX t_to_amt [`N-1:0],//retire
     // output REG_IDX  dest_reg_out [`N-1:0],//to AMT
     output ROB_CNT space_avail,//to dispatch
     output ROB_IDX rob_index [`N-1:0]
@@ -44,7 +43,7 @@ module rob(
     //retire
     logic retire_1, retire_2;
     assign retire_1 = (rob_array[head_ptr].ready_retire && !rob_array[head_ptr + 1 ].ready_retire);
-    assign retire_2 = (rob_array[head_ptr].ready_retire && rob_array[head_ptr + 1 ].ready_retire );
+    assign retire_2 = (rob_array[head_ptr].ready_retire && rob_array[head_ptr + 1 ].ready_retire);
     assign rob_index[0] = tail_ptr;
     assign rob_index[1] = tail_ptr + 1'b1;
 
@@ -76,7 +75,6 @@ module rob(
         if(retire_2)begin
             for(int i = 0; i < `N; ++i)begin
                 told_to_freelist[i] = rob_array[head_ptr+i].told;
-                t_to_amt[i] = rob_array[head_ptr+i].t;
                 next_rob_array[head_ptr+i].ready_retire = 1'b0; 
                 //  dest_reg_out[i] = rob_array[head_ptr+i].dest_reg_idx;
             end
@@ -85,14 +83,12 @@ module rob(
 
         end else if(retire_1)begin
             told_to_freelist[0] = rob_array[head_ptr].told;
-            t_to_amt[0] = rob_array[head_ptr].t;
             //  dest_reg_out[0] = rob_array[head_ptr].dest_reg_idx;
             next_head_ptr = head_ptr + 1;
             next_rob_count = rob_count - 1;
             next_rob_array[head_ptr].ready_retire = 1'b0;
         end else begin
             told_to_freelist    = '{default: '0};
-            t_to_amt            = '{default: '0};
             //  dest_reg_out        = '{default: '0};
         end
        
