@@ -10,7 +10,7 @@ module rob(
     input X_C_PACKET cdb [`N-1:0],// add a cdb packet
     //input ADDR pc,
     //input logic [2:0] fu_type,//we can seperate it into logic   is_store; is_load; is_wfi
-    input REG_IDX  dest_reg_in [`N-1:0],
+    input REG_IDX  rd [`N-1:0],
     //input rob complete index
     //input rob recover index(the tail/rob index when the mispredicted branch was dispatched into ROB)
     //there should be a dispatch to issue packet, and this will at least be the input of rob and rs 
@@ -24,16 +24,6 @@ module rob(
     // TODO: Add checkpoint_id for the branch stack
 );
 
-    typedef struct packed {
-        ADDR    pc;
-        PRF_IDX t;
-        PRF_IDX told;
-        logic ready_retire;//how many inst can we retire per cycle?
-        ROB_IDX index;
-        logic is_load;
-        logic is_store;
-        REG_IDX  dest_reg_idx; 
-    } ROB_ENTRY;
 
     ROB_ENTRY rob_array [`ROB_SZ-1:0];
     ROB_ENTRY next_rob_array [`ROB_SZ-1:0];
@@ -142,7 +132,7 @@ module rob(
                 next_rob_array[tail_ptr + k].ready_retire = 1'b0;
                 // next_rob_array[tail_ptr + k].is_load = (fu_type == 3'b001) ? 1'b1 : 1'b0;
                 // next_rob_array[tail_ptr + k].is_store = (fu_type == 3'b010) ? 1'b1 : 1'b0;
-                next_rob_array[tail_ptr + k].dest_reg_idx = dest_reg_in[k];
+                next_rob_array[tail_ptr + k].dest_reg_idx = rd[k];
             end
             next_tail_ptr = tail_ptr + dispatched_inst_cnt;             // We need a logic to stop enqueing (maybe in dispatcher)
             next_rob_count = next_rob_count + dispatched_inst_cnt;

@@ -27,9 +27,11 @@
 // sizes
 `define ROB_SZ 8
 `define RS_SZ xx
+`define ARCH_REG_SZ 32
 `define PHYS_REG_SZ_P6 32
 `define PHYS_REG_SZ_R10K (32 + `ROB_SZ)
 `define TAG_CNT $clog2(`PHYS_REG_SZ_R10K)
+`define MT_SIZE       (`ARCH_REG_SZ*($clog2(`PHYS_REG_SZ_R10K)+1))
 // worry about these later
 `define BRANCH_PRED_SZ xx
 `define LSQ_SZ xx
@@ -280,6 +282,29 @@ typedef enum logic [2:0] {
     M_MULHU
 } MULT_FUNC;
 
+
+////////////////////////////////
+// ---- Entry def. ----       //
+////////////////////////////////
+
+typedef struct packed {
+        ADDR    pc;
+        PRF_IDX t;
+        PRF_IDX told;
+        logic ready_retire;//how many inst can we retire per cycle?
+        ROB_IDX index;
+        logic is_load;
+        logic is_store;
+        REG_IDX  dest_reg_idx; 
+} ROB_ENTRY;
+
+typedef struct packed {
+    logic [$clog2(`PHYS_REG_SZ_R10K)-1:0]   p_tag; 
+    logic                                   ready;
+} MT_ENTRY;
+
+
+
 ////////////////////////////////
 // ---- Datapath Packets ---- //
 ////////////////////////////////
@@ -409,7 +434,6 @@ typedef struct packed{
     logic           illegal;
     // TODO: Add B-mask reg
 } D_S_PACKET;
-
 
 
 
