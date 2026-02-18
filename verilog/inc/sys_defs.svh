@@ -26,12 +26,14 @@
 
 // sizes
 `define ROB_SZ 8
-`define RS_SZ xx
+`define FLIST_SIZE `ROB_SZ
+`define RS_SZ 8
 `define ARCH_REG_SZ 32
 `define PHYS_REG_SZ_P6 32
 `define PHYS_REG_SZ_R10K (32 + `ROB_SZ)
 `define TAG_CNT $clog2(`PHYS_REG_SZ_R10K)
 `define MT_SIZE       (`ARCH_REG_SZ*($clog2(`PHYS_REG_SZ_R10K)+1))
+`define BRANCH_STACK_DEPTH (2*`N)
 // worry about these later
 `define BRANCH_PRED_SZ xx
 `define LSQ_SZ xx
@@ -61,6 +63,7 @@ typedef logic [$clog2(`PHYS_REG_SZ_R10K)-1:0] PRF_IDX;
 typedef logic [31:0] ADDR;
 typedef logic [31:0] DATA;
 typedef logic [4:0] REG_IDX;
+typedef logic [2*`N-1:0] B_MASK;
 
 // the zero register
 // In RISC-V, any read of this register returns zero and any writes are thrown away
@@ -86,6 +89,7 @@ typedef logic [4:0] REG_IDX;
 // 0 is a sentinel value and is not a valid tag
 `define NUM_MEM_TAGS 15
 typedef logic [3:0] MEM_TAG;
+
 
 // icache definitions
 `define ICACHE_LINES 32
@@ -418,6 +422,8 @@ typedef struct packed{
     PRF_IDX         T;
     PRF_IDX         t1;
     PRF_IDX         t2;
+    logic           t1_ready;
+    logic           t2_ready;
     ADDR            PC;
     ADDR            NPC;
     ALU_OPA_SELECT  opa_select;
@@ -432,15 +438,18 @@ typedef struct packed{
     logic           csr_op;
     logic           halt;
     logic           illegal;
-    // TODO: Add B-mask reg
+    B_MASK          bmask_index;
+    ROB_IDX         rob_index;
 } D_S_PACKET;
 
 
 
 typedef struct packed{
-    logic   valid;
-    ROB_IDX complete_index;
-    PRF_IDX complete_tag;
+    logic           valid;
+    ROB_IDX         complete_index;//rob
+    PRF_IDX         complete_tag;
+    logic           mispredicted;
+    B_MASK          bmask_index;
 } X_C_PACKET;
 
 
