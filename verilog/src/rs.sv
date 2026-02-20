@@ -103,6 +103,7 @@ module rs(
         next_rs_entry = rs_entry;
         next_empty_entry_mask = empty_entry_mask;
         ready_entry_mask = '0;
+        issue_pack = '{default:'0};
 
         //update ready bits based on cdb
         if(cdb[0].valid) begin

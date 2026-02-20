@@ -1,4 +1,0 @@
-test/testbenches/rs_test.sv
-verilog/inc/sys_defs.svh
-verilog/src/combinational/psel_gen.sv
-verilog/src/rs.sv
