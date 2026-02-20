@@ -15,14 +15,14 @@ module rs(
     input logic                         alu1_ready                          ,
   
     output D_S_PACKET                   issue_pack                  [`N-1:0],//to issue stage
-    output logic [$clog2(`RS_SZ)-1:0]   empty_entries_num
+    output logic [$clog2(`RS_SZ + 1)-1:0]   empty_entries_num
 );
 
     typedef struct packed{
         logic               busy;             
         INST                inst;
-        ADDR                pc;
-        ADDR                npc;
+        ADDR                PC;
+        ADDR                NPC;
         ALU_OPA_SELECT      opa_select;
         ALU_OPB_SELECT      opb_select;
         logic               has_dest;
@@ -38,7 +38,7 @@ module rs(
         B_MASK              bmask;          
         B_MASK              bmask_index;    //which bit of bmask is for this branch
         logic [6:0]         opcode;
-        PRF_IDX             t;
+        PRF_IDX             T;
         PRF_IDX             t1;
         PRF_IDX             t2;
         logic               t1_ready;
@@ -58,11 +58,11 @@ module rs(
 
     logic [`RS_SZ-1:0]      mult_mask;//, next_mult_mask;
 
-    logic [`RS_SZ-1:0]      dispatch_bus [`N-1:0];
-    logic [`RS_SZ-1:0]      issue_bus [`N-1:0];
+    logic [`RS_SZ-1:0] [`N-1:0]     dispatch_bus;
+    logic [`RS_SZ-1:0] [`N-1:0]     issue_bus;
     logic                   empty_dispatch, empty_issue, empty_mult_issue;
 
-    psel_gen #(.WIDTH(`RS_SZ), .REQS(dispatch_num)) priorty_selector_dispatch(
+    psel_gen #(.WIDTH(`RS_SZ), .REQS(`N)) priorty_selector_dispatch(
         .req(empty_entry_mask),
         .gnt(dispatch_mask),
         .gnt_bus(dispatch_bus),
@@ -133,12 +133,12 @@ module rs(
 
         //enqueue logic
         if(!empty_dispatch)begin
-            for (i=0; i<`RS_SZ; i++)begin
+            for (int i=0; i<`RS_SZ; i++) begin
                 if(dispatch_bus[0][i]) begin
                     //from dispatch pack 0
                     next_rs_entry[i].inst= dispatch_pack[0].inst;
-                    next_rs_entry[i].pc= dispatch_pack[0].pc;
-                    next_rs_entry[i].npc= dispatch_pack[0].npc;
+                    next_rs_entry[i].PC= dispatch_pack[0].PC;
+                    next_rs_entry[i].NPC= dispatch_pack[0].NPC;
                     next_rs_entry[i].opa_select= dispatch_pack[0].opa_select;
                     next_rs_entry[i].opb_select= dispatch_pack[0].opb_select;
                     next_rs_entry[i].has_dest= dispatch_pack[0].has_dest;
@@ -154,7 +154,7 @@ module rs(
                     next_rs_entry[i].bmask= dispatch_pack[0].bmask;
                     next_rs_entry[i].bmask_index= dispatch_pack[0].bmask_index;
                     next_rs_entry[i].opcode= dispatch_pack[0].opcode;
-                    next_rs_entry[i].t= dispatch_pack[0].t;
+                    next_rs_entry[i].T= dispatch_pack[0].T;
                     next_rs_entry[i].t1= dispatch_pack[0].t1;
                     next_rs_entry[i].t2= dispatch_pack[0].t2;
                     next_rs_entry[i].t1_ready = dispatch_pack[0].t1_ready;
@@ -177,11 +177,11 @@ module rs(
                     end
 
                 end
-                if(dispatch_bus[1][i]) begin
+                if(dispatch_bus[1][i] && dispatch_num == 2'd2) begin
                     //from dispatch pack 1
                     next_rs_entry[i].inst= dispatch_pack[1].inst;
-                    next_rs_entry[i].pc= dispatch_pack[1].pc;
-                    next_rs_entry[i].npc= dispatch_pack[1].npc;
+                    next_rs_entry[i].PC= dispatch_pack[1].PC;
+                    next_rs_entry[i].NPC= dispatch_pack[1].NPC;
                     next_rs_entry[i].opa_select= dispatch_pack[1].opa_select;
                     next_rs_entry[i].opb_select= dispatch_pack[1].opb_select;
                     next_rs_entry[i].has_dest= dispatch_pack[1].has_dest;
@@ -197,14 +197,14 @@ module rs(
                     next_rs_entry[i].bmask_index= dispatch_pack[1].bmask_index;
                     next_rs_entry[i].bmask= dispatch_pack[1].bmask;
                     next_rs_entry[i].opcode= dispatch_pack[1].opcode;
-                    next_rs_entry[i].t= dispatch_pack[1].t;
+                    next_rs_entry[i].T= dispatch_pack[1].T;
                     next_rs_entry[i].t1= dispatch_pack[1].t1;
                     next_rs_entry[i].t2= dispatch_pack[1].t2;
                     next_rs_entry[i].t1_ready = dispatch_pack[1].t1_ready;
                     next_rs_entry[i].t2_ready = dispatch_pack[1].t2_ready;
                     next_rs_entry[i].busy = 1;
                     //mark as not empty
-                    next_empty_entry_mask[i] = 1;
+                    next_empty_entry_mask[i] = 0;
                     //from rob
                     next_rs_entry[i].rob_index = rob_index[1];
                     //update ready bit based on cdb
@@ -233,7 +233,7 @@ module rs(
         
         //mispredict logic
         if(mispredicted) begin
-            for (i = 0; i < `RS_SZ; i++)begin
+            for (int i = 0; i < `RS_SZ; i++)begin
                 if(next_rs_entry[i].busy && (mispredicted_bmask_index & next_rs_entry[i].bmask)) begin
                     next_empty_entry_mask[i] = 1;
                     next_rs_entry[i] = '0;
@@ -251,12 +251,12 @@ module rs(
         // Issue mult to pack[0], non-mult to pack[1]
         case(issue_case)
             ISSUE_1_MULT_1_ALU: begin
-                for (i = 0; i<`RS_SZ; i++)begin
+                for (int i = 0; i<`RS_SZ; i++)begin
                     if(mult_issue_mask[i]) begin
                         //to issue pack 0
                         issue_pack[0].inst= rs_entry[i].inst;
-                        issue_pack[0].pc= rs_entry[i].pc;
-                        issue_pack[0].npc= rs_entry[i].npc;
+                        issue_pack[0].PC= rs_entry[i].PC;
+                        issue_pack[0].NPC= rs_entry[i].NPC;
                         issue_pack[0].opa_select= rs_entry[i].opa_select;
                         issue_pack[0].opb_select= rs_entry[i].opb_select;
                         issue_pack[0].has_dest= rs_entry[i].has_dest;
@@ -272,7 +272,7 @@ module rs(
                         issue_pack[0].bmask_index= rs_entry[i].bmask_index;
                         issue_pack[0].bmask= rs_entry[i].bmask;
                         issue_pack[0].opcode= rs_entry[i].opcode;
-                        issue_pack[0].t= rs_entry[i].t;
+                        issue_pack[0].T= rs_entry[i].T;
                         issue_pack[0].t1= rs_entry[i].t1;
                         issue_pack[0].t2= rs_entry[i].t2;
                         issue_pack[0].rob_index = rs_entry[i].rob_index;
@@ -285,8 +285,8 @@ module rs(
                     if(issue_bus[0][i]) begin
                         //to issue pack 1
                         issue_pack[1].inst= rs_entry[i].inst;
-                        issue_pack[1].pc= rs_entry[i].pc;
-                        issue_pack[1].npc= rs_entry[i].npc;
+                        issue_pack[1].PC= rs_entry[i].PC;
+                        issue_pack[1].NPC= rs_entry[i].NPC;
                         issue_pack[1].opa_select= rs_entry[i].opa_select;
                         issue_pack[1].opb_select= rs_entry[i].opb_select;
                         issue_pack[1].has_dest= rs_entry[i].has_dest;
@@ -302,7 +302,7 @@ module rs(
                         issue_pack[1].bmask_index= rs_entry[i].bmask_index;
                         issue_pack[1].bmask= rs_entry[i].bmask;
                         issue_pack[1].opcode= rs_entry[i].opcode;
-                        issue_pack[1].t= rs_entry[i].t;
+                        issue_pack[1].T= rs_entry[i].T;
                         issue_pack[1].t1= rs_entry[i].t1;
                         issue_pack[1].t2= rs_entry[i].t2;
                         issue_pack[1].rob_index = rs_entry[i].rob_index;
@@ -317,12 +317,12 @@ module rs(
             // Case 2: Only mult instruction is ready
             // Issue mult to pack[0]
             ISSUE_1_MULT: begin
-                for (i = 0; i<`RS_SZ; i++)begin
+                for (int i = 0; i<`RS_SZ; i++)begin
                     if(mult_issue_mask[i]) begin
                         //to issue pack 0
                         issue_pack[0].inst= rs_entry[i].inst;
-                        issue_pack[0].pc= rs_entry[i].pc;
-                        issue_pack[0].npc= rs_entry[i].npc;
+                        issue_pack[0].PC= rs_entry[i].PC;
+                        issue_pack[0].NPC= rs_entry[i].NPC;
                         issue_pack[0].opa_select= rs_entry[i].opa_select;
                         issue_pack[0].opb_select= rs_entry[i].opb_select;
                         issue_pack[0].has_dest= rs_entry[i].has_dest;
@@ -338,7 +338,7 @@ module rs(
                         issue_pack[0].bmask_index= rs_entry[i].bmask_index;
                         issue_pack[0].bmask= rs_entry[i].bmask;
                         issue_pack[0].opcode= rs_entry[i].opcode;
-                        issue_pack[0].t= rs_entry[i].t;
+                        issue_pack[0].T= rs_entry[i].T;
                         issue_pack[0].t1= rs_entry[i].t1;
                         issue_pack[0].t2= rs_entry[i].t2;
                         issue_pack[0].rob_index = rs_entry[i].rob_index;
@@ -353,12 +353,12 @@ module rs(
             // Case 3: Only non-mult instructions are ready (no mult or mult not ready)
             // Issue 2 non-mult instructions
             ISSUE_2_ALU: begin
-                for (i = 0; i<`RS_SZ; i++)begin
+                for (int i = 0; i<`RS_SZ; i++)begin
                     if(issue_bus[0][i]) begin
                         //to issue pack 0
                         issue_pack[0].inst= rs_entry[i].inst;
-                        issue_pack[0].pc= rs_entry[i].pc;
-                        issue_pack[0].npc= rs_entry[i].npc;
+                        issue_pack[0].PC= rs_entry[i].PC;
+                        issue_pack[0].NPC= rs_entry[i].NPC;
                         issue_pack[0].opa_select= rs_entry[i].opa_select;
                         issue_pack[0].opb_select= rs_entry[i].opb_select;
                         issue_pack[0].has_dest= rs_entry[i].has_dest;
@@ -374,7 +374,7 @@ module rs(
                         issue_pack[0].bmask_index= rs_entry[i].bmask_index;
                         issue_pack[0].bmask= rs_entry[i].bmask;
                         issue_pack[0].opcode= rs_entry[i].opcode;
-                        issue_pack[0].t= rs_entry[i].t;
+                        issue_pack[0].T= rs_entry[i].T;
                         issue_pack[0].t1= rs_entry[i].t1;
                         issue_pack[0].t2= rs_entry[i].t2;
                         issue_pack[0].rob_index = rs_entry[i].rob_index;
@@ -387,8 +387,8 @@ module rs(
                     if(issue_bus[1][i]) begin
                         //to issue pack 1
                         issue_pack[1].inst= rs_entry[i].inst;
-                        issue_pack[1].pc= rs_entry[i].pc;
-                        issue_pack[1].npc= rs_entry[i].npc;
+                        issue_pack[1].PC= rs_entry[i].PC;
+                        issue_pack[1].NPC= rs_entry[i].NPC;
                         issue_pack[1].opa_select= rs_entry[i].opa_select;
                         issue_pack[1].opb_select= rs_entry[i].opb_select;
                         issue_pack[1].has_dest= rs_entry[i].has_dest;
@@ -404,7 +404,7 @@ module rs(
                         issue_pack[1].bmask_index= rs_entry[i].bmask_index;
                         issue_pack[1].bmask= rs_entry[i].bmask;
                         issue_pack[1].opcode= rs_entry[i].opcode;
-                        issue_pack[1].t= rs_entry[i].t;
+                        issue_pack[1].T= rs_entry[i].T;
                         issue_pack[1].t1= rs_entry[i].t1;
                         issue_pack[1].t2= rs_entry[i].t2;
                         issue_pack[1].rob_index = rs_entry[i].rob_index;
@@ -414,20 +414,16 @@ module rs(
                         //mark as empty
                         next_empty_entry_mask[i] = 1;
                     end
-                    //update empty entry count
-                    if (!next_rs_entry[i].busy) begin
-                        empty_entries_num = empty_entries_num + 1;
-                    end
                 end
             end
             //case4: only 1 non-mult instruction is ready
             ISSUE_1_ALU: begin
-                for (i = 0; i<`RS_SZ; i++)begin
+                for (int i = 0; i<`RS_SZ; i++)begin
                     if(issue_bus[0][i]) begin
                         //to issue pack 0
                         issue_pack[0].inst= rs_entry[i].inst;
-                        issue_pack[0].pc= rs_entry[i].pc;
-                        issue_pack[0].npc= rs_entry[i].npc;
+                        issue_pack[0].PC= rs_entry[i].PC;
+                        issue_pack[0].NPC= rs_entry[i].NPC;
                         issue_pack[0].opa_select= rs_entry[i].opa_select;
                         issue_pack[0].opb_select= rs_entry[i].opb_select;
                         issue_pack[0].has_dest= rs_entry[i].has_dest;
@@ -443,7 +439,7 @@ module rs(
                         issue_pack[0].bmask_index= rs_entry[i].bmask_index;
                         issue_pack[0].bmask= rs_entry[i].bmask;
                         issue_pack[0].opcode= rs_entry[i].opcode;
-                        issue_pack[0].t= rs_entry[i].t;
+                        issue_pack[0].T= rs_entry[i].T;
                         issue_pack[0].t1= rs_entry[i].t1;
                         issue_pack[0].t2= rs_entry[i].t2;
                         issue_pack[0].rob_index = rs_entry[i].rob_index;
@@ -460,17 +456,22 @@ module rs(
                 //do nothing
             end
         endcase
+        empty_entries_num = 0;
+        for(int j = 0; j < `RS_SZ; j++) begin 
+            if(next_empty_entry_mask[j]) begin 
+                empty_entries_num = empty_entries_num + 1;
+            end
+        end
     end
     ///////////////////////////////////////////////////////////////////////
     //////////////////////                         ////////////////////////
     //////////////////////       sequential logic  ////////////////////////
     //////////////////////                         ////////////////////////
     ///////////////////////////////////////////////////////////////////////
-    always_ff(@posedge clock)begin
+    always_ff@(posedge clock)begin
         if(reset)begin
             rs_entry <= '{default: '0};
             empty_entry_mask <= '1; //all entries are empty at the beginning
-            empty_entries_num <= `RS_SZ;
         end
         else begin
             rs_entry <= next_rs_entry;

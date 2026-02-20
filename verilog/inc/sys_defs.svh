@@ -439,6 +439,7 @@ typedef struct packed{
     logic           halt;
     logic           illegal;
     B_MASK          bmask_index;
+    B_MASK          bmask;
     ROB_IDX         rob_index;
 } D_S_PACKET;
 

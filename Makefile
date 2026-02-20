@@ -251,7 +251,7 @@ ALL_HEADERS = $(INC)*.svh
 # 	All headers must be in inc/ directly.
 
 # TODO: add more modules here, or rename the given ones
-MODULES = cpu mult rob rs
+MODULES = cpu mult rob rs psel_gen
 
 # TODO: add extra source file dependencies below
 
@@ -261,7 +261,7 @@ build/mult.cov.simv: $(MULT_FILES)
 synth/mult.vg:		 $(MULT_FILES)
 
 # TODO: add any files required for the RS here (besides test/testbenches/rs_test.sv)
-RS_FILES =		   	 $(SRC)rs.sv		# e.x. file name doesn't need to match build/'rs', but BE ORGANIZED
+RS_FILES =		   	 $(SRC)rs.sv 	$(SRC)combinational/psel_gen.sv	# e.x. file name doesn't need to match build/'rs', but BE ORGANIZED
 build/rs.simv:     	 $(RS_FILES)
 build/rs.cov.simv: 	 $(RS_FILES)
 synth/rs.vg:       	 $(RS_FILES)
