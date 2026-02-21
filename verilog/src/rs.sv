@@ -102,7 +102,7 @@ module rs(
     case_t issue_case;
 
     // candidate existence (do NOT depend on gnt)
-    logic has_ready_alu, has_ready_mult;
+    logic has_ready_mult;
     logic cand_alu0, cand_alu1;   // selected candidates by psel_gen
     logic any_gnt, two_gnt;
     logic t1_hit, t2_hit;
@@ -264,7 +264,7 @@ module rs(
         end
 
 
-        has_ready_alu  = |ready_entry_mask;
+
         has_ready_mult = |mult_mask;
 
         // these come from the priority selector outputs
@@ -280,10 +280,10 @@ module rs(
 
         // issue_case: mult prioritized, but ALU participation depends on gnt
         issue_case =
-            (has_ready_mult && cdb_gnt_alu[0]) ? ISSUE_1_MULT_1_ALU :
-            (has_ready_mult && no_gnt)           ? ISSUE_1_MULT :
-            (has_ready_alu  && two_gnt)                  ? ISSUE_2_ALU :
-            (has_ready_alu  && cdb_gnt_alu[0])                  ? ISSUE_1_ALU :ISSUE_NOTHING;
+            (has_ready_mult && cdb_gnt_alu[0])  ? ISSUE_1_MULT_1_ALU :
+            (has_ready_mult && no_gnt)          ? ISSUE_1_MULT :
+            (two_gnt)                           ? ISSUE_2_ALU :
+            (cdb_gnt_alu[0])                    ? ISSUE_1_ALU :ISSUE_NOTHING;
 
         // Case 1: Both mult and non-mult instructions are ready
         // Issue mult to pack[0], non-mult to pack[1]
@@ -352,7 +352,7 @@ module rs(
                         //mark as empty
                         //next_empty_entry_mask[i] = 1;
                         dbg_issue_count = dbg_issue_count + 'd1;
-                    end
+                    end 
                 end
             end
             // Case 2: Only mult instruction is ready

@@ -6,7 +6,6 @@ module testbench;
     ROB_IDX     mispredicted_index; 
     PRF_IDX     t_from_freelist[`N-1:0];
     PRF_IDX     told_from_mt[`N-1:0];
-    REG_IDX     dest_reg_in[`N-1:0];
     X_C_PACKET  cdb[`N-1:0];
 
     // DUT Outputs
@@ -22,7 +21,6 @@ module testbench;
         .t_from_freelist(t_from_freelist),
         .told_from_mt(told_from_mt),
         .cdb(cdb),
-        .dest_reg_in(dest_reg_in),
         .told_to_freelist(told_to_freelist),
         .space_avail(space_avail),
         .rob_index(rob_index)
@@ -54,19 +52,13 @@ module testbench;
 
     initial begin 
         reset_dut();
-        $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
-                     $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
-            for(int i = 0; i < `ROB_SZ; i++) begin
-                $display("ROB[%0d]: T=%0d | Told=%0d | Dest=%0d | Ready=%b",
-                    i, dut.rob_array[i].t, dut.rob_array[i].told, 
-                    dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
-            end
+
 
         // --- Case 1: Standard 2-way Dispatch & Retire ---
         $display("\nCase 1: Dispatch 2 and Retire (Check Data Integrity)");
         dispatched_inst_cnt = 2;
-        t_from_freelist[0] = 10; told_from_mt[0] = 5; dest_reg_in[0] = 1;
-        t_from_freelist[1] = 11; told_from_mt[1] = 6; dest_reg_in[1] = 2;
+        t_from_freelist[0] = 10; told_from_mt[0] = 5; 
+        t_from_freelist[1] = 11; told_from_mt[1] = 6; 
         @(negedge clock);
         dispatched_inst_cnt = 0; 
 
@@ -136,13 +128,7 @@ module testbench;
             $error("Case 3 Fail: Head cannot move if the older instruction hasn't retired"); 
             test_failed = 1; 
         end
-        $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
-                     $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
-            for(int i = 0; i < `ROB_SZ; i++) begin
-                $display("ROB[%0d]: T=%0d | Told=%0d | Dest=%0d | Ready=%b",
-                    i, dut.rob_array[i].t, dut.rob_array[i].told, 
-                    dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
-            end
+
 
         // --- Case 4: Full ROB & Wrap-around Check ---
         $display("\nCase 4: Fill ROB to test pointer wrap-around");
@@ -171,20 +157,13 @@ module testbench;
 
         $display("\nCase 5: Dispatch 1 and Retire (Check Data Integrity)");
         dispatched_inst_cnt = 1;
-        t_from_freelist[0] = 10; told_from_mt[0] = 5; dest_reg_in[0] = 1;
+        t_from_freelist[0] = 10; told_from_mt[0] = 5; 
         @(negedge clock);
         dispatched_inst_cnt = 0;
 
 
         cdb[0].valid = 1; cdb[0].complete_index = 0; 
-        $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
-                     $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
-            for(int i = 0; i < `ROB_SZ; i++) begin
-                $display("ROB[%0d]: T=%0d | Told=%0d | Dest=%0d | Ready=%b",
-                    i, dut.rob_array[i].t, dut.rob_array[i].told, 
-                    dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
-            end
-        @(negedge clock);
+
 
         
         assert(told_to_freelist[0] == 5) else begin
@@ -199,20 +178,14 @@ module testbench;
             test_failed = 1; 
         end
 
-        $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
-                     $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
-            for(int i = 0; i < `ROB_SZ; i++) begin
-                $display("ROB[%0d]: T=%0d | Told=%0d | Dest=%0d | Ready=%b",
-                    i, dut.rob_array[i].t, dut.rob_array[i].told, 
-                    dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
-            end
+
 
         // --- Case 6: Clear ready_retire in rob when we dispatch new instructions ---
         reset_dut();
 
         $display("\nCase 6: Clear ready_retire in rob when we retire instructions");
         dispatched_inst_cnt = 1;
-        t_from_freelist[0] = 10; told_from_mt[0] = 5; dest_reg_in[0] = 1;
+        t_from_freelist[0] = 10; told_from_mt[0] = 5; 
         @(negedge clock);
         dispatched_inst_cnt = 0;
 
@@ -223,13 +196,6 @@ module testbench;
         cdb[0].valid = 0; cdb[1].valid = 0;
         repeat(2) @(negedge clock); 
 
-        $display("\n--- Time: %0t | Head: %0d | Tail: %0d | Count: %0d ---", 
-                     $time, dut.head_ptr, dut.tail_ptr, dut.rob_count);
-            for(int i = 0; i < `ROB_SZ; i++) begin
-                $display("ROB[%0d]: T=%0d | Told=%0d | Dest=%0d | Ready=%b",
-                    i, dut.rob_array[i].t, dut.rob_array[i].told, 
-                    dut.rob_array[i].dest_reg_idx, dut.rob_array[i].ready_retire);
-            end
 
 
         assert(dut.rob_array[0].ready_retire == 1'b0) else begin

@@ -46,7 +46,6 @@ module testbench;
 
   task automatic tick();
     @(posedge clock);
-    #1;
   endtask
 
   task automatic reset_dut();
@@ -160,14 +159,15 @@ endtask
         rob_index[0]              = ROB_IDX'(3);
 
         tick(); // enqueue
+        dispatch_num = 2'd0;
+  
+        
+
         cdb_gnt_alu[0] = 'b1;
         early_tag_bus[0].valid = 'b1;
         early_tag_bus[0].tag =  PRF_IDX'(12);
-
-        display_rs_table("after enqueue");
-
-        dispatch_num = 2'd0;
         tick();
+        display_rs_table("after enqueue");
 
         //display_rs_table("after enqueue");
         assert(dbg_issue_count == 'd1 );
@@ -207,6 +207,7 @@ endtask
         rob_index[1]              = ROB_IDX'(4);
 
         tick();
+        display_rs_table("after dispatch 2 alu");
 
         dispatch_num = 2'd1;
         dispatch_pack[0] = '0;
@@ -227,12 +228,65 @@ endtask
         early_tag_bus[0].tag =  PRF_IDX'(12);
         early_tag_bus[1].valid = 'b1;
         early_tag_bus[1].tag =  PRF_IDX'(15);
-        
-        display_rs_table("after enqueue");
         tick();
+        dispatch_num = 'd0;
+        early_tag_bus[0].valid = 'd0;
+        early_tag_bus[1].valid = 'd0;
+        cdb_gnt_alu[0] = 'd0;
+        cdb_gnt_alu[1] = 'd0;
+
+        display_rs_table("after enqueue");
         assert (issue_pack[0].mult);
         assert (!issue_pack[1].mult);
   endtask
+
+  task test2_2alu();
+        dispatch_num = 2'd2;
+
+        dispatch_pack[0] = '0;
+        dispatch_pack[0].mult     = 1'b0;
+        dispatch_pack[0].t1       = PRF_IDX'(12);
+        dispatch_pack[0].t2       = PRF_IDX'(13);
+        dispatch_pack[0].t1_ready = 1'b0;
+        dispatch_pack[0].t2_ready = 1'b1;
+        dispatch_pack[0].PC       = ADDR'(32'h1000);
+        dispatch_pack[0].NPC      = ADDR'(32'h1004);
+        dispatch_pack[0].inst     = INST'(32'hDEADBEEF);
+        dispatch_pack[0].opcode   = 7'h33;
+        rob_index[0]              = ROB_IDX'(3);
+
+        dispatch_pack[1] = '0;
+        dispatch_pack[1].mult     = 1'b0;
+        dispatch_pack[1].t1       = PRF_IDX'(14);
+        dispatch_pack[1].t2       = PRF_IDX'(15);
+        dispatch_pack[1].t1_ready = 1'b1;
+        dispatch_pack[1].t2_ready = 1'b0;
+        dispatch_pack[1].PC       = ADDR'(32'h1000);
+        dispatch_pack[1].NPC      = ADDR'(32'h1008);
+        dispatch_pack[1].inst     = INST'(32'hDEADBEEF);
+        dispatch_pack[1].opcode   = 7'h33;
+        rob_index[1]              = ROB_IDX'(4);
+
+        tick();
+        display_rs_table("after dispatch 2 alu");
+        dispatch_num = 'd0;
+        cdb_gnt_alu[0] = 'b1;
+        cdb_gnt_alu[1] = 'b1;
+        early_tag_bus[0].valid = 'b1;
+        early_tag_bus[0].tag =  PRF_IDX'(12);
+        early_tag_bus[1].valid = 'b1;
+        early_tag_bus[1].tag =  PRF_IDX'(15);
+        tick();
+        early_tag_bus[0].valid = 'd0;
+        early_tag_bus[1].valid = 'd0;
+        cdb_gnt_alu[0] = 'd0;
+        cdb_gnt_alu[1] = 'd0;
+
+        display_rs_table("after enqueue");
+        assert (!issue_pack[0].mult);
+        assert (!issue_pack[1].mult);
+  endtask
+    
     
 
   initial begin
@@ -242,6 +296,11 @@ endtask
 
     reset_dut();
     test1_1mult_1alu();
+    #100;
+
+    reset_dut();
+    test2_2alu();
+    
 
     $display("\nALL BASIC TESTS PASSED");
     $finish;
