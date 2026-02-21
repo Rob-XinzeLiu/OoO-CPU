@@ -22,7 +22,8 @@ module rs(
     output logic                            cdb_req_alu                 [`N-1:0],
     //to issue stage
     output D_S_PACKET                       issue_pack                  [`N-1:0],
-    output logic [$clog2(`RS_SZ + 1)-1:0]   empty_entries_num
+    output logic [$clog2(`RS_SZ + 1)-1:0]   empty_entries_num,
+    output logic [1:0]                      dbg_issue_count
 );
 
     typedef struct packed{
@@ -67,7 +68,7 @@ module rs(
 
     logic [`N-1:0] [`RS_SZ-1:0]      dispatch_bus;
     logic [`N-1:0] [`RS_SZ-1:0]      issue_bus;
-    logic                   empty_dispatch, empty_issue, empty_mult_issue;
+    logic                   empty_dispatch, empty_issue, empty_mult_issue, no_gnt;
 
     psel_gen #(.WIDTH(`RS_SZ), .REQS(`N)) priorty_selector_dispatch(
         .req(empty_entry_mask),
@@ -104,26 +105,39 @@ module rs(
     logic has_ready_alu, has_ready_mult;
     logic cand_alu0, cand_alu1;   // selected candidates by psel_gen
     logic any_gnt, two_gnt;
+    logic t1_hit, t2_hit;
 
     logic dispatch_0, dispatch_1;
+    assign dispatch_0 = (dispatch_num != 'd0);
+    assign dispatch_1 = (dispatch_num == 'd2);
 
     always_comb begin
         //default
         next_rs_entry = rs_entry;
-        next_empty_entry_mask = empty_entry_mask;
+        next_empty_entry_mask = '1;
         ready_entry_mask = '0;
         issue_pack = '{default:'0};
         mult_mask = '0;
         cdb_req_alu = '{default:'0};
         issue_case = ISSUE_NOTHING;
+        dbg_issue_count = 'd0;
 
-        dispatch_0 = (dispatch_bus[0]!=='0);
-        dispatch_1 = (dispatch_bus[1]!=='0);
+        empty_entries_num = 'd0;
 
+        for (int i = 0; i< `RS_SZ; i++)begin
+            next_empty_entry_mask[i] = !rs_entry[i].busy;
+        end
+        empty_entry_mask = next_empty_entry_mask;
+
+        for(int j = 0; j < `RS_SZ; j++) begin 
+            if(next_empty_entry_mask[j]) begin 
+                empty_entries_num = empty_entries_num + 1;
+            end
+        end
         //enqueue logic
         if(dispatch_0)begin
             for (int i=0; i<`RS_SZ; i++) begin
-                if(dispatch_bus[0][i] && dispatch_num == '1) begin
+                if(dispatch_bus[0][i] /*&& dispatch_num == 'd1*/) begin
                     //from dispatch pack 0
                     next_rs_entry[i].inst= dispatch_pack[0].inst;
                     next_rs_entry[i].PC= dispatch_pack[0].PC;
@@ -159,7 +173,7 @@ module rs(
 
         if(dispatch_1)begin
             for (int i=0; i<`RS_SZ; i++) begin
-                if(dispatch_bus[1][i] && dispatch_num == 2'd2) begin
+                if(dispatch_bus[1][i] /*&& dispatch_num == 2'd2*/) begin
                     //from dispatch pack 1
                     next_rs_entry[i].inst= dispatch_pack[1].inst;
                     next_rs_entry[i].PC= dispatch_pack[1].PC;
@@ -186,7 +200,7 @@ module rs(
                     next_rs_entry[i].t2_ready = dispatch_pack[1].t2_ready;
                     next_rs_entry[i].busy = 1;
                     //mark as not empty
-                    next_empty_entry_mask[i] = 0;
+                    //next_empty_entry_mask[i] = 0;
                     //from rob
                     next_rs_entry[i].rob_index = rob_index[1];
                 end
@@ -206,7 +220,7 @@ module rs(
         if(mispredicted) begin
             for (int i = 0; i < `RS_SZ; i++)begin
                 if(next_rs_entry[i].busy && (mispredicted_bmask_index & next_rs_entry[i].bmask)) begin
-                    next_empty_entry_mask[i] = 1;
+                    //next_empty_entry_mask[i] = 1;
                     next_rs_entry[i] = '0;
                 end
             end
@@ -214,7 +228,7 @@ module rs(
 
         // unified wakeup (ETB + CDB) + build ready masks
         for (int j = 0; j < `RS_SZ; j++) begin
-            logic t1_hit, t2_hit;
+            
 
             // match against next_rs_entry so same-cycle dispatch is visible
             t1_hit =
@@ -269,7 +283,7 @@ module rs(
             (has_ready_mult && cdb_gnt_alu[0]) ? ISSUE_1_MULT_1_ALU :
             (has_ready_mult && no_gnt)           ? ISSUE_1_MULT :
             (has_ready_alu  && two_gnt)                  ? ISSUE_2_ALU :
-            (has_ready_alu  && cdb_gnt[0])                  ? ISSUE_1_ALU :ISSUE_NOTHING;
+            (has_ready_alu  && cdb_gnt_alu[0])                  ? ISSUE_1_ALU :ISSUE_NOTHING;
 
         // Case 1: Both mult and non-mult instructions are ready
         // Issue mult to pack[0], non-mult to pack[1]
@@ -304,7 +318,9 @@ module rs(
                         //mark as not busy
                         next_rs_entry[i] = '0;
                         //mark as empty
-                        next_empty_entry_mask[i] = 1;
+                        //next_empty_entry_mask[i] = 1;
+
+                        dbg_issue_count = dbg_issue_count + 'd1;
                     end
                     if(issue_bus[0][i] && cdb_gnt_alu[0] ) begin
                         //to issue pack 1
@@ -334,7 +350,8 @@ module rs(
                         //mark as not busy
                         next_rs_entry[i] = '0;
                         //mark as empty
-                        next_empty_entry_mask[i] = 1;
+                        //next_empty_entry_mask[i] = 1;
+                        dbg_issue_count = dbg_issue_count + 'd1;
                     end
                 end
             end
@@ -370,7 +387,9 @@ module rs(
                         //mark as not busy
                         next_rs_entry[i] = '0;
                         //mark as empty
-                        next_empty_entry_mask[i] = 1;
+                        //next_empty_entry_mask[i] = 1;
+
+                        dbg_issue_count = dbg_issue_count + 'd1;dbg_issue_count = dbg_issue_count + 'd1;
                     end
                 end
             end
@@ -406,7 +425,8 @@ module rs(
                         //mark as not busy
                         next_rs_entry[i] = '0;
                         //mark as empty
-                        next_empty_entry_mask[i] = 1;
+                        //next_empty_entry_mask[i] = 1;
+                        dbg_issue_count = dbg_issue_count + 'd1;
                     end
                     if(issue_bus[1][i] && cdb_gnt_alu[1]) begin
                         //to issue pack 1
@@ -436,7 +456,8 @@ module rs(
                         //mark as not busy
                         next_rs_entry[i] = '0;
                         //mark as empty
-                        next_empty_entry_mask[i] = 1;
+                        //next_empty_entry_mask[i] = 1;
+                        dbg_issue_count = dbg_issue_count + 'd1;
                     end
                 end
             end
@@ -471,7 +492,8 @@ module rs(
                         //mark as not busy
                         next_rs_entry[i] = '0;
                         //mark as empty
-                        next_empty_entry_mask[i] = 1;
+                        //next_empty_entry_mask[i] = 1;
+                        dbg_issue_count = dbg_issue_count + 'd1;
                     end
                 end
             end
@@ -480,12 +502,8 @@ module rs(
                 //do nothing
             end
         endcase
-        empty_entries_num = 0;
-        for(int j = 0; j < `RS_SZ; j++) begin 
-            if(next_empty_entry_mask[j]) begin 
-                empty_entries_num = empty_entries_num + 1;
-            end
-        end
+        
+        
     end
     ///////////////////////////////////////////////////////////////////////
     //////////////////////                         ////////////////////////
@@ -495,11 +513,11 @@ module rs(
     always_ff@(posedge clock)begin
         if(reset)begin
             rs_entry <= '{default: '0};
-            empty_entry_mask <= '1; //all entries are empty at the beginning
+            //empty_entry_mask <= '1; //all entries are empty at the beginning
         end
         else begin
             rs_entry <= next_rs_entry;
-            empty_entry_mask <= next_empty_entry_mask;
+            //empty_entry_mask <= next_empty_entry_mask;
         end
     end
 
