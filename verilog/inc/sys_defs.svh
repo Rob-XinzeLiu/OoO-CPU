@@ -443,7 +443,10 @@ typedef struct packed{
     ROB_IDX         rob_index;
 } D_S_PACKET;
 
-
+typedef struct packed{
+    logic           valid;
+    PRF_IDX         tag;
+} ETB_TAG_PACKET;
 
 typedef struct packed{
     logic           valid;
