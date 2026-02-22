@@ -21,9 +21,10 @@ module rs(
     input logic                             cdb_gnt_alu                 [`N-1:0],
     output logic                            cdb_req_alu                 [`N-1:0],
     //to issue stage
-    output D_S_PACKET                       issue_pack                  [`N-1:0],
+    output D_S_PACKET                       issue_pack                  [`N-1:0], //to issue and prf
     output logic [$clog2(`RS_SZ + 1)-1:0]   empty_entries_num,
     output logic [1:0]                      dbg_issue_count
+    //TODO: add branch selector logic 
 );
 
     typedef struct packed{
@@ -129,11 +130,6 @@ module rs(
         end
         empty_entry_mask = next_empty_entry_mask;
 
-        for(int j = 0; j < `RS_SZ; j++) begin 
-            if(next_empty_entry_mask[j]) begin 
-                empty_entries_num = empty_entries_num + 1;
-            end
-        end
         //enqueue logic
         if(dispatch_0)begin
             for (int i=0; i<`RS_SZ; i++) begin
@@ -503,7 +499,11 @@ module rs(
             end
         endcase
         
-        
+        for(int j = 0; j < `RS_SZ; j++) begin 
+            if(!next_rs_entry[j].busy) begin 
+                empty_entries_num = empty_entries_num + 1;
+            end
+        end
     end
     ///////////////////////////////////////////////////////////////////////
     //////////////////////                         ////////////////////////

@@ -16,18 +16,17 @@ module freelist(
 
     output PRF_IDX      t [`N-1:0],
     output logic        full,
-    output logic        [$clog2(`ROB_SZ)-1:0] BS_head [`N-1:0]  //to BS
+    output logic        [$clog2(`ROB_SZ)-1:0] BS_head [`N-1:0],  //to BS
+    output logic [1:0] avail_num
 
-    // TODO: Sent head_ptr to the branch stack
+    // TODO:make sure avail_num is correct
 );
     logic remaining_valid;
-    logic empty;
     logic do_disp;
     
     logic [$clog2(`ROB_SZ) - 1:0] head,tail,head_n,tail_n;
     logic [$clog2(`ROB_SZ):0] cnt,cnt_n;
     PRF_IDX freelist [`ROB_SZ -1:0];  // 8 total fresslist size
-
 
     always_comb begin
     head_n = head;
@@ -36,7 +35,6 @@ module freelist(
     t       = '{default:'0};
     BS_head = '{default:'0};
 
-    empty = (cnt == 0);
     // only dispatch if we have enough entries
     do_disp = dispatch_valid && (cnt >= dispatch_num);
     
@@ -67,7 +65,14 @@ module freelist(
     if (cond_branch[1]) BS_head[1] = head + 1;
 
     full = (cnt < dispatch_num);
-    
+        if (!dispatch_valid)
+            avail_num = 2'd0;
+        else if (cnt >= 2)
+            avail_num = 2'd2;
+        else if (cnt == 1)
+            avail_num = 2'd1;
+        else
+            avail_num = 2'd0;
     end
     end
 

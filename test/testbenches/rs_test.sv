@@ -112,7 +112,20 @@ module testbench;
     tmp[idx] = 1'b1;
     return tmp;
   endfunction
+  
+  function automatic int count_busy();
+    int c = 0;
+    for (int i = 0; i < `RS_SZ; i++) c += dut.rs_entry[i].busy;
+    return c;
+  endfunction
 
+  function automatic bit any_busy_with_pc(input ADDR pc);
+    for (int i = 0; i < `RS_SZ; i++) begin
+      if (dut.rs_entry[i].busy && dut.rs_entry[i].PC == pc) return 1'b1;
+    end
+    return 1'b0;
+  endfunction
+  
   task automatic display_rs_table(string tag);
     $display("\n================ RS TABLE: %s (t=%0t) ================", tag, $time);
     $display("empty_entries_num=%0d  dbg_issue_count=%0d", empty_entries_num, dut.dbg_issue_count);
@@ -180,6 +193,7 @@ endtask
     endtask
 
   task test1_1mult_1alu();
+        $display("empty_entries_num = %0d", empty_entries_num);
         dispatch_num = 2'd2;
 
         dispatch_pack[0] = '0;
@@ -208,6 +222,8 @@ endtask
 
         tick();
         display_rs_table("after dispatch 2 alu");
+
+        $display("empty_entries_num = %0d", empty_entries_num);
 
         dispatch_num = 2'd1;
         dispatch_pack[0] = '0;
@@ -287,7 +303,97 @@ endtask
         assert (!issue_pack[1].mult);
   endtask
     
-    
+  task test3_mispredict_kills_matching_bmask();
+    $display("\n[TEST3] mispredict kills younger entries");
+
+    dispatch_num = 2'd2;
+
+    // Put "younger" behind branch bit 0 (will be killed)
+    dispatch_pack[0] = '0;
+    dispatch_pack[0].mult     = 1'b0;
+    dispatch_pack[0].t1_ready = 1'b0;   // not ready so it won't issue
+    dispatch_pack[0].t2_ready = 1'b0;
+    dispatch_pack[0].t1       = PRF_IDX'(10);
+    dispatch_pack[0].t2       = PRF_IDX'(11);
+    dispatch_pack[0].PC       = ADDR'(32'h2000);
+    dispatch_pack[0].NPC      = ADDR'(32'h2004);
+    dispatch_pack[0].bmask    = bm_onehot(0);     // depends on branch 0
+    rob_index[0]              = ROB_IDX'(1);
+
+    // Put "older" not behind branch bit 0 (should survive)
+    dispatch_pack[1] = '0;
+    dispatch_pack[1].mult     = 1'b0;
+    dispatch_pack[1].t1_ready = 1'b0;
+    dispatch_pack[1].t2_ready = 1'b0;
+    dispatch_pack[1].t1       = PRF_IDX'(12);
+    dispatch_pack[1].t2       = PRF_IDX'(13);
+    dispatch_pack[1].PC       = ADDR'(32'h3000);
+    dispatch_pack[1].NPC      = ADDR'(32'h3004);
+    dispatch_pack[1].bmask    = bm_onehot(1);     // NOT affected by branch 0
+    rob_index[1]              = ROB_IDX'(2);
+
+    tick();
+    dispatch_num = 2'd0;
+
+    display_rs_table("after dispatch (2 entries resident)");
+
+    // Simple asserts: two entries should be busy in the slots you usually see (7 and 0)
+    assert(dut.next_rs_entry[7].busy || dut.next_rs_entry[0].busy);
+    // Step 2: mispredict branch bit 0 -> should clear the entry with bmask[0]=1
+    mispredicted = 1'b1;
+    mispredicted_bmask_index = bm_onehot(0);
+    tick();
+    mispredicted = 1'b0;
+    mispredicted_bmask_index = '0;
+
+    display_rs_table("after mispredict(bit0)");
+
+    // In your table, the killed entry should be cleared (busy=0) wherever it landed.
+    // We keep it simple: assert that at least one of the slots became empty after mispredict.
+    assert(dut.next_rs_entry[7].busy == 1'b0 || dut.next_rs_entry[0].busy == 1'b0);
+
+  endtask
+
+  task test4_branch_resolve();
+    $display("\n[TEST4] bmask clears");
+
+    dispatch_num = 2'd2;
+    dispatch_pack[0] = '0;
+    dispatch_pack[0].mult     = 1'b0;
+    dispatch_pack[0].t1_ready = 1'b0;   // not ready so it won't issue
+    dispatch_pack[0].t2_ready = 1'b0;
+    dispatch_pack[0].t1       = PRF_IDX'(10);
+    dispatch_pack[0].t2       = PRF_IDX'(11);
+    dispatch_pack[0].PC       = ADDR'(32'h2000);
+    dispatch_pack[0].NPC      = ADDR'(32'h2004);
+    dispatch_pack[0].bmask    = bm_onehot(0);     // depends on branch 0
+    rob_index[0]              = ROB_IDX'(1);
+
+    // Put "older" not behind branch bit 0 (should survive)
+    dispatch_pack[1] = '0;
+    dispatch_pack[1].mult     = 1'b0;
+    dispatch_pack[1].t1_ready = 1'b0;
+    dispatch_pack[1].t2_ready = 1'b0;
+    dispatch_pack[1].t1       = PRF_IDX'(12);
+    dispatch_pack[1].t2       = PRF_IDX'(13);
+    dispatch_pack[1].PC       = ADDR'(32'h3000);
+    dispatch_pack[1].NPC      = ADDR'(32'h3004);
+    dispatch_pack[1].bmask    = bm_onehot(1);     // NOT affected by branch 0
+    rob_index[1]              = ROB_IDX'(2);
+
+    tick();
+    dispatch_num = 2'd0;
+    resolved = '1;
+    resolved_bmask_index = bm_onehot(0);
+
+    display_rs_table("after dispatch (2 entries resident)");
+    assert(dut.next_rs_entry[7].busy || dut.next_rs_entry[0].busy);
+    tick();
+
+    display_rs_table("after mispredict(bit0)");
+    assert(dut.next_rs_entry[7].busy == 1'b0 || dut.next_rs_entry[0].busy == 1'b0);
+
+  endtask
 
   initial begin
     reset_dut();
@@ -300,7 +406,15 @@ endtask
 
     reset_dut();
     test2_2alu();
-    
+    #100;
+
+    reset_dut();
+    test3_mispredict_kills_matching_bmask();
+    #100;
+
+    reset_dut();
+    test4_branch_resolve();
+    #100;
 
     $display("\nALL BASIC TESTS PASSED");
     $finish;

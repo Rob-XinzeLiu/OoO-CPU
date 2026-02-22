@@ -415,10 +415,16 @@ typedef struct packed {
     logic   valid;
 } COMMIT_PACKET;
 
+typedef struct packed {
+    ADDR    PC;
+    ADDR    NPC;
+    INST    inst;
+    logic   valid;
+} F_D_PACKET;
+
 typedef struct packed{
     INST            inst;
     logic           valid;
-    logic [6:0]     opcode;
     PRF_IDX         T;
     PRF_IDX         t1;
     PRF_IDX         t2;
@@ -442,6 +448,28 @@ typedef struct packed{
     B_MASK          bmask;
     ROB_IDX         rob_index;
 } D_S_PACKET;
+
+typedef struct packed{
+    logic           valid;
+    ALU_OPA_SELECT  opa_select;
+    ALU_OPB_SELECT  opb_select;
+    logic           has_dest;
+    ALU_FUNC        alu_func;
+    logic           mult;
+    logic           rd_mem;
+    logic           wr_mem;
+    logic           cond_branch;
+    logic           uncond_branch;
+    logic           csr_op;
+    logic           halt;
+    logic           illegal;
+    B_MASK          bmask_index;
+    B_MASK          bmask;
+    ROB_IDX         rob_index;
+    PRF_IDX         tag;
+    DATA            rs1_value;
+    DATA            rs2_value;
+} S_X_PACKET;
 
 typedef struct packed{
     logic           valid;
