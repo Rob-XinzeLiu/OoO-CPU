@@ -11,7 +11,6 @@ module rs(
     //from rob
     input ROB_IDX                           rob_index                   [`N-1:0],
     //from dispatch stage
-    input logic [1:0]                       dispatch_num                        , //number of instructions dispatched in this cycle
     input D_S_PACKET                        dispatch_pack               [`N-1:0],//from dispatcher
     //from cdb
     input X_C_PACKET                        cdb                         [`N-1:0], 
@@ -21,10 +20,10 @@ module rs(
     input logic                             cdb_gnt_alu                 [`N-1:0],
     output logic                            cdb_req_alu                 [`N-1:0],
     //to issue stage
-    output D_S_PACKET                       issue_pack                  [`N-1:0], //to issue and prf
+    output D_S_PACKET                       issue_pack                  [`N:0], //1 conditional branch
     output logic [$clog2(`RS_SZ + 1)-1:0]   empty_entries_num,
     output logic [1:0]                      dbg_issue_count
-    //TODO: add branch selector logic 
+    //conditional branch goes to issue_pack[2]
 );
 
     typedef struct packed{
@@ -66,10 +65,12 @@ module rs(
     logic [`RS_SZ-1:0]      dispatch_mask;
 
     logic [`RS_SZ-1:0]      mult_mask;//, next_mult_mask;
+    logic [`RS_SZ-1:0]      cond_branch_mask;
+    logic [`RS_SZ-1:0]      cond_branch_issue_mask;
 
     logic [`N-1:0] [`RS_SZ-1:0]      dispatch_bus;
     logic [`N-1:0] [`RS_SZ-1:0]      issue_bus;
-    logic                   empty_dispatch, empty_issue, empty_mult_issue, no_gnt;
+    logic                   empty_dispatch, empty_issue, empty_mult_issue, no_gnt, empty_cond_branch_issue;
 
     psel_gen #(.WIDTH(`RS_SZ), .REQS(`N)) priorty_selector_dispatch(
         .req(empty_entry_mask),
@@ -92,6 +93,13 @@ module rs(
         .empty(empty_issue)
     );
 
+    psel_gen #(.WIDTH(`RS_SZ), .REQS('d1)) priorty_selector_cond_branch(
+        .req(cond_branch_mask),
+        .gnt(cond_branch_issue_mask),
+        .gnt_bus(),
+        .empty(empty_cond_branch_issue)
+    );
+
     typedef enum logic [2:0] {
         ISSUE_1_MULT_1_ALU,
         ISSUE_1_MULT,
@@ -108,9 +116,9 @@ module rs(
     logic any_gnt, two_gnt;
     logic t1_hit, t2_hit;
 
-    logic dispatch_0, dispatch_1;
-    assign dispatch_0 = (dispatch_num != 'd0);
-    assign dispatch_1 = (dispatch_num == 'd2);
+    logic dispatch_1, dispatch_2;
+    assign dispatch_1 = (dispatch_pack[0].valid && !dispatch_pack[1].valid);
+    assign dispatch_2 = (dispatch_pack[0].valid && dispatch_pack[1].valid);
 
     always_comb begin
         //default
@@ -122,7 +130,7 @@ module rs(
         cdb_req_alu = '{default:'0};
         issue_case = ISSUE_NOTHING;
         dbg_issue_count = 'd0;
-
+        cond_branch_mask =  '0;
         empty_entries_num = 'd0;
 
         for (int i = 0; i< `RS_SZ; i++)begin
@@ -131,9 +139,9 @@ module rs(
         empty_entry_mask = next_empty_entry_mask;
 
         //enqueue logic
-        if(dispatch_0)begin
+        if(dispatch_1)begin
             for (int i=0; i<`RS_SZ; i++) begin
-                if(dispatch_bus[0][i] /*&& dispatch_num == 'd1*/) begin
+                if(dispatch_bus[0][i] ) begin
                     //from dispatch pack 0
                     next_rs_entry[i].inst= dispatch_pack[0].inst;
                     next_rs_entry[i].PC= dispatch_pack[0].PC;
@@ -167,9 +175,9 @@ module rs(
             end
         end
 
-        if(dispatch_1)begin
+        if(dispatch_2)begin
             for (int i=0; i<`RS_SZ; i++) begin
-                if(dispatch_bus[1][i] /*&& dispatch_num == 2'd2*/) begin
+                if(dispatch_bus[1][i] ) begin
                     //from dispatch pack 1
                     next_rs_entry[i].inst= dispatch_pack[1].inst;
                     next_rs_entry[i].PC= dispatch_pack[1].PC;
@@ -195,8 +203,6 @@ module rs(
                     next_rs_entry[i].t1_ready = dispatch_pack[1].t1_ready;
                     next_rs_entry[i].t2_ready = dispatch_pack[1].t2_ready;
                     next_rs_entry[i].busy = 1;
-                    //mark as not empty
-                    //next_empty_entry_mask[i] = 0;
                     //from rob
                     next_rs_entry[i].rob_index = rob_index[1];
                 end
@@ -224,8 +230,6 @@ module rs(
 
         // unified wakeup (ETB + CDB) + build ready masks
         for (int j = 0; j < `RS_SZ; j++) begin
-            
-
             // match against next_rs_entry so same-cycle dispatch is visible
             t1_hit =
                 (early_tag_bus[0].valid && (next_rs_entry[j].t1 == early_tag_bus[0].tag)) ||
@@ -256,7 +260,14 @@ module rs(
                 next_rs_entry[j].busy &&
                 next_rs_entry[j].t1_ready &&
                 next_rs_entry[j].t2_ready &&
-                !next_rs_entry[j].mult;
+                !next_rs_entry[j].mult &&
+                !next_rs_entry[j].cond_branch;
+
+            cond_branch_mask[j] =
+                next_rs_entry[j].busy &&
+                next_rs_entry[j].t1_ready &&
+                next_rs_entry[j].t2_ready &&
+                next_rs_entry[j].cond_branch;
         end
 
 
@@ -288,6 +299,7 @@ module rs(
                 for (int i = 0; i<`RS_SZ; i++)begin
                     if(mult_issue_mask[i]) begin
                         //to issue pack 0
+                        issue_pack[0].valid= 'b1;
                         issue_pack[0].inst= next_rs_entry[i].inst;
                         issue_pack[0].PC= next_rs_entry[i].PC;
                         issue_pack[0].NPC= next_rs_entry[i].NPC;
@@ -313,13 +325,12 @@ module rs(
 
                         //mark as not busy
                         next_rs_entry[i] = '0;
-                        //mark as empty
-                        //next_empty_entry_mask[i] = 1;
 
                         dbg_issue_count = dbg_issue_count + 'd1;
                     end
                     if(issue_bus[0][i] && cdb_gnt_alu[0] ) begin
                         //to issue pack 1
+                        issue_pack[1].valid= 'b1;
                         issue_pack[1].inst= next_rs_entry[i].inst;
                         issue_pack[1].PC= next_rs_entry[i].PC;
                         issue_pack[1].NPC= next_rs_entry[i].NPC;
@@ -345,8 +356,7 @@ module rs(
                         
                         //mark as not busy
                         next_rs_entry[i] = '0;
-                        //mark as empty
-                        //next_empty_entry_mask[i] = 1;
+
                         dbg_issue_count = dbg_issue_count + 'd1;
                     end 
                 end
@@ -357,6 +367,7 @@ module rs(
                 for (int i = 0; i<`RS_SZ; i++)begin
                     if(mult_issue_mask[i]) begin
                         //to issue pack 0
+                        issue_pack[0].valid = 'b1;
                         issue_pack[0].inst= next_rs_entry[i].inst;
                         issue_pack[0].PC= next_rs_entry[i].PC;
                         issue_pack[0].NPC= next_rs_entry[i].NPC;
@@ -380,12 +391,11 @@ module rs(
                         issue_pack[0].t2= next_rs_entry[i].t2;
                         issue_pack[0].rob_index = next_rs_entry[i].rob_index;
 
+                        issue_pack[1].valid = 'b0;
                         //mark as not busy
                         next_rs_entry[i] = '0;
-                        //mark as empty
-                        //next_empty_entry_mask[i] = 1;
 
-                        dbg_issue_count = dbg_issue_count + 'd1;dbg_issue_count = dbg_issue_count + 'd1;
+                        dbg_issue_count = dbg_issue_count + 'd1;
                     end
                 end
             end
@@ -395,6 +405,7 @@ module rs(
                 for (int i = 0; i<`RS_SZ; i++)begin
                     if(issue_bus[0][i] && cdb_gnt_alu[0]) begin
                         //to issue pack 0
+                        issue_pack[0].valid = 'b1;
                         issue_pack[0].inst= next_rs_entry[i].inst;
                         issue_pack[0].PC= next_rs_entry[i].PC;
                         issue_pack[0].NPC= next_rs_entry[i].NPC;
@@ -420,12 +431,12 @@ module rs(
                         
                         //mark as not busy
                         next_rs_entry[i] = '0;
-                        //mark as empty
-                        //next_empty_entry_mask[i] = 1;
+
                         dbg_issue_count = dbg_issue_count + 'd1;
                     end
                     if(issue_bus[1][i] && cdb_gnt_alu[1]) begin
                         //to issue pack 1
+                        issue_pack[1].valid = 'b1;
                         issue_pack[1].inst= next_rs_entry[i].inst;
                         issue_pack[1].PC= next_rs_entry[i].PC;
                         issue_pack[1].NPC= next_rs_entry[i].NPC;
@@ -451,8 +462,7 @@ module rs(
                     
                         //mark as not busy
                         next_rs_entry[i] = '0;
-                        //mark as empty
-                        //next_empty_entry_mask[i] = 1;
+
                         dbg_issue_count = dbg_issue_count + 'd1;
                     end
                 end
@@ -462,6 +472,7 @@ module rs(
                 for (int i = 0; i<`RS_SZ; i++)begin
                     if(issue_bus[0][i] && cdb_gnt_alu[0]) begin
                         //to issue pack 0
+                        issue_pack[0].valid= 'b1;
                         issue_pack[0].inst= next_rs_entry[i].inst;
                         issue_pack[0].PC= next_rs_entry[i].PC;
                         issue_pack[0].NPC= next_rs_entry[i].NPC;
@@ -485,20 +496,54 @@ module rs(
                         issue_pack[0].t2= next_rs_entry[i].t2;
                         issue_pack[0].rob_index = next_rs_entry[i].rob_index;
 
+                        issue_pack[1].valid = 'b0;
                         //mark as not busy
                         next_rs_entry[i] = '0;
-                        //mark as empty
-                        //next_empty_entry_mask[i] = 1;
+
                         dbg_issue_count = dbg_issue_count + 'd1;
                     end
                 end
             end
             //case5: no instruction is ready
             ISSUE_NOTHING: begin
-                //do nothing
+                issue_pack[0].valid = 'b0;
+                issue_pack[1].valid = 'b0;
             end
         endcase
-        
+
+        //issue conditional branch if any
+        if(!empty_cond_branch_issue) begin
+            for (int i = 0; i<`RS_SZ; i++)begin
+                if(cond_branch_issue_mask[i]) begin
+                    issue_pack[2].valid= 'b1;
+                    issue_pack[2].inst= next_rs_entry[i].inst;
+                    issue_pack[2].PC= next_rs_entry[i].PC;
+                    issue_pack[2].NPC= next_rs_entry[i].NPC;
+                    issue_pack[2].opa_select= next_rs_entry[i].opa_select;
+                    issue_pack[2].opb_select= next_rs_entry[i].opb_select;
+                    issue_pack[2].has_dest= next_rs_entry[i].has_dest;
+                    issue_pack[2].alu_func= next_rs_entry[i].alu_func;
+                    issue_pack[2].mult= next_rs_entry[i].mult;
+                    issue_pack[2].rd_mem= next_rs_entry[i].rd_mem;
+                    issue_pack[2].wr_mem= next_rs_entry[i].wr_mem;
+                    issue_pack[2].cond_branch= next_rs_entry[i].cond_branch;
+                    issue_pack[2].uncond_branch= next_rs_entry[i].uncond_branch;
+                    issue_pack[2].csr_op= next_rs_entry[i].csr_op;
+                    issue_pack[2].halt= next_rs_entry[i].halt;
+                    issue_pack[2].illegal= next_rs_entry[i].illegal;
+                    issue_pack[2].bmask_index= next_rs_entry[i].bmask_index;
+                    issue_pack[2].bmask= next_rs_entry[i].bmask;
+                    issue_pack[2].opcode= next_rs_entry[i].opcode;
+                    issue_pack[2].T= next_rs_entry[i].T;
+                    issue_pack[2].t1= next_rs_entry[i].t1;
+                    issue_pack[2].t2= next_rs_entry[i].t2;
+                    issue_pack[2].rob_index = next_rs_entry[i].rob_index;\
+                    //mark as not busy
+                    next_rs_entry[i] = '0;
+                end
+            end
+        end
+
         for(int j = 0; j < `RS_SZ; j++) begin 
             if(!next_rs_entry[j].busy) begin 
                 empty_entries_num = empty_entries_num + 1;
@@ -513,11 +558,9 @@ module rs(
     always_ff@(posedge clock)begin
         if(reset)begin
             rs_entry <= '{default: '0};
-            //empty_entry_mask <= '1; //all entries are empty at the beginning
         end
         else begin
             rs_entry <= next_rs_entry;
-            //empty_entry_mask <= next_empty_entry_mask;
         end
     end
 

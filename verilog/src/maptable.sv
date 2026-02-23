@@ -4,7 +4,6 @@ module maptable(
     input logic                         clock,
     input logic                         reset,
     input logic                         mispredicted,
-    input logic                         branch_encountered,
     input ALU_OPA_SELECT                opa_select              [`N-1:0],  // Whether to read src1 mapping
     input ALU_OPB_SELECT                opb_select              [`N-1:0],  // Whether to read src2 mapping
     input logic                         has_dest                [`N-1:0],
