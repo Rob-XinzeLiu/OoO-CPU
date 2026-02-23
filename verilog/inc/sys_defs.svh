@@ -291,16 +291,6 @@ typedef enum logic [2:0] {
 // ---- Entry def. ----       //
 ////////////////////////////////
 
-typedef struct packed {
-        ADDR    pc;
-        PRF_IDX t;
-        PRF_IDX told;
-        logic ready_retire;//how many inst can we retire per cycle?
-        ROB_IDX index;
-        logic is_load;
-        logic is_store;
-        REG_IDX  dest_reg_idx; 
-} ROB_ENTRY;
 
 typedef struct packed {
     logic [$clog2(`PHYS_REG_SZ_R10K)-1:0]   p_tag; 
@@ -426,6 +416,7 @@ typedef struct packed{
     INST            inst;
     logic           valid;
     PRF_IDX         T;
+    PRF_IDX         Told;
     PRF_IDX         t1;
     PRF_IDX         t2;
     logic           t1_ready;
