@@ -443,6 +443,7 @@ typedef struct packed{
 
 typedef struct packed{
     logic           valid;
+    INST            inst;
     ALU_OPA_SELECT  opa_select;
     ALU_OPB_SELECT  opb_select;
     logic           has_dest;

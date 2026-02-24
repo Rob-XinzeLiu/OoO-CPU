@@ -15,4 +15,6 @@ module issue_stage(
 
     output S_X_PACKET                       s_x_pack                     [`N-1:0]
 );
+
+//TODO: Remeber to pass inst.
 endmodule

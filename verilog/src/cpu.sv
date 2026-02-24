@@ -61,7 +61,8 @@ module cpu (
 
     // Outputs from IF-Stage and IF/ID Pipeline Register
     ADDR Imem_addr;
-    IF_ID_PACKET if_packet, if_id_reg;
+    IF_ID_PACKET if_packet [1:0]; 
+    IF_ID_PACKET if_id_reg [1:0];
 
     // Outputs from ID stage and ID/EX Pipeline Register
     ID_EX_PACKET id_packet, id_ex_reg;
@@ -159,9 +160,9 @@ module cpu (
     );
 
     // debug outputs
-    assign if_NPC_dbg   = if_packet.NPC;
-    assign if_inst_dbg  = if_packet.inst;
-    assign if_valid_dbg = if_packet.valid;
+    assign if_NPC_dbg   = if_packet.NPC; // NOT UPDATED AFTER TWO WIDE FETCH
+    assign if_inst_dbg  = if_packet.inst; // NOT UPDATED AFTER TWO WIDE FETCH
+    assign if_valid_dbg = if_packet.valid; // NOT UPDATED AFTER TWO WIDE  FETCH
 
     //////////////////////////////////////////////////
     //                                              //
@@ -173,12 +174,18 @@ module cpu (
 
     always_ff @(posedge clock) begin
         if (reset) begin
-            if_id_reg.inst  <= `NOP;
-            if_id_reg.valid <= `FALSE;
-            if_id_reg.NPC   <= 0;
-            if_id_reg.PC    <= 0;
+            if_id_reg[0].inst  <= `NOP;
+            if_id_reg[0].valid <= `FALSE;
+            if_id_reg[0].NPC   <= '0;
+            if_id_reg[0].PC    <= '0;
+
+            if_id_reg[1].inst  <= `NOP;
+            if_id_reg[1].valid <= `FALSE;
+            if_id_reg[1].NPC   <= '0;
+            if_id_reg[1].PC    <= '0;
         end else if (if_id_enable) begin
-            if_id_reg <= if_packet;
+            if_id_reg[0] <= if_packet[0];
+            if_id_reg[1] <= if_packet[1];
         end
     end
 
