@@ -7,8 +7,8 @@ module rob(
     input ROB_IDX               mispredicted_index              ,
     input X_C_PACKET            cdb                     [`N-1:0],
 
-    output PRF_IDX              told_to_freelist        [`N-1:0],//retire
-    output ROB_CNT              space_avail                     ,//to dispatch stage
+    output PRF_IDX              told_to_freelist        [`N-1:0],//retire TODO: maybe we can get rid of tag? just use number
+    output ROB_CNT              rob_space_avail                 ,//to dispatch stage
     output ROB_IDX              rob_index               [`N-1:0] //to rs
 );
 
@@ -110,7 +110,7 @@ module rob(
 //////////////////////  space count            ////////////////////////
 //////////////////////                         ////////////////////////
 ///////////////////////////////////////////////////////////////////////
-        space_avail = `ROB_SZ - next_rob_count;
+        rob_space_avail = `ROB_SZ - next_rob_count;
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
 //////////////////////  Enqueue(Dispatch)      ////////////////////////

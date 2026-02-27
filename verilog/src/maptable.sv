@@ -15,6 +15,7 @@ module maptable(
     input REG_IDX                       r1                      [`N-1:0],
     input REG_IDX                       r2                      [`N-1:0],
     input logic [`MT_SIZE-1:0]          snapshot_in                     ,
+    input logic                         is_branch               [`N-1:0],
     
     output  PRF_IDX                     t1                      [`N-1:0],
     output  PRF_IDX                     t2                      [`N-1:0],
@@ -100,7 +101,7 @@ module maptable(
             end
 
             // Take snapshot[0]
-            if(cond_branch[0]) begin
+            if(is_branch[0]) begin
                 snapshot_out[0] = pack_mt(next_mt);
             end
 
@@ -134,7 +135,7 @@ module maptable(
             end
 
             // Take snapshot[1]
-            if(cond_branch[1]) begin
+            if(is_branch[1]) begin
                 snapshot_out[1] = pack_mt(next_mt);
             end
         end

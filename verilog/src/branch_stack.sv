@@ -3,19 +3,21 @@
 module branch_stack (
     input logic                                         clock                            ,
     input logic                                         reset                            ,
-    input logic [`MT_SIZE-1:0]                          mt_snapshot_in           [`N-1:0],   //from maptable
+    input logic [`MT_SIZE-1:0]                          mt_snapshot_in           [`N-1:0],   //from maptable inside dispatch stage
     input logic                                         mispredicted                     ,   //from execute stage
     input B_MASK                                        mispredicted_idx                 ,   //from execute stage
     input logic [`FLIST_SIZE-1:0]                       tail_ptr_in              [`N-1:0],   //from freelist
     input logic                                         branch_encountered       [`N-1:0],   //from dispatch stage
     input B_MASK                                        branch_idx               [`N-1:0],   //from dispatch stage
+    input ADDR                                          pc_snapshop_in           [`N-1:0],   //from dispatch stage
     input X_C_PACKET                                    x_c_pack                 [`N-1:0],   //from execute stage , retire branch stack entry                          
     
     output logic [`MT_SIZE-1:0]                         mt_snapshot_out                  ,   //to maptable
     output logic [`FLIST_SIZE-1:0]                      tail_ptr_out                     ,   //to freelist
     output logic                                        stack_full                       ,   //to dispatch stage
-    output logic                                        stack_empty                      ,   //to dispatch stage
-    output logic [$clog2(`BRANCH_STACK_DEPTH)-1:0]      space_avail                          //to dispatch stage
+    //output logic                                      stack_empty                      ,   //to dispatch stage
+    output BSTACK_CNT                                   branch_stack_space_avail         ,   //to dispatch stage
+    output ADDR                                         pc_snapshot_out                      //to fetch stage
 );
 
     typedef struct packed {
@@ -23,14 +25,15 @@ module branch_stack (
         logic [`MT_SIZE-1:0]           maptable;
         logic [`FLIST_SIZE-1:0]        freelist_tail_idx;
         logic                          resolved;
+        ADDR                           pc;
                   
-        //TODO : LSQ, PC
+        //TODO : LSQ
     } checkpoint_t;
 
     checkpoint_t stack              [`BRANCH_STACK_DEPTH-1:0];
     checkpoint_t stack_next         [`BRANCH_STACK_DEPTH-1:0];
 
-    logic [$clog2(`BRANCH_STACK_DEPTH+1)-1:0] stack_ptr, stack_ptr_next, stack_ptr_temp;//always point to the top of the stack
+    BSTACK_CNT   stack_ptr, stack_ptr_next, stack_ptr_temp;//always point to the top of the stack
     ///////////////////////////////////////////////////////////////////////
     //////////////////////                         ////////////////////////
     //////////////////////  Combinational Logic    ////////////////////////
@@ -53,7 +56,8 @@ module branch_stack (
         if(mispredicted) begin
             mt_snapshot_out = stack[mispredicted_idx].maptable;
             tail_ptr_out = stack[mispredicted_idx].freelist_tail_idx;
-            //TODO: send LSQ, PC out
+            pc_snapshot_out = stack[mispredicted_idx].pc;
+            //TODO: LSQ
             //clear all the younger entries
             for (i = mispredicted_idx + 1; i<`BRANCH_STACK_DEPTH; i++) begin
                 stack_next[i].resolved = '0; 
@@ -77,7 +81,7 @@ module branch_stack (
             stack_next[i] = '0;
         end
 
-        space_avail = `BRANCH_STACK_DEPTH - stack_ptr_next;
+        Branch_stack_space_avail = `BRANCH_STACK_DEPTH - stack_ptr_next;
     
         //step 4 : enqueue logic
         stack_ptr_temp = stack_ptr_next;
@@ -86,14 +90,15 @@ module branch_stack (
                 stack_next[stack_ptr_next].branch_idx = branch_idx[i];
                 stack_next[stack_ptr_next].maptable = mt_snapshot_in[i];
                 stack_next[stack_ptr_next].freelist_tail_idx = tail_ptr_in[i];
+                stack_next[stack_ptr_next].pc = pc_snapshot_in[i];
                 stack_ptr_temp = stack_ptr_temp + 1;
-                //TODO: LSQ, PC
+                //TODO: LSQ
             end
         end
         stack_ptr_next = stack_ptr_temp;
 
-        stack_empty = (stack_ptr_next == 0);
-        stack_full  = (stack_ptr_next == `BRANCH_STACK_DEPTH);
+        // stack_empty = (stack_ptr_next == 0);
+        // stack_full  = (stack_ptr_next == `BRANCH_STACK_DEPTH);
     end
 
     ///////////////////////////////////////////////////////////////////////
@@ -105,9 +110,9 @@ module branch_stack (
         if(reset) begin
             stack_ptr <= '0;
             stack <= '{default: '0};
-            stack_empty <= 1'b1;
-            stack_full <= 1'b0;
-            space_avail <= `BRANCH_STACK_DEPTH;
+            // stack_empty <= 1'b1;
+            // stack_full <= 1'b0;
+            branch_stack_space_avail <= `BRANCH_STACK_DEPTH;
         end else begin
             stack_ptr <= stack_ptr_next;
             stack <= stack_next;

@@ -20,10 +20,9 @@ module rs(
     input logic                             cdb_gnt_alu                 [`N-1:0],
     output logic                            cdb_req_alu                 [`N-1:0],
     //to issue stage
-    output D_S_PACKET                       issue_pack                  [`N:0], //1 conditional branch
-    output logic [$clog2(`RS_SZ + 1)-1:0]   empty_entries_num,
+    output D_S_PACKET                       issue_pack                    [`N:0], //conditional branch goes to issue_pack[2]
+    output RS_CNT                           rs_empty_entries_num                ,
     output logic [1:0]                      dbg_issue_count
-    //conditional branch goes to issue_pack[2]
 );
 
     typedef struct packed{
@@ -222,7 +221,6 @@ module rs(
         if(mispredicted) begin
             for (int i = 0; i < `RS_SZ; i++)begin
                 if(next_rs_entry[i].busy && (mispredicted_bmask_index & next_rs_entry[i].bmask)) begin
-                    //next_empty_entry_mask[i] = 1;
                     next_rs_entry[i] = '0;
                 end
             end

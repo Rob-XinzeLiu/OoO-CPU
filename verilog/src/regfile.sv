@@ -6,71 +6,95 @@
 //                 WB Stages of the Pipeline.                          //
 //                                                                     //
 /////////////////////////////////////////////////////////////////////////
-
 `include "sys_defs.svh"
 
-// TODO: update this with the new parameters from sys_defs
-// namely: PHYS_REG_SZ_P6 or PHYS_REG_SZ_R10K
-
-module regfile (
+module regfile #parameter(
+    parameter WIDTH      = 32,
+    parameter DEPTH      = 32,
+    parameter READ_PORTS = 1,
+    parameter BYPASS_EN  = 0 // ensure it is only ever 0 or 1
+)(
     input         clock, // system clock
-    // note: no system reset, register values must be written before they can be read
-    input REG_IDX read_idx_1, read_idx_2, write_idx,
-    input         write_en,
-    input DATA    write_data,
+    input         reset,
+    input PRF_IDX [`N-1:0] read_idx_1, 
+    input PRF_IDX [`N-1:0] read_idx_2, 
+    input PRF_IDX [`N-1:0] write_idx,
+    input         [`N-1:0] write_en,
+    input DATA    [`N-1:0] write_data,
 
-    output DATA   read_out_1, read_out_2
+    output DATA   [`N-1:0] read_out_1, 
+    output DATA   [`N-1:0] read_out_2
 );
-
-    // Intermediate data before accounting for register 0
-    DATA  rdata2, rdata1;
     // Don't read or write when dealing with register 0
-    logic re2, re1;
-    logic we;
+    logic [1:0] re2; 
+    logic [1:0] re1;
+    logic [1:0] we;
 
-    // Technically we only need 31 registers since reg 0 is hard wired to 0
-    // But since we're not grading area, just set size to 32 to make interface
-    // easier and avoid having to subtract 1 from all addresses
-    memDP #(
-        .WIDTH     ($bits(DATA)), // 32-bit registers
-        .DEPTH     (32),
-        .READ_PORTS(2), // 2 read ports
-        .BYPASS_EN (1)) // Allow internal forwarding
-    regfile_mem (
-        .clock(clock),
-        .reset(1'b0),   // must be written before read
-        .re   ({re2,        re1}),
-        .raddr({read_idx_2, read_idx_1}),
-        .rdata({rdata2,     rdata1}),
-        .we   (we),
-        .waddr(write_idx),
-        .wdata(write_data)
-    );
+    logic [DEPTH-1:0][WIDTH-1:0]  memData;
 
-    // Read port 1
-    always_comb begin
-        if (read_idx_1 == `ZERO_REG) begin
-            read_out_1 = '0;
-            re1        = 1'b0;
+    /////////////////////////////
+    //                         //
+    //      Read Data Logic    //
+    //                         //
+    /////////////////////////////
+    assign re1[0] = !(read_idx_1[0] == `ZERO_REG);
+    assign re1[1] = !(read_idx_1[1] == `ZERO_REG);
+    assign re2[0] = !(read_idx_2[0] == `ZERO_REG);
+    assign re2[1] = !(read_idx_2[1] == `ZERO_REG);
+    assign we[0]  = write_en[0] && (write_idx[0] != `ZERO_REG);
+    assign we[1]  = write_en[1] && (write_idx[1] != `ZERO_REG);
+
+    /////// inst 1 ////////
+    wire mux10_0 = BYPASS_EN && we[0] && (read_idx_1[0] == write_idx[0]); //read_idx_1 slot 0 needs write_data 0
+    wire mux10_1 = BYPASS_EN && we[1] && (read_idx_1[0] == write_idx[1]); // read_idx_1 slot 0 needs write_data 1
+
+    wire mux20_0 = BYPASS_EN && we[0] && (read_idx_2[0] == write_idx[0]); //read_idx_2 slot 0 needs write_data 0
+    wire mux20_1 = BYPASS_EN && we[1] && (read_idx_2[0] == write_idx[1]); // read_idx_2 slot 0 needs write_data 1
+    
+    /////// inst 2 /////////
+    wire mux11_0 = BYPASS_EN && we[0] && (read_idx_1[1] == write_idx[0]); //read_idx_1 slot 1 needs write_data 0
+    wire mux11_1 = BYPASS_EN && we[1] && (read_idx_1[1] == write_idx[1]); // read_idx_1 slot 1 needs write_data 1
+
+    wire mux21_0 = BYPASS_EN && we[0] && (read_idx_2[1] == write_idx[0]); //read_idx_2 slot 1 needs write_data 0
+    wire mux21_1 = BYPASS_EN && we[1] && (read_idx_2[1] == write_idx[1]); // read_idx_2 slot 1 needs write_data 1
+
+    assign read_out_1[0] = !re1[0] ? '0 :
+                            mux10_1 ? write_data[1] :
+                            mux10_0 ? write_data[0] :
+                            memData [read_idx_1[0]];
+
+    assign read_out_1[1] = !re1[1] ? '0 :
+                            mux11_1 ? write_data[1] :
+                            mux11_0 ? write_data[0] :
+                            memData [read_idx_1[1]];
+
+    assign read_out_2[0] = !re2[0] ? '0 :
+                            mux20_1 ? write_data[1] :
+                            mux20_0 ? write_data[0] :
+                            memData [read_idx_2[0]];
+
+    assign read_out_2[1] = !re2[1] ? '0 :
+                            mux21_1 ? write_data[1] :
+                            mux21_0 ? write_data[0] :
+                            memData [read_idx_2[1]];
+
+    /////////////////////////////
+    //                         //
+    //     Write Data Logic    //
+    //                         //
+    /////////////////////////////
+    
+
+    //no two instructions should be writing to the same location in MR10K
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            memData        <= '0;
         end else begin
-            read_out_1 = rdata1;
-            re1       = 1'b1;
+            for(int i = 0; i < `N; ++i)begin
+                if(we[i]) begin
+                    memData[write_idx[i]] <= write_data[i];
+                end
+            end
         end
     end
-
-    // Read port 2
-    always_comb begin
-        if (read_idx_2 == `ZERO_REG) begin
-            read_out_2 = '0;
-            re2        = 1'b0;
-        end else begin
-            read_out_2 = rdata2;
-            re2       = 1'b1;
-        end
-    end
-
-    // Write port
-    // Can't write to zero register
-    assign we = write_en && (write_idx != `ZERO_REG);
-
 endmodule // regfile

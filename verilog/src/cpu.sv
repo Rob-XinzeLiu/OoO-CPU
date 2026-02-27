@@ -291,6 +291,56 @@ module cpu (
 
     //////////////////////////////////////////////////
     //                                              //
+    //                 cdb_arbiter                  //
+    //                                              //
+    //////////////////////////////////////////////////
+    typedef enum logic [2:0] {
+        1_MULT,
+        1_MULT_1_ALU,
+        1_ALU,
+        2_ALU,
+        NONE,
+    } cdb_arbiter_state_t;
+
+    cdb_arbiter_state_t cdb_arbiter_state;
+    //we will always grant mult, so cdb_req_mult just means if there's a mult inst in that stage.
+    always_comb begin
+        cdb_arbiter_state = NONE;  // default
+        if(cdb_req_alu[0] && cdb_req_mult) begin
+            cdb_arbiter_state = 1_MULT_1_ALU;
+        end else if(cdb_req_mult && !cdb_req_alu[0]) begin
+            cdb_arbiter_state = 1_MULT;
+        end else if(!cdb_req_mult && cdb_req_alu[0] && !cdb_req_alu[1]) begin
+            cdb_arbiter_state = 1_ALU;
+        end else if(!cdb_req_mult && cdb_req_alu[0] && cdb_req_alu[1])  begin           
+            cdb_arbiter_state = 2_ALU;
+        end
+
+        case (cdb_arbiter_state)
+            1_MULT: begin
+                cdb_grant_alu[0] = 0;
+                cdb_grant_alu[1] = 0;
+            end
+            1_MULT_1_ALU: begin
+                cdb_grant_alu[0] = 1;
+                cdb_grant_alu[1] = 0;
+            end
+            1_ALU: begin
+                cdb_grant_alu[0] = 1;
+                cdb_grant_alu[1] = 0;
+            end
+            2_ALU: begin
+                cdb_grant_alu[0] = 1;
+                cdb_grant_alu[1] = 1;
+            end
+            NONE: begin
+                cdb_grant_alu[0] = 0;
+                cdb_grant_alu[1] = 0;
+            end
+        endcase
+    end
+    //////////////////////////////////////////////////
+    //                                              //
     //                 MEM-Stage                    //
     //                                              //
     //////////////////////////////////////////////////

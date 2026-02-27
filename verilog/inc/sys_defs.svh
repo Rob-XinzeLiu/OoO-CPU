@@ -45,7 +45,12 @@
 `define NUM_FU_STORE xx
 
 typedef logic [$clog2(`ROB_SZ)-1:0] ROB_IDX;
+typedef logic [$clog2(`FLIST_SZ)-1:0] FLIST_IDX;
 typedef logic [$clog2(`ROB_SZ+1)-1:0] ROB_CNT;
+typedef logic [$clog2(`FLIST_SZ+1)-1:0] FLIST_CNT;
+typedef logic [$clog2(`RS_SZ + 1)-1:0] RS_CNT;
+typedef logic [$clog2(`BRANCH_STACK_DEPTH)-1:0]  BSTACK_IDX;
+typedef logic [$clog2(`BRANCH_STACK_DEPTH+1)-1:0]  BSTACK_CNT;
 typedef logic [$clog2(`PHYS_REG_SZ_R10K)-1:0] PRF_IDX;
 // number of mult stages (2, 4) (you likely don't need 8)
 `define MULT_STAGES 4
@@ -444,6 +449,8 @@ typedef struct packed{
 typedef struct packed{
     logic           valid;
     INST            inst;
+    ADDR            PC;
+    ADDR            NPC;
     ALU_OPA_SELECT  opa_select;
     ALU_OPB_SELECT  opb_select;
     logic           has_dest;
