@@ -9,7 +9,7 @@ module freelist(
     input logic                             cond_branch [`N-1:0],
     input logic                             mispredicted        ,
 
-    output logic                            full,
+    //output logic                            full,
     output FLIST_CNT                        BS_head [`N-1:0]    ,  //to BS
     output PRF_IDX                          t       [`N-1:0]    ,                              // to dispatch
     output FLIST_CNT                        avail_num     // to dispatch

@@ -23,12 +23,13 @@ module stage_dispatch (
 
     output D_S_PACKET                       dispatch_pack               [`N-1:0],
     output logic                            branch_encountered          [`N-1:0],
-
+    output B_MASK                           branch_index                [`N-1:0],  
+    // maptable snapshot
     input  logic [`MT_SIZE-1:0]             maptable_snapshot_in                ,                         
     output logic [`MT_SIZE-1:0]             maptable_snapshot_out       [`N-1:0],
 
     output ADDR                             pc_snapshot_out             [`N-1:0],
-    output B_MASK                           branch_index                [`N-1:0],  
+   
     output logic [1:0]                      dispatch_num             
 );
 
@@ -164,6 +165,8 @@ module stage_dispatch (
         next_bmask = bmask;
         bmask_idx_0 = 'd0;
         bmask_idx_1 = 'd0;
+        branch_encountered = '{default: 1'b0};
+        branch_index = '{default: '0};
         
         // Allocate bmask， if there's a mispredict, we can't dispatch in the same cycle.
         if(mispredicted) begin
@@ -236,6 +239,11 @@ module stage_dispatch (
                     dispatch_pack[0].csr_op = decode_pack[0].csr_op;
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
+                    dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
+                    dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    //send to branch stack
+                    branch_encountered[0] = 1'b1;
+                    branch_index[0] = bmask_idx_0;
                     //update branch count
                     next_branch_count = next_branch_count + 1;
                 end
@@ -265,6 +273,8 @@ module stage_dispatch (
                     dispatch_pack[0].csr_op = decode_pack[0].csr_op;
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
+                    dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
+                    dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
                 end
 
                 TWO_BRANCH: begin
@@ -300,6 +310,11 @@ module stage_dispatch (
                     dispatch_pack[0].csr_op = decode_pack[0].csr_op;
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
+                    dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
+                    dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    //send to branch stack
+                    branch_encountered[0] = 1'b1;
+                    branch_index[0] = bmask_idx_0;
                     //inst 1
                     for(int i = 0; i < 2*`N; i++) begin
                         if(~next_bmask[i]) begin
@@ -332,6 +347,11 @@ module stage_dispatch (
                     dispatch_pack[1].csr_op = decode_pack[1].csr_op;
                     dispatch_pack[1].halt = decode_pack[1].halt;
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
+                    dispatch_pack[1].predict_addr = f_d_pack[1].predict_addr;
+                    dispatch_pack[1].predict_taken = f_d_pack[1].predict_taken;
+                    //send to branch stack
+                    branch_encountered[1] = 1'b1;
+                    branch_index[1] = bmask_idx_1;
                     //update branch count
                     next_branch_count = next_branch_count + 2;
                 end
@@ -362,6 +382,8 @@ module stage_dispatch (
                         dispatch_pack[i].csr_op = decode_pack[i].csr_op;
                         dispatch_pack[i].halt = decode_pack[i].halt;
                         dispatch_pack[i].illegal = decode_pack[i].illegal;
+                        dispatch_pack[i].predict_addr = f_d_pack[i].predict_addr;
+                        dispatch_pack[i].predict_taken = f_d_pack[i].predict_taken;
                     end
                 end
 
@@ -391,7 +413,8 @@ module stage_dispatch (
                     dispatch_pack[0].csr_op = decode_pack[0].csr_op;
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
-                
+                    dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
+                    dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;               
                     //inst 1 is branch
                     for(int i = 0; i < 2*`N; i++) begin
                         if(~next_bmask[i]) begin
@@ -424,6 +447,11 @@ module stage_dispatch (
                     dispatch_pack[1].csr_op = decode_pack[1].csr_op;
                     dispatch_pack[1].halt = decode_pack[1].halt;
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
+                    dispatch_pack[1].predict_addr = f_d_pack[1].predict_addr;
+                    dispatch_pack[1].predict_taken = f_d_pack[1].predict_taken;
+                    //send to branch stack
+                    branch_encountered[0] = 1'b1;
+                    branch_index[0] = bmask_idx_1;
                     //update branch count
                     next_branch_count = next_branch_count + 1;
                 end
@@ -461,6 +489,11 @@ module stage_dispatch (
                     dispatch_pack[0].csr_op = decode_pack[0].csr_op;
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
+                    dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
+                    dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    //send to branch stack
+                    branch_encountered[0] = 1'b1;
+                    branch_index[0] = bmask_idx_0;
 
                     //inst 1 is not branch
                     dispatch_pack[1].inst = f_d_pack[1].inst;
@@ -487,6 +520,8 @@ module stage_dispatch (
                     dispatch_pack[1].csr_op = decode_pack[1].csr_op;
                     dispatch_pack[1].halt = decode_pack[1].halt;
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
+                    dispatch_pack[1].predict_addr = f_d_pack[1].predict_addr;
+                    dispatch_pack[1].predict_taken = f_d_pack[1].predict_taken;
                     //update branch count
                     next_branch_count = next_branch_count + 1;
                 end
@@ -495,8 +530,11 @@ module stage_dispatch (
                     dispatch_pack = '{default: '0};
                 end
 
-            endcase
-            
+                default: begin
+                    dispatch_pack = '{default: '0};
+                end
+
+            endcase        
             
             // Calculate how many instructions we can dispatch in the next cycle
             branch_avail_slot = (next_branch_count < 3)? 'd2:(next_branch_count == 3)? 'd1:'d0; 
@@ -507,7 +545,6 @@ module stage_dispatch (
             dispatch_num = small4;
         end
     end
-
 
     always_ff @(posedge clock) begin
         if(reset) begin

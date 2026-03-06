@@ -2,10 +2,10 @@
 module stage_issue(
     input logic                             clock                               , 
     input logic                             reset                               , 
-    input D_S_PACKET                        issue_pack                  [`N-1:0],
+    input D_S_PACKET                        issue_pack                    [`N:0],
     //from prf
-    input DATA                              rs1_value                   [`N-1:0],
-    input DATA                              rs2_value                   [`N-1:0],
+    input DATA                              rs1_value                     [`N:0],
+    input DATA                              rs2_value                     [`N:0],
     //For branch resolve
     input logic                             resolved                            ,
     input B_MASK                            resolved_bmask_index                , 
@@ -14,12 +14,12 @@ module stage_issue(
     input B_MASK                            mispredicted_bmask_index            ,
     
 
-    output S_X_PACKET                       next_s_x_pack               [`N-1:0]
+    output S_X_PACKET                       next_s_x_pack               [`N:0]
 );
 
 ////////////make sure not to latch a valid on mispredict on the top level module (CPU) and the register file is BYPASS_EN = 1
     always_comb begin 
-        for (int i = 0; i < `N; i++)begin
+        for (int i = 0; i < `N + 1; i++)begin
 
             next_s_x_pack[i].valid = issue_pack[i].valid;
             next_s_x_pack[i].opa_select = issue_pack[i].opa_select;
@@ -40,12 +40,12 @@ module stage_issue(
             next_s_x_pack[i].tag = issue_pack[i].T;
             next_s_x_pack[i].rs1_value = rs1_value[i];
             next_s_x_pack[i].rs2_value = rs2_value[i];
-            next_s_x_pack[i].PREDICTED_PC = issue_pack[i].PREDICTED_PC;
-            next_s_x_pack[i].prediction = issue_pack[i].prediction;     
+            next_s_x_pack[i].predict_taken = issue_pack[i].predict_taken;
+            next_s_x_pack[i].predict_address = issue_pack[i].predict_address;     
         end
 
         if (resolved && !mispredicted) begin
-                for (int i = 0; i < `N; i++) begin
+                for (int i = 0; i < `N + 1; i++) begin
                     if (next_s_x_pack[i].valid) begin
                         next_s_x_pack[i].bmask = next_s_x_pack[i].bmask & ~(resolved_bmask_index);
                     end

@@ -14,7 +14,7 @@ module branch_stack (
     
     output logic [`MT_SIZE-1:0]                         mt_snapshot_out                  ,   //to maptable
     output logic [`FLIST_SIZE-1:0]                      tail_ptr_out                     ,   //to freelist
-    output logic                                        stack_full                       ,   //to dispatch stage
+    //output logic                                        stack_full                       ,   //to dispatch stage
     //output logic                                      stack_empty                      ,   //to dispatch stage
     output BSTACK_CNT                                   branch_stack_space_avail         ,   //to dispatch stage
     output ADDR                                         pc_snapshot_out                      //to fetch stage

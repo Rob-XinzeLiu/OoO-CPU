@@ -209,7 +209,7 @@ module rs(
         end
 
         //resolve logic
-        if (resolved && !mispredicted) begin
+        if (resolved) begin
             for (int j = 0; j < `RS_SZ; j++) begin
                 if (next_rs_entry[j].busy) begin
                     next_rs_entry[j].bmask = next_rs_entry[j].bmask & ~(resolved_bmask_index);
@@ -470,31 +470,31 @@ module rs(
                 for (int i = 0; i<`RS_SZ; i++)begin
                     if(issue_bus[0][i] && cdb_gnt_alu[0]) begin
                         //to issue pack 0
-                        issue_pack[0].valid= 'b1;
-                        issue_pack[0].inst= next_rs_entry[i].inst;
-                        issue_pack[0].PC= next_rs_entry[i].PC;
-                        issue_pack[0].NPC= next_rs_entry[i].NPC;
-                        issue_pack[0].opa_select= next_rs_entry[i].opa_select;
-                        issue_pack[0].opb_select= next_rs_entry[i].opb_select;
-                        issue_pack[0].has_dest= next_rs_entry[i].has_dest;
-                        issue_pack[0].alu_func= next_rs_entry[i].alu_func;
-                        issue_pack[0].mult= next_rs_entry[i].mult;
-                        issue_pack[0].rd_mem= next_rs_entry[i].rd_mem;
-                        issue_pack[0].wr_mem= next_rs_entry[i].wr_mem;
-                        issue_pack[0].cond_branch= next_rs_entry[i].cond_branch;
-                        issue_pack[0].uncond_branch= next_rs_entry[i].uncond_branch;
-                        issue_pack[0].csr_op= next_rs_entry[i].csr_op;
-                        issue_pack[0].halt= next_rs_entry[i].halt;
-                        issue_pack[0].illegal= next_rs_entry[i].illegal;
-                        issue_pack[0].bmask_index= next_rs_entry[i].bmask_index;
-                        issue_pack[0].bmask= next_rs_entry[i].bmask;
-                        issue_pack[0].opcode= next_rs_entry[i].opcode;
-                        issue_pack[0].T= next_rs_entry[i].T;
-                        issue_pack[0].t1= next_rs_entry[i].t1;
-                        issue_pack[0].t2= next_rs_entry[i].t2;
-                        issue_pack[0].rob_index = next_rs_entry[i].rob_index;
+                        issue_pack[1].valid= 'b1;
+                        issue_pack[1].inst= next_rs_entry[i].inst;
+                        issue_pack[1].PC= next_rs_entry[i].PC;
+                        issue_pack[1].NPC= next_rs_entry[i].NPC;
+                        issue_pack[1].opa_select= next_rs_entry[i].opa_select;
+                        issue_pack[1].opb_select= next_rs_entry[i].opb_select;
+                        issue_pack[1].has_dest= next_rs_entry[i].has_dest;
+                        issue_pack[1].alu_func= next_rs_entry[i].alu_func;
+                        issue_pack[1].mult= next_rs_entry[i].mult;
+                        issue_pack[1].rd_mem= next_rs_entry[i].rd_mem;
+                        issue_pack[1].wr_mem= next_rs_entry[i].wr_mem;
+                        issue_pack[1].cond_branch= next_rs_entry[i].cond_branch;
+                        issue_pack[1].uncond_branch= next_rs_entry[i].uncond_branch;
+                        issue_pack[1].csr_op= next_rs_entry[i].csr_op;
+                        issue_pack[1].halt= next_rs_entry[i].halt;
+                        issue_pack[1].illegal= next_rs_entry[i].illegal;
+                        issue_pack[1].bmask_index= next_rs_entry[i].bmask_index;
+                        issue_pack[1].bmask= next_rs_entry[i].bmask;
+                        issue_pack[1].opcode= next_rs_entry[i].opcode;
+                        issue_pack[1].T= next_rs_entry[i].T;
+                        issue_pack[1].t1= next_rs_entry[i].t1;
+                        issue_pack[1].t2= next_rs_entry[i].t2;
+                        issue_pack[1].rob_index = next_rs_entry[i].rob_index;
 
-                        issue_pack[1].valid = 'b0;
+                        issue_pack[0].valid = 'b0;
                         //mark as not busy
                         next_rs_entry[i] = '0;
 
@@ -506,6 +506,9 @@ module rs(
             ISSUE_NOTHING: begin
                 issue_pack[0].valid = 'b0;
                 issue_pack[1].valid = 'b0;
+            end
+            default:begin
+                issue_pack = '{default:'0};
             end
         endcase
 
@@ -525,7 +528,7 @@ module rs(
                     issue_pack[2].rd_mem= next_rs_entry[i].rd_mem;
                     issue_pack[2].wr_mem= next_rs_entry[i].wr_mem;
                     issue_pack[2].cond_branch= next_rs_entry[i].cond_branch;
-                    issue_pack[2].uncond_branch= next_rs_entry[i].uncond_branch;
+                    issue_pack[2].uncond_branch= 'b0;
                     issue_pack[2].csr_op= next_rs_entry[i].csr_op;
                     issue_pack[2].halt= next_rs_entry[i].halt;
                     issue_pack[2].illegal= next_rs_entry[i].illegal;
@@ -535,7 +538,7 @@ module rs(
                     issue_pack[2].T= next_rs_entry[i].T;
                     issue_pack[2].t1= next_rs_entry[i].t1;
                     issue_pack[2].t2= next_rs_entry[i].t2;
-                    issue_pack[2].rob_index = next_rs_entry[i].rob_index;\
+                    issue_pack[2].rob_index = next_rs_entry[i].rob_index;
                     //mark as not busy
                     next_rs_entry[i] = '0;
                 end

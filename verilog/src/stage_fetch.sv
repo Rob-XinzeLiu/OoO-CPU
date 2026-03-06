@@ -18,7 +18,7 @@ module stage_if (
     input ADDR      branch_target,  // target pc: use if take_branch is TRUE
     input MEM_BLOCK Imem_data,      // data coming back from Instruction memory
 
-    output IF_ID_PACKET if_packet [1:0], // MAKE SURE TO CHANGE DECLARATION IN CPU.SV
+    output F_D_PACKET if_packet [1:0], // MAKE SURE TO CHANGE DECLARATION IN CPU.SV
     output ADDR         Imem_addr // address sent to Instruction memory
 );
 

@@ -415,6 +415,8 @@ typedef struct packed {
     ADDR    NPC;
     INST    inst;
     logic   valid;
+    ADDR    predict_addr;     // predict address
+    logic   predict_taken;    // predict taken
 } F_D_PACKET;
 
 
@@ -444,6 +446,8 @@ typedef struct packed{
     B_MASK          bmask_index;
     B_MASK          bmask;
     ROB_IDX         rob_index;
+    ADDR            predict_addr;     // predict address
+    logic           predict_taken;    // predict taken
 } D_S_PACKET;
 
 typedef struct packed{
@@ -469,6 +473,8 @@ typedef struct packed{
     PRF_IDX         tag;
     DATA            rs1_value;
     DATA            rs2_value;
+    ADDR            predict_addr;     // predict address
+    logic           predict_taken;    // predict taken
 } S_X_PACKET;
 
 typedef struct packed{
@@ -478,10 +484,21 @@ typedef struct packed{
 
 typedef struct packed{
     logic           valid;
+    logic           take_branch;
+    ROB_IDX         br_rob_idx;
+    ADDR            correct_next_pc;
+} COND_BRANCH_PACKET;
+
+typedef struct packed{
+    logic           valid;
     ROB_IDX         complete_index;//rob
     PRF_IDX         complete_tag;
     logic           mispredicted;
     B_MASK          bmask_index;
+    B_MASK          bmask;
+    logic           has_dest;
+    logic           uncond_branch;//for unconditional branches, write NPC into PRF 
+    DATA            result;//write to PRF
 } X_C_PACKET;
 
 

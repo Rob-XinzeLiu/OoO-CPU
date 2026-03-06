@@ -7,18 +7,34 @@
 // period than straight multiplication.
 
 module mult (
-    input clock, reset, start,
+    input logic clock, 
+    input logic reset,
+    input logic start,
     input DATA rs1, rs2,
     input MULT_FUNC func,
-    // input logic [TODO] dest_tag_in,
+    input PRF_IDX  dest_tag_in,
+    input ROB_IDX rob_idx_in,
+    input B_MASK  bmask_in,
 
-    // output logic [TODO] dest_tag_out,
+    input logic       mispredicted,
+    input B_MASK      mispredicted_bmask_index,
+    input logic       resolved,
+    input B_MASK      resolved_bmask_index,
+
+    output B_MASK      bmask_out, 
+    output ROB_IDX    rob_idx_out,
+    output PRF_IDX dest_tag_out,
+    output logic cdb_req_mult,
     output DATA result,
-    output done
+    output logic done
 );
 
     MULT_FUNC [`MULT_STAGES-2:0] internal_funcs;
     MULT_FUNC func_out;
+    
+    PRF_IDX [`MULT_STAGES-2:0] internal_tags;//wires
+    ROB_IDX [`MULT_STAGES-2:0] internal_rob_indexes;//wires
+    B_MASK [`MULT_STAGES-2:0] internal_bmasks; //wires
 
     logic [(64*(`MULT_STAGES-1))-1:0] internal_sums, internal_mcands, internal_mpliers;
     logic [`MULT_STAGES-2:0] internal_dones;
@@ -26,21 +42,33 @@ module mult (
     logic [63:0] mcand, mplier, product;
     logic [63:0] mcand_out, mplier_out; // unused, just for wiring
 
+    assign cdb_req_mult = internal_dones[`MULT_STAGES-2];
+
     // instantiate an array of mult_stage modules
     // this uses concatenation syntax for internal wiring, see lab 2 slides
     mult_stage mstage [`MULT_STAGES-1:0] (
-        .clock (clock),
-        .reset (reset),
-        .func        ({internal_funcs,   func}),
-        .start       ({internal_dones,   start}), // forward prev done as next start
-        .prev_sum    ({internal_sums,    64'h0}), // start the sum at 0
-        .mplier      ({internal_mpliers, mplier}),
-        .mcand       ({internal_mcands,  mcand}),
-        .product_sum ({product,    internal_sums}),
-        .next_mplier ({mplier_out, internal_mpliers}),
-        .next_mcand  ({mcand_out,  internal_mcands}),
-        .next_func   ({func_out,   internal_funcs}),
-        .done        ({done,       internal_dones}) // done when the final stage is done
+        .clock                      (clock),
+        .reset                      (reset),
+        .func                       ({internal_funcs,   func}),
+        .start                      ({internal_dones,   start}), // forward prev done as next start
+        .prev_sum                   ({internal_sums,    64'h0}), // start the sum at 0
+        .mplier                     ({internal_mpliers, mplier}),
+        .mcand                      ({internal_mcands,  mcand}),
+        .product_sum                ({product,    internal_sums}),
+        .next_mplier                ({mplier_out, internal_mpliers}),
+        .next_mcand                 ({mcand_out,  internal_mcands}),
+        .next_func                  ({func_out,   internal_funcs}),
+        .done                       ({done,       internal_dones}), // done when the final stage is done
+        .tag_in                     ({internal_tags, dest_tag_in}),
+        .tag_out                    ({dest_tag_out, internal_tags}),
+        .rob_in                     ({internal_rob_indexes, rob_idx_in}),
+        .rob_out                    ({rob_idx_out, internal_rob_indexes}),
+        .bmask_in                   ({internal_bmasks, bmask_in}),
+        .bmask_out                  ({bmask_out, internal_bmasks}),
+        .mispredicted               (mispredicted),
+        .mispredicted_bmask_index   (mispredicted_bmask_index),
+        .resolved                   (resolved),
+        .resolved_bmask_index       (resolved_bmask_index)
     );
 
     // Sign-extend the multiplier inputs based on the operation
@@ -62,10 +90,22 @@ endmodule // mult
 
 
 module mult_stage (
-    input clock, reset, start,
+    input logic clock,
+    input logic reset, 
+    input logic start,
     input [63:0] prev_sum, mplier, mcand,
     input MULT_FUNC func,
+    input PRF_IDX  tag_in,
+    input ROB_IDX rob_in,
+    input B_MASK  bmask_in,
+    input logic       mispredicted,
+    input B_MASK      mispredicted_bmask_index,
+    input logic       resolved,
+    input B_MASK      resolved_bmask_index,
 
+    output B_MASK      bmask_out,
+    output ROB_IDX    rob_out,
+    output PRF_IDX     tag_out,
     output logic [63:0] product_sum, next_mplier, next_mcand,
     output MULT_FUNC next_func,
     output logic done
@@ -79,7 +119,7 @@ module mult_stage (
 
     assign shifted_mplier = {SHIFT'('b0), mplier[63:SHIFT]};
     assign shifted_mcand = {mcand[63-SHIFT:0], SHIFT'('b0)};
-
+    
     always_ff @(posedge clock) begin
         product_sum <= prev_sum + partial_product;
         next_mplier <= shifted_mplier;
@@ -87,12 +127,34 @@ module mult_stage (
         next_func   <= func;
     end
 
-    always_ff @(posedge clock) begin
-        if (reset) begin
-            done <= 1'b0;
+    B_MASK next_bmask;
+    logic next_done;
+
+    always_comb begin
+        // resolve first
+        next_bmask = resolved ? (bmask_in & ~resolved_bmask_index) : bmask_in;
+        // mispredict
+        if (mispredicted && |(next_bmask & mispredicted_bmask_index)) begin
+            next_bmask = '0;
+            next_done  = '0;
         end else begin
-            done <= start;
+            next_done  = start;
         end
     end
+
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            tag_out <= '0;          // on reset, clear tag
+            rob_out <= '0;          // on reset, clear ROB index
+            bmask_out <= '0;         // on reset, clear bmask
+            done <= '0;             // on reset, not done
+        end else begin
+            tag_out <= tag_in;
+            rob_out <= rob_in;
+            bmask_out <= next_bmask;
+            done      <= next_done;
+        end
+    end
+  
 
 endmodule // mult_stage

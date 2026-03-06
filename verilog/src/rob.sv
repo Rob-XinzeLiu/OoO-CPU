@@ -3,13 +3,16 @@ module rob(
     input logic                 clock                           ,
     input logic                 reset                           ,
     input D_S_PACKET            dispatch_pack           [`N-1:0],
-    input logic                 mispredicted                    ,
-    input ROB_IDX               mispredicted_index              ,
-    input X_C_PACKET            cdb                     [`N-1:0],
+    input logic                 mispredicted                    ,//from execute
+    input ROB_IDX               mispredicted_index              ,//from execute
+    input X_C_PACKET            cdb                     [`N-1:0],//set complete bit
+    input COND_BRANCH_PACKET    cond_branch_in                  ,//from execute, set complete 1 cycle earlier than cdb 
 
-    output PRF_IDX              told_to_freelist        [`N-1:0],//retire TODO: maybe we can get rid of tag? just use number
+    output logic                retire_valid                    ,//to freelist
+    output logic [1:0]          retire_num                      ,//to freelist
     output ROB_CNT              rob_space_avail                 ,//to dispatch stage
-    output ROB_IDX              rob_index               [`N-1:0] //to rs
+    output ROB_IDX              rob_index               [`N-1:0], //to rs
+    output ROB_IDX              rob_head_ptr_out                  //to execute stage
 );
 
     typedef struct packed {
@@ -27,9 +30,9 @@ module rob(
     ROB_IDX         tail_ptr, next_tail_ptr;//tail pointer point to next free slot
     ROB_CNT         rob_count, next_rob_count;//how many entries used
     //retire
-    logic           retire_1, retire_2;
-    assign          retire_1 = (rob_array[head_ptr].ready_retire && !rob_array[head_ptr + 1 ].ready_retire);
-    assign          retire_2 = (rob_array[head_ptr].ready_retire && rob_array[head_ptr + 1 ].ready_retire);
+    logic           retire_valid;
+    //output current head ptr to execute stage
+    assign          rob_head_ptr_out = head_ptr;
     //combinational output to rs
     assign          rob_index[0] = tail_ptr;
     assign          rob_index[1] = tail_ptr + 1'b1;
@@ -58,26 +61,26 @@ module rob(
         next_tail_ptr = tail_ptr;
         next_rob_count = rob_count;
         next_rob_array = rob_array;
-        told_to_freelist    = '{default: '0};
+        retire_valid = 'b0;
+        retire_num = 2'b00;
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
 //////////////////////      Commit(Retire)     ////////////////////////
 //////////////////////                         ////////////////////////
 ///////////////////////////////////////////////////////////////////////
+        retire_num = (rob_array[head_ptr].ready_retire && rob_array[head_ptr + 1 ].ready_retire)? 2 : 
+                     (rob_array[head_ptr].ready_retire && !rob_array[head_ptr + 1 ].ready_retire)? 1 : 0;
+        
+        retire_valid = (rob_array[head_ptr].ready_retire)? 1'b1 : 1'b0;
 
-        if(retire_2)begin
+        if(retire_num == 2)begin
             for(int i = 0; i < `N; ++i)begin
-
-                told_to_freelist[i] = rob_array[head_ptr+i].told;
                 next_rob_array[head_ptr+i].ready_retire = 1'b0; 
             end
-
             next_head_ptr = head_ptr + 2;
             next_rob_count = rob_count - 2;
 
-        end else if(retire_1)begin
-
-            told_to_freelist[0] = rob_array[head_ptr].told;
+        end else if(retire_num == 1)begin
             next_head_ptr = head_ptr + 1;
             next_rob_count = rob_count - 1;
             next_rob_array[head_ptr].ready_retire = 1'b0;
@@ -95,6 +98,10 @@ module rob(
                 next_rob_array[cdb[i].complete_index].ready_retire = 1'b1;
             end
         end
+
+        if(cond_branch_in.valid) begin
+                next_rob_array[cond_branch_in.br_rob_idx].ready_retire = 1'b1;
+            end
 
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
