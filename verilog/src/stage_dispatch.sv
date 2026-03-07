@@ -106,6 +106,7 @@ module stage_dispatch (
         .r2                     (r2),
         .snapshot_in            (maptable_snapshot_in),
         .is_branch              (is_branch),
+        .valid                  (f_d_pack[i].valid),
         .t1                     (t1),
         .t2                     (t2),
         .told                   (told),
@@ -171,7 +172,7 @@ module stage_dispatch (
         // Allocate bmask， if there's a mispredict, we can't dispatch in the same cycle.
         if(mispredicted) begin
 
-            next_bmask = mispredicted_bmask;
+            next_bmask = mispredicted_bmask & ~mispredicted_bmask_index;//same as resolve
             next_branch_count = $countone(next_bmask);
             dispatch_num = 'd0;
 

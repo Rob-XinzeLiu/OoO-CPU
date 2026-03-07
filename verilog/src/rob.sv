@@ -4,15 +4,14 @@ module rob(
     input logic                 reset                           ,
     input D_S_PACKET            dispatch_pack           [`N-1:0],
     input logic                 mispredicted                    ,//from execute
-    input ROB_IDX               mispredicted_index              ,//from execute
+    input ROB_IDX               mispredicted_index              ,//from branch stack
     input X_C_PACKET            cdb                     [`N-1:0],//set complete bit
     input COND_BRANCH_PACKET    cond_branch_in                  ,//from execute, set complete 1 cycle earlier than cdb 
 
     output logic                retire_valid                    ,//to freelist
     output logic [1:0]          retire_num                      ,//to freelist
     output ROB_CNT              rob_space_avail                 ,//to dispatch stage
-    output ROB_IDX              rob_index               [`N-1:0], //to rs
-    output ROB_IDX              rob_head_ptr_out                  //to execute stage
+    output ROB_IDX              rob_index               [`N-1:0] //to rs & branch stack
 );
 
     typedef struct packed {

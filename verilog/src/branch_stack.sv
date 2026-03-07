@@ -10,11 +10,13 @@ module branch_stack (
     input logic                                         branch_encountered       [`N-1:0],   //from dispatch stage
     input B_MASK                                        branch_idx               [`N-1:0],   //from dispatch stage
     input ADDR                                          pc_snapshop_in           [`N-1:0],   //from dispatch stage
-    input X_C_PACKET                                    x_c_pack                 [`N-1:0],   //from execute stage , retire branch stack entry                          
+    input X_C_PACKET                                    x_c_pack                 [`N-1:0],   //from execute stage , retire branch stack entry       
+    input ROB_IDX                                       rob_index_in             [`N-1:0],   //from rob                   
     
     output logic [`MT_SIZE-1:0]                         mt_snapshot_out                  ,   //to maptable
     output logic [`FLIST_SIZE-1:0]                      tail_ptr_out                     ,   //to freelist
-    //output logic                                        stack_full                       ,   //to dispatch stage
+    output ROB_IDX                                      rob_index_out                    ,   //to rob
+    //output logic                                        stack_full                     ,   //to dispatch stage
     //output logic                                      stack_empty                      ,   //to dispatch stage
     output BSTACK_CNT                                   branch_stack_space_avail         ,   //to dispatch stage
     output ADDR                                         pc_snapshot_out                      //to fetch stage
@@ -26,6 +28,7 @@ module branch_stack (
         logic [`FLIST_SIZE-1:0]        freelist_tail_idx;
         logic                          resolved;
         ADDR                           pc;
+        ROB_IDX                        rob_index;
                   
         //TODO : LSQ
     } checkpoint_t;
@@ -55,7 +58,8 @@ module branch_stack (
         //step 2 : mispredict logic
         if(mispredicted) begin
             mt_snapshot_out = stack[mispredicted_idx].maptable;
-            tail_ptr_out = stack[mispredicted_idx].freelist_tail_idx;
+            tail_ptr_out    = stack[mispredicted_idx].freelist_tail_idx;
+            rob_index_out   = stack[mispredicted_idx].rob_index;
             pc_snapshot_out = stack[mispredicted_idx].pc;
             //TODO: LSQ
             //clear all the younger entries
@@ -91,6 +95,7 @@ module branch_stack (
                 stack_next[stack_ptr_next].maptable = mt_snapshot_in[i];
                 stack_next[stack_ptr_next].freelist_tail_idx = tail_ptr_in[i];
                 stack_next[stack_ptr_next].pc = pc_snapshot_in[i];
+                stack_next[stack_ptr_next].rob_index = rob_index_in[i];
                 stack_ptr_temp = stack_ptr_temp + 1;
                 //TODO: LSQ
             end

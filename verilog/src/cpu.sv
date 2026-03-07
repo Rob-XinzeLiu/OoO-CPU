@@ -64,11 +64,14 @@ module cpu (
     IF_ID_PACKET if_packet [1:0]; 
     IF_ID_PACKET if_id_reg [1:0];
 
-    // Outputs from ID stage and ID/EX Pipeline Register
-    ID_EX_PACKET id_packet, id_ex_reg;
+    // Outputs from ISSUE stage and ISSUE/EX Pipeline Register
+    S_X_PACKET s_x_pack [`N-1:0];
+    S_X_PACKET s_x_pack_reg [`N-1:0];
 
-    // Outputs from EX-Stage and EX/MEM Pipeline Register
-    EX_MEM_PACKET ex_packet, ex_mem_reg;
+    // Outputs from EX-Stage and EX/COM Pipeline Register
+    X_C_PACKET x_c_pack [`N-1:0];
+    X_C_PACKET x_c_pack_reg [`N-1:0];
+    COND_BRANCH_PACKET cond_pack, cond_pack_reg;
 
     // Outputs from MEM-Stage and MEM/WB Pipeline Register
     MEM_WB_PACKET mem_packet, mem_wb_reg;
@@ -259,12 +262,23 @@ module cpu (
     //                                              //
     //////////////////////////////////////////////////
 
-    stage_ex stage_ex_0 (
+    stage_execute stage_execute_0 (
         // Input
-        .id_ex_reg (id_ex_reg),
-
+        .clock (clock),
+        .reset (reset),
+        .s_x_pack(s_x_pack_reg),
+        .mult_ready(),
+        .alu_ready(),
+        
         // Output
-        .ex_packet (ex_packet)
+        .x_c_pack(),
+        .conditional_branch_out(),
+        .cdb_req_mult(),
+        .mispredict_signal_out(),
+        .mispredict_index_out(),
+        .resolve_index_out(),
+        .resolve_signal_out(),
+        .early_tag_bus()
     );
 
     //////////////////////////////////////////////////
@@ -273,21 +287,7 @@ module cpu (
     //                                              //
     //////////////////////////////////////////////////
 
-    assign ex_mem_enable = !load_stall;
 
-    always_ff @(posedge clock) begin
-        if (reset) begin
-            ex_mem_inst_dbg <= `NOP; // debug output
-            ex_mem_reg      <= '0;   // the defaults can all be zero!
-        end else if (ex_mem_enable) begin
-            ex_mem_inst_dbg <= id_ex_inst_dbg; // debug output, just forwarded from ID
-            ex_mem_reg      <= ex_packet;
-        end
-    end
-
-    // debug outputs
-    assign ex_mem_NPC_dbg   = ex_mem_reg.NPC;
-    assign ex_mem_valid_dbg = ex_mem_reg.valid;
 
     //////////////////////////////////////////////////
     //                                              //
@@ -339,6 +339,23 @@ module cpu (
             end
         endcase
     end
+
+    logic alu_ready_reg [`N-1:0];
+    logic mult_ready_reg ;
+    always_ff @(posedge clock) begin
+        if (reset) begin
+            for (int i = 0; i < `N; i++) begin
+                alu_ready_reg[i] <= 1'b0;
+            end
+            mult_ready_reg <= 1'b0;
+        end else begin
+            for (int i = 0; i < `N; i++) begin
+                alu_ready_reg[i] <= cdb_grant_alu[i];
+            end
+            mult_ready_reg <= cdb_req_mult; // we always grant mult, so just check if there's a mult request
+        end
+    end
+
     //////////////////////////////////////////////////
     //                                              //
     //                 MEM-Stage                    //

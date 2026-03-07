@@ -493,12 +493,12 @@ typedef struct packed{
     logic           valid;
     ROB_IDX         complete_index;//rob
     PRF_IDX         complete_tag;
-    logic           mispredicted;
     B_MASK          bmask_index;
     B_MASK          bmask;
     logic           has_dest;
     logic           uncond_branch;//for unconditional branches, write NPC into PRF 
     DATA            result;//write to PRF
+    ADDR            NPC;//for unconditional branches, write NPC into PRF
 } X_C_PACKET;
 
 

@@ -16,6 +16,7 @@ module maptable(
     input REG_IDX                       r2                      [`N-1:0],
     input logic [`MT_SIZE-1:0]          snapshot_in                     ,
     input logic                         is_branch               [`N-1:0],
+    input logic                         valid                   [`N-1:0], 
     
     output  PRF_IDX                     t1                      [`N-1:0],
     output  PRF_IDX                     t2                      [`N-1:0],
@@ -82,7 +83,7 @@ module maptable(
             end
         end else begin          // read then write
             // Instruction 0
-            if(!halt[0]) begin
+            if(!halt[0] && valid[0]) begin
                 if(opa_select[0] == OPA_IS_RS1 && r1[0] != '0 && !halt || cond_branch[0]) begin
                     t1[0]       = mt[r1[0]].p_tag;
                     t1_ready[0] = next_prf_ready[t1[0]];
@@ -101,12 +102,12 @@ module maptable(
             end
 
             // Take snapshot[0]
-            if(is_branch[0]) begin
+            if(is_branch[0] && valid[0]) begin
                 snapshot_out[0] = pack_mt(next_mt);
             end
 
             // Instruction 1
-            if (!halt[1]) begin
+            if (!halt[1] && valid[1]) begin
                 if (opa_select[1] == OPA_IS_RS1 && r1[1] != '0 || cond_branch[1]) begin
                     if (has_dest[0] && rd[0] != '0 && r1[1] == rd[0]) begin
                         t1[1]       = t_from_freelist[0]; 
@@ -135,7 +136,7 @@ module maptable(
             end
 
             // Take snapshot[1]
-            if(is_branch[1]) begin
+            if(is_branch[1] && valid[1]) begin
                 snapshot_out[1] = pack_mt(next_mt);
             end
         end

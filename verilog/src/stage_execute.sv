@@ -4,8 +4,6 @@ module execute_stage(
     input logic                             reset                               ,
     // from RS                             
     input S_X_PACKET                        s_x_pack                      [`N:0],
-    //from rob, used to find the oldest branch
-    input  ROB_IDX                          rob_head_ptr_in                     ,
     //from cdb arbiter, decide whick inst can go to cdb
     input  logic                            mult_ready                          ,
     input  logic                            alu_ready                      [1:0],
@@ -104,75 +102,54 @@ module execute_stage(
         mis_direction = s_x_pack[2].valid && (s_x_pack[2].predict_taken != take);
     end
     
-    // mispredict and resolve signal
-    logic  mispredicted;
+    
     B_MASK mispredicted_bmask_index;
-    logic  resolved;
+    logic resolved;
     B_MASK resolved_bmask_index;
+    B_MASK mispredicted_mask;
 
+    always_comb begin
+        mispredicted = 1'b0;
+        resolved = 1'b0;
+        mispredicted_bmask_index = '0;
+        resolved_bmask_index = '0;
+        mispredicted_mask = '1;
+        mispredict_pc       = '0;
+        mispredict_result   = '0;
+
+        if(s_x_pack[2].valid && !mis_direction) begin
+            resolved_bmask_index |= s_x_pack[2].bmask_index;
+        end else if(s_x_pack[2].valid && mis_direction) begin
+            mispredicted_mask &= s_x_pack[2].bmask;
+        end
+
+        for(int i = 0; i < 2; i++) begin
+            if(s_x_pack[i].valid && s_x_pack[i].uncond_branch && !mis_target[i]) begin
+                resolved_bmask_index |= s_x_pack[i].bmask_index;
+            end else if(s_x_pack[i].valid && s_x_pack[i].uncond_branch && mis_target[i]) begin
+                mispredicted_mask &= s_x_pack[i].bmask;
+            end 
+        end
+
+        if (s_x_pack[2].valid && mis_direction && (s_x_pack[2].bmask == mispredicted_mask)) begin
+            mispredicted = 1'b1;
+            mispredicted_bmask_index = s_x_pack[2].bmask_index;
+        end else begin
+            for (int i = 0; i < 2; i++) begin
+                if (s_x_pack[i].valid && s_x_pack[i].uncond_branch && mis_target[i] && (s_x_pack[i].bmask == mispredicted_mask)) begin
+                    mispredicted = 1'b1;
+                    mispredicted_bmask_index = s_x_pack[i].bmask_index;
+                end
+            end
+        end
+
+        resolved = (resolved_bmask_index != 'd0);
+    end
+    assign resolve_signal_out = resolved;
     assign mispredict_signal_out = mispredicted;
     assign mispredict_index_out = mispredicted_bmask_index;
-    assign resolve_signal_out = resolved;
     assign resolve_index_out = resolved_bmask_index;
-    
-    // find who's rob index is the youngest among all the mispredicted branch
-    function automatic logic rob_is_older(ROB_IDX a, ROB_IDX b, ROB_IDX head);
-        // the instruction who is closer to head is older
-        return (ROB_IDX'(a - head) < ROB_IDX'(b - head));//return 1 means a is older
-    endfunction
 
-    // find the oldest mispredicted branch
-    ROB_IDX oldest_rob;
-    B_MASK  oldest_bmask_idx;
-    //generate mispredict and resolve signal
-    always_comb begin
-        mispredicted             = '0;
-        mispredicted_bmask_index = '0;
-        resolved                 = '0;
-        resolved_bmask_index     = '0;
-        oldest_rob               = '0;
-
-        // resolve: OR all resolved branches
-        if (s_x_pack[0].valid && s_x_pack[0].uncond_branch && !mis_target[0]) begin
-            resolved             = 1'b1;
-            resolved_bmask_index |= s_x_pack[0].bmask_idx;
-        end
-        if (s_x_pack[1].valid && s_x_pack[1].uncond_branch && !mis_target[1]) begin
-            resolved             = 1'b1;
-            resolved_bmask_index |= s_x_pack[1].bmask_idx;
-        end
-        if (s_x_pack[2].valid && s_x_pack[2].cond_branch && !mis_direction) begin
-            resolved             = 1'b1;
-            resolved_bmask_index |= s_x_pack[2].bmask_idx;
-        end
-
-        // mispredict: pick oldest by ROB index
-        if (mis_target[0] && s_x_pack[0].valid) begin
-            mispredicted             = 1'b1;
-            mispredicted_bmask_index = s_x_pack[0].bmask_idx;
-            oldest_rob               = s_x_pack[0].rob_index;
-        end
-        if (mis_target[1] && s_x_pack[1].valid) begin
-            if (!mispredicted || rob_is_older(s_x_pack[1].rob_index, oldest_rob, rob_head_ptr_in)) begin
-                mispredicted             = 1'b1;
-                mispredicted_bmask_index = s_x_pack[1].bmask_idx;
-                oldest_rob               = s_x_pack[1].rob_index;
-            end
-        end
-        if (mis_direction && s_x_pack[2].valid) begin
-            if (!mispredicted || rob_is_older(s_x_pack[2].rob_index, oldest_rob, rob_head_ptr_in)) begin
-                mispredicted             = 1'b1;
-                mispredicted_bmask_index = s_x_pack[2].bmask_idx;
-                oldest_rob               = s_x_pack[2].rob_index; 
-            end
-        end
-
-        // mispredicted branch's bmask index need to be deleted from resolved branch's bmask index
-        if (mispredicted) begin
-            resolved_bmask_index &= ~mispredicted_bmask_index;
-            if (resolved_bmask_index == '0) resolved = 1'b0;
-        end
-    end
 
 
     //input to execute, output to complete
@@ -325,24 +302,25 @@ module execute_stage(
         //broadcast control logic(without considering mispredict and resolve)
         case(execute_output_type)
             BROADCAST_1_MULT: begin
-                x_c_pack[0].valid          = !(mispredicted && |(effective_bmask_mult & mispredicted_bmask_index));
+                x_c_pack[0].valid          = mult_done && !(mispredicted && |(effective_bmask_mult & mispredicted_bmask_index));
                 x_c_pack[0].complete_index = mult_out.complete_index;
                 x_c_pack[0].complete_tag   = mult_out.complete_tag;
                 x_c_pack[0].bmask          = effective_bmask_mult;
                 x_c_pack[0].result         = mult_out.result;
-                x_c_pack[0].has_dest       = 'b1;
+                x_c_pack[0].has_dest       = 1'b1;
+                x_c_pack[1].valid          = 1'b0;
                 //etb
                 early_tag_bus[0].valid = 'b1;
                 early_tag_bus[0].tag = mult_out.complete_tag;
             end
             BROADCAST_2_ALU: begin
-                x_c_pack[0].valid          = !(mispredicted && |(effective_bmask_alu0 & mispredicted_bmask_index));
+                x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_idx == mispredicted_bmask_index))? 1'b1: (s_x_pack[0].valid && !|(effective_bmask_alu0 & mispredicted_bmask_index)) ;
                 x_c_pack[0].complete_index = s_x_pack[0].rob_index;
                 x_c_pack[0].complete_tag   = s_x_pack[0].tag;
                 x_c_pack[0].bmask          = effective_bmask_alu0;
                 x_c_pack[0].result         = result1_alu;
                 x_c_pack[0].has_dest       = s_x_pack[0].has_dest;
-                x_c_pack[1].valid          = !(mispredicted && |(effective_bmask_alu1 & mispredicted_bmask_index));
+                x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_idx == mispredicted_bmask_index))? 1'b1: (s_x_pack[1].valid && !|(effective_bmask_alu1 & mispredicted_bmask_index)) ;
                 x_c_pack[1].complete_index = s_x_pack[1].rob_index;
                 x_c_pack[1].complete_tag   = s_x_pack[1].tag;
                 x_c_pack[1].bmask          = effective_bmask_alu1;
@@ -355,13 +333,13 @@ module execute_stage(
                 early_tag_bus[1].tag = s_x_pack[1].tag;
             end
             BROADCAST_1_MULT_1_ALU: begin
-                x_c_pack[0].valid          = !(mispredicted && |(effective_bmask_mult & mispredicted_bmask_index));
+                x_c_pack[0].valid          = mult_done && !(mispredicted && |(effective_bmask_mult & mispredicted_bmask_index));
                 x_c_pack[0].complete_index = mult_out.complete_index;
                 x_c_pack[0].complete_tag   = mult_out.complete_tag;
                 x_c_pack[0].bmask          = effective_bmask_mult;
                 x_c_pack[0].result         = mult_out.result;
                 x_c_pack[0].has_dest       = 'b1;
-                x_c_pack[1].valid          = !(mispredicted && |(effective_bmask_alu1 & mispredicted_bmask_index));
+                x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_idx == mispredicted_bmask_index))? 1'b1: (s_x_pack[1].valid && !|(effective_bmask_alu1 & mispredicted_bmask_index)) ;
                 x_c_pack[1].complete_index = s_x_pack[1].rob_index;
                 x_c_pack[1].complete_tag   = s_x_pack[1].tag;
                 x_c_pack[1].bmask          = effective_bmask_alu1;
@@ -374,12 +352,13 @@ module execute_stage(
                 early_tag_bus[1].tag = s_x_pack[1].tag;
             end
             BROADCAST_1_ALU: begin
-                x_c_pack[0].valid          = !(mispredicted && |(effective_bmask_alu0 & mispredicted_bmask_index));
+                x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_idx == mispredicted_bmask_index))? 1'b1: (s_x_pack[0].valid && !|(effective_bmask_alu0 & mispredicted_bmask_index)) ;
                 x_c_pack[0].complete_index = s_x_pack[0].rob_index;
                 x_c_pack[0].complete_tag   = s_x_pack[0].tag;
                 x_c_pack[0].bmask          = effective_bmask_alu0;
                 x_c_pack[0].result         = result1_alu;
                 x_c_pack[0].has_dest       = s_x_pack[0].has_dest;
+                x_c_pack[1].valid          = 1'b0;
                 //etb
                 early_tag_bus[0].valid = s_x_pack[0].has_dest;
                 early_tag_bus[0].tag = s_x_pack[0].tag;
@@ -466,6 +445,5 @@ module conditional_branch (
     end
 
 endmodule // conditional_branch
-
 
 
