@@ -60,9 +60,18 @@ module cpu (
     MEM_COMMAND Imem_command; // Command sent to memory
 
     // Outputs from IF-Stage and IF/ID Pipeline Register
-    ADDR Imem_addr;
-    IF_ID_PACKET if_packet [1:0]; 
-    IF_ID_PACKET if_id_reg [1:0];
+    F_D_PACKET  f_pack [`N-1:0];
+    F_D_PACKET  f_pack_reg [`N-1:0];
+
+    // Outputs from Fetch buffer
+    F_D_PACKET  f_d_pack[`N-1:0];
+
+    // Outputs from Dispatch stage
+    D_S_PACKET  dispatch_out_pack [`N-1:0];
+
+    // Outputs from RS and D/S Pipeline Register
+    D_S_PACKET  d_s_pack [`N-1:0];
+    D_S_PACKET  d_s_pack_reg [`N-1:0];
 
     // Outputs from ISSUE stage and ISSUE/EX Pipeline Register
     S_X_PACKET s_x_pack [`N-1:0];
@@ -72,9 +81,12 @@ module cpu (
     X_C_PACKET x_c_pack [`N-1:0];
     X_C_PACKET x_c_pack_reg [`N-1:0];
     COND_BRANCH_PACKET cond_pack, cond_pack_reg;
+    ETB_TAG_PACKET  etb_bus [`N-1:0];
 
-    // Outputs from MEM-Stage and MEM/WB Pipeline Register
-    MEM_WB_PACKET mem_packet, mem_wb_reg;
+    // Outputs from COM-Stage
+    X_C_PACKET cdb [`N-1:0];
+
+
 
     // Outputs from MEM-Stage to memory
     ADDR        Dmem_addr;
@@ -140,154 +152,189 @@ module cpu (
 
     //////////////////////////////////////////////////
     //                                              //
-    //                  IF-Stage                    //
+    //                Fetch-stage                   //
     //                                              //
     //////////////////////////////////////////////////
 
     stage_if stage_if_0 (
-        // Inputs
-        .clock (clock),
-        .reset (reset),
-        .if_valid      (if_valid),
-        .take_branch   (ex_mem_reg.take_branch),
-        .branch_target (ex_mem_reg.alu_result),
-        .Imem_data     (mem2proc_data),
-        
-        .Imem2proc_transaction_tag(mem2proc_transaction_tag),
-        .Imem2proc_data_tag       (mem2proc_data_tag),
+        .clock(clock),
 
-        // Outputs
-        .Imem_command  (Imem_command),
-        .if_packet     (if_packet),
-        .Imem_addr     (Imem_addr)
+
+
     );
 
-    // debug outputs
-    assign if_NPC_dbg   = if_packet.NPC; // NOT UPDATED AFTER TWO WIDE FETCH
-    assign if_inst_dbg  = if_packet.inst; // NOT UPDATED AFTER TWO WIDE FETCH
-    assign if_valid_dbg = if_packet.valid; // NOT UPDATED AFTER TWO WIDE  FETCH
-
     //////////////////////////////////////////////////
     //                                              //
-    //            IF/ID Pipeline Register           //
+    //      Fetch / Dispatch Pipeline Register      //
     //                                              //
     //////////////////////////////////////////////////
-
-    assign if_id_enable = !load_stall;
 
     always_ff @(posedge clock) begin
-        if (reset) begin
-            if_id_reg[0].inst  <= `NOP;
-            if_id_reg[0].valid <= `FALSE;
-            if_id_reg[0].NPC   <= '0;
-            if_id_reg[0].PC    <= '0;
-
-            if_id_reg[1].inst  <= `NOP;
-            if_id_reg[1].valid <= `FALSE;
-            if_id_reg[1].NPC   <= '0;
-            if_id_reg[1].PC    <= '0;
-        end else if (if_id_enable) begin
-            if_id_reg[0] <= if_packet[0];
-            if_id_reg[1] <= if_packet[1];
+        if(reset || global_mispredict) begin
+            f_pack_reg    <= '0;
+        end else begin
+            f_pack_reg    <= f_pack;
         end
     end
 
-    // debug outputs
-    assign if_id_NPC_dbg   = if_id_reg.NPC;
-    assign if_id_inst_dbg  = if_id_reg.inst;
-    assign if_id_valid_dbg = if_id_reg.valid;
-
     //////////////////////////////////////////////////
     //                                              //
-    //                  ID-Stage                    //
+    //                Fetch buffer                  //
     //                                              //
     //////////////////////////////////////////////////
+    logic [1:0] can_fetch_num;
 
-    stage_id stage_id_0 (
-        // Inputs
-        .clock (clock),
-        .reset (reset),
-        .if_id_reg       (if_id_reg),
-        .wb_regfile_en   (wb_packet.valid),
-        .wb_regfile_idx  (wb_packet.reg_idx),
-        .wb_regfile_data (wb_packet.data),
+    fetch_buffer fetch_buffer_0 (
+        // Input
+        .clock(clock),
+        .reset(reset),
+        .mispredicted(global_mispredict),
+        .dispatch_num_req(dispatch_num),
+        .fetch_pack(f_pack_reg),
 
         // Output
-        .id_packet (id_packet)
+        .can_fetch_num(can_fetch_num),
+        .dispatch_pack(f_d_pack)
     );
 
     //////////////////////////////////////////////////
     //                                              //
-    //            ID/EX Pipeline Register           //
+    //                Dispatch-Stage                //
+    //                                              //
+    //////////////////////////////////////////////////
+    logic [`N-1:0]  dispatch_valid;
+    logic           branch_encountered;
+    B_MASK          branch_index;
+    logic [`MT_SIZE-1:0] maptable_snapshot_out;
+    ADDR            pc_snapshot_out;
+    logic [1:0]     dispatch_num;
+
+    stage_dispatch stage_dispatch_0 (
+        // Input
+        .clock(clock),
+        .reset(reset),
+        .f_d_pack(f_d_pack),
+        .rs_empty_entries_num(rs_empty_entries_num),
+        .rob_space_avail(rob_space_avail),
+        .branch_stack_space_avail(branch_stack_space_avail),
+        .t_new(t_new),
+        .avail_num(avail_num),
+        .cdb(cdb),
+        .resolved(global_resolve),
+        .resolved_bmask_index(global_resolve_index),
+        .mispredicted(global_mispredict),
+        .mispredicted_bmask_index(global_mispredict_index),
+        .mispredicted_bmask(global_mispredict_bmask),
+        .maptable_snapshot_in(mt_BS_out)
+
+        // Output
+        .dispatch_valid(dispatch_valid),
+        .dispatch_pack(dispatch_out_pack),
+        .branch_encountered(branch_encountered),
+        .branch_index(branch_index),
+        .maptable_snapshot_out(maptable_snapshot_out),
+        .pc_snapshot_out(pc_snapshot_out),
+        .dispatch_num(dispatch_num)
+    );
+    
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //         Dispatch/ISSUE Pipeline Register     //
     //                                              //
     //////////////////////////////////////////////////
 
-    assign id_ex_enable = !load_stall;
-
     always_ff @(posedge clock) begin
-        if (reset) begin
-            id_ex_reg <= '{
-                `NOP, // we can't simply assign 0 because NOP is non-zero
-                32'b0, // PC
-                32'b0, // NPC
-                32'b0, // rs1 select
-                32'b0, // rs2 select
-                OPA_IS_RS1,
-                OPB_IS_RS2,
-                `ZERO_REG,
-                ALU_ADD,
-                1'b0, // mult
-                1'b0, // rd_mem
-                1'b0, // wr_mem
-                1'b0, // cond
-                1'b0, // uncond
-                1'b0, // halt
-                1'b0, // illegal
-                1'b0, // csr_op
-                1'b0  // valid
-            };
-        end else if (id_ex_enable) begin
-            id_ex_reg <= id_packet;
+        if(reset || global_mispredict) begin
+            d_s_pack_reg    <= '0;
+        end else begin
+            d_s_pack_reg    <= d_s_pack;
         end
     end
 
-    // debug outputs
-    assign id_ex_NPC_dbg   = id_ex_reg.NPC;
-    assign id_ex_inst_dbg  = id_ex_reg.inst;
-    assign id_ex_valid_dbg = id_ex_reg.valid;
+    //////////////////////////////////////////////////
+    //                                              //
+    //               ISSUE-Stage                    //
+    //                                              //
+    //////////////////////////////////////////////////
+
+    stage_issue stage_issue_0 (
+        // Input
+        .clock(clock),
+        .reset(reset),
+        .issue_pack(d_s_pack_reg),
+        .rs1_value(rs1_value),
+        .rs2_value(rs2_value),
+        .resolved(global_resolve),
+        .resolved_bmask_index(global_resolve_index),
+        .mispredicted(global_mispredict),
+        .mispredicted_bmask_index(global_mispredict_index),
+
+        // Output
+        .next_s_x_pack(s_x_pack)
+    );
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //           ISSUE/EX Pipeline Register         //
+    //                                              //
+    //////////////////////////////////////////////////
+
+    always_ff @(posedge clock) begin
+        if(reset || global_mispredict) begin
+            s_x_pack_reg    <= '0;
+        end else begin
+            s_x_pack_reg    <= s_x_pack;
+        end
+    end
 
     //////////////////////////////////////////////////
     //                                              //
     //                  EX-Stage                    //
     //                                              //
     //////////////////////////////////////////////////
+    
+    logic   global_mispredict;
+    logic   global_resolve;
+    B_MASK  global_mispredict_index;
+    B_MASK  global_resolve_index;
+    B_MASK  global_mispredict_bmask;
 
     stage_execute stage_execute_0 (
         // Input
         .clock (clock),
         .reset (reset),
         .s_x_pack(s_x_pack_reg),
-        .mult_ready(),
-        .alu_ready(),
+        .mult_ready(mult_ready_reg),
+        .alu_ready(alu_ready_reg),
         
         // Output
-        .x_c_pack(),
-        .conditional_branch_out(),
-        .cdb_req_mult(),
-        .mispredict_signal_out(),
-        .mispredict_index_out(),
-        .resolve_index_out(),
-        .resolve_signal_out(),
-        .early_tag_bus()
+        .x_c_pack(x_c_pack),
+        .conditional_branch_out(cond_pack),
+        .cdb_req_mult(cdb_req_mult),
+        .mispredict_signal_out(global_mispredict),
+        .mispredict_index_out(global_mispredict_index),
+        .mispredict_bmask_out(global_mispredict_bmask),
+        .resolve_index_out(global_resolve_index),
+        .resolve_signal_out(global_resolve),
+        .early_tag_bus(etb_bus)
     );
 
     //////////////////////////////////////////////////
     //                                              //
-    //           EX/MEM Pipeline Register           //
+    //           EX/COM Pipeline Register           //
     //                                              //
     //////////////////////////////////////////////////
 
-
+    always_ff @(posedge clock) begin
+        if(reset || global_mispredict) begin
+            x_c_pack_reg    <= '0;
+            cond_pack_reg   <= '0;
+        end else begin
+            x_c_pack_reg    <= x_c_pack;
+            cond_pack_reg   <= cond_pack;
+        end
+    end
 
     //////////////////////////////////////////////////
     //                                              //
@@ -302,6 +349,9 @@ module cpu (
         NONE,
     } cdb_arbiter_state_t;
 
+    logic   cdb_req_mult, cdb_gnt_mult;
+    logic   cdb_req_alu [`N-1:0];
+    logic   cdb_gnt_alu [`N-1:0];
     cdb_arbiter_state_t cdb_arbiter_state;
     //we will always grant mult, so cdb_req_mult just means if there's a mult inst in that stage.
     always_comb begin
@@ -358,87 +408,180 @@ module cpu (
 
     //////////////////////////////////////////////////
     //                                              //
-    //                 MEM-Stage                    //
+    //                 COM-Stage                    //
     //                                              //
     //////////////////////////////////////////////////
 
-    // New address if:
-    // 1) Previous instruction wasn't a load
-    // 2) Load address changed
-    logic valid_load;
-    assign valid_load = ex_mem_reg.valid && ex_mem_reg.rd_mem; 
-    assign new_load = valid_load && !rd_mem_q;
-
-    assign mem_tag_match = outstanding_mem_tag == mem2proc_data_tag;
-    assign load_stall    = new_load || (valid_load && !mem_tag_match);
-
-    assign Dmem_command_filtered = new_load || ex_mem_reg.wr_mem ? Dmem_command : MEM_NONE;
-
-    always_ff @(posedge clock) begin
-        if (reset) begin
-            rd_mem_q            <= 1'b0;
-            outstanding_mem_tag <= '0;
-        end else begin
-            rd_mem_q            <= valid_load;
-            outstanding_mem_tag <= new_load      ? mem2proc_transaction_tag : 
-                                   mem_tag_match ? '0 : outstanding_mem_tag;
-        end
-    end
-
-    stage_mem stage_mem_0 (
-        // Inputs
-        .ex_mem_reg      (ex_mem_reg),
-        .Dmem_load_data  (mem2proc_data),
-
-        // Outputs
-        .mem_packet      (mem_packet),
-        .Dmem_command    (Dmem_command),
-        .Dmem_size       (Dmem_size),
-        .Dmem_addr       (Dmem_addr),
-        .Dmem_store_data (Dmem_store_data)
-    );
-
-    //////////////////////////////////////////////////
-    //                                              //
-    //           MEM/WB Pipeline Register           //
-    //                                              //
-    //////////////////////////////////////////////////
-
-    assign mem_wb_enable = 1'b1; // always enabled
-
-    always_ff @(posedge clock) begin
-        if (reset || load_stall) begin
-            mem_wb_inst_dbg <= `NOP; // debug output
-            mem_wb_reg      <= '0;   // the defaults can all be zero!
-        end else if (mem_wb_enable) begin
-            mem_wb_inst_dbg <= ex_mem_inst_dbg; // debug output, just forwarded from EX
-            mem_wb_reg      <= mem_packet;
-        end
-    end
-
-    // debug outputs
-    assign mem_wb_NPC_dbg   = mem_wb_reg.NPC;
-    assign mem_wb_valid_dbg = mem_wb_reg.valid;
-
-    //////////////////////////////////////////////////
-    //                                              //
-    //                  WB-Stage                    //
-    //                                              //
-    //////////////////////////////////////////////////
-
-    stage_wb stage_wb_0 (
+    stage_complete stage_complete_0 (
         // Input
-        .mem_wb_reg (mem_wb_reg), // doesn't use all of these
+        .clock(clock),
+        .reset(reset),
+        .x_c_packet(x_c_pack_reg),
+        .branch_mispredicted(global_mispredict),
+        .mispred_mask_idx(global_mispredict_index),
 
         // Output
-        .wb_packet (wb_packet)
+        .cdb(cdb),
+        .write_en(write_enable),
+        .prf_index(write_index),
+        .data_for_prf(write_data)
     );
 
-    // This signal is solely used by if_valid for the initial stalling behavior
-    always_ff @(posedge clock) begin
-        if (reset) wb_valid <= 0;
-        else       wb_valid <= mem_wb_reg.valid;
+
+
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //           Physical Register File             //
+    //                                              //
+    //////////////////////////////////////////////////
+    logic      [`N-1:0] write_enable;
+    PRF_IDX    [`N-1:0] write_index;
+    DATA       [`N-1:0] write_data;
+    DATA       rs1_value, rs2_value;
+    PRF_IDX    [`N-1:0] read_idx_1;
+    PRF_IDX    [`N-1:0] read_idx_2;
+
+    always_comb begin
+        for(int i = 0; i < `N; i++) begin
+            read_idx_1 = d_s_pack_reg[i].t1;
+            read_idx_2 = d_s_pack_reg[i].t2;
+        end
     end
+
+
+    regfile regfile0 (
+        // Input
+        .clock(clock),
+        .reset(reset),
+        .read_idx_1(read_idx_1),
+        .read_idx_2(read_idx_2),
+        .write_idx(write_index),
+        .write_en(write_enable),
+        .write_data(write_data),
+        // Output
+        .read_out_1(rs1_value),
+        .read_out_2(rs2_value)
+    );
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //           Rob                                //
+    //                                              //
+    //////////////////////////////////////////////////
+    logic           retire_valid;
+    logic   [1:0]   retire_num;
+    ROB_CNT         rob_space_avail;
+    ROB_IDX         rob_index [`N-1:0];
+
+    rob rob_0 (
+        // Input
+        .clock(clock),
+        .reset(reset),
+        .dispatch_pack(),
+        .mispredicted(global_mispredict),
+        .mispredicted_index(rob_index_out), 
+        .cdb(cdb),
+        .cond_branch_in(cond_pack_reg),
+
+        // Output
+        .retire_valid(retire_valid),
+        .retire_num(retire_num),
+        .rob_space_avail(rob_space_avail),
+        .rob_index(rob_index)
+    );
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //           Freelist                           //
+    //                                              //
+    //////////////////////////////////////////////////
+    FLIST_CNT   BS_head [`N-1:0];
+    PRF_IDX     t_new   [`N-1:0];
+    FLIST_CNT   avail_num;
+
+    freelist freelist_0 (
+        // Input
+        .clock(clock),
+        .reset(reset),
+        .retire_num(retire_num),
+        .retire_valid(retire_valid),
+        .Branch_stack_H(Branch_stack_H),
+        .dispatch_valid(dispatch_valid),
+        .is_branch(branch_encountered),
+        .mispredicted(global_mispredict),
+        
+        // Output 
+        .BS_head(BS_head),
+        .t(t_new),
+        .avail_num(avail_num)
+    );
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //           Branch Stack                       //
+    //                                              //
+    //////////////////////////////////////////////////
+    FLIST_SZ    Branch_stack_H;
+    logic [`MT_SIZE-1:0]    mt_BS_out;
+    logic [`FLIST_SIZE-1:0] tail_ptr_out;
+    ROB_IDX         rob_index_out;
+    BSTACK_CNT      branch_stack_space_avail;
+    ADDR            pc_BS_out;
+
+
+    branch_stack branch_stack_0 (
+        // Input
+        .clock(clock),
+        .reset(reset),
+        .mt_snapshot_in(maptable_snapshot_out),
+        .mispredicted(global_mispredict),
+        .mispredicted_idx(global_mispredict_index),
+        .tail_ptr_in(BS_head),
+        .branch_encountered(),
+        .branch_idx(branch_index),
+        .pc_snapshop_in(pc_snapshot_out),
+        .resolved(global_resolve),
+        .resolved_bmask_index(global_resolve_index),
+        .rob_index_in(rob_index),
+
+        // Output
+        .mt_snapshot_out(mt_BS_out),
+        .tail_ptr_out(tail_ptr_out),
+        .rob_index_out(rob_idx_out),
+        .branch_stack_space_avail(branch_stack_space_avail),
+        .pc_snapshot_out(pc_BS_out)
+    );
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //           Reservation Station                //
+    //                                              //
+    //////////////////////////////////////////////////
+    RS_CNT rs_empty_entries_num;
+
+    rs rs_0 (
+        // Input
+        .clock(clock),
+        .reset(reset),
+        .mispredicted(global_mispredict),
+        .mispredicted_bmask_index(global_mispredict_index),
+        .resolved(global_resolve),
+        .resolved_bmask_index(global_resolve_index),
+        .rob_index(rob_index),
+        .dispatch_pack(dispatch_out_pack),
+        .cdb(cdb),
+        .early_tag_bus(etb_bus),
+        .cdb_gnt_alu(cdb_gnt_alu),
+        
+
+        // Output
+        .cdb_req_alu(cdb_req_alu),
+        .issue_pack(d_s_pack),
+        .rs_empty_entries_num(rs_empty_entries_num),
+        .dbg_issue_count()
+    );
+
 
     //////////////////////////////////////////////////
     //                                              //

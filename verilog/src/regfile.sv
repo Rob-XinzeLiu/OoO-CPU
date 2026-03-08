@@ -8,7 +8,7 @@
 /////////////////////////////////////////////////////////////////////////
 `include "sys_defs.svh"
 
-module regfile #parameter(
+module regfile #(
     parameter WIDTH      = 32,
     parameter DEPTH      = 32,
     parameter READ_PORTS = 1,

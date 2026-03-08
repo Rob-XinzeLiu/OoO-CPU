@@ -17,6 +17,7 @@ module execute_stage(
     //mispredict and resolve logic to other stages and registers                            
     output logic                            mispredict_signal_out               ,
     output B_MASK                           mispredict_index_out                ,
+    output B_MASK                           mispredict_bmask_out                ,
     output logic                            resolve_signal_out                  ,
     output B_MASK                           resolve_index_out                   ,
     output ETB_TAG_PACKET                   early_tag_bus               [`N-1:0]
@@ -149,6 +150,7 @@ module execute_stage(
     assign mispredict_signal_out = mispredicted;
     assign mispredict_index_out = mispredicted_bmask_index;
     assign resolve_index_out = resolved_bmask_index;
+    assign mispredict_bmask_out = mispredicted_mask;
 
 
 

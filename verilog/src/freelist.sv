@@ -6,7 +6,7 @@ module freelist(
     input logic                             retire_valid        ,  // from rob
     input FLIST_SZ                          Branch_stack_H      ,  // Head output from BS
     input logic [`N-1:0]                    dispatch_valid      ,  // from dispatcher
-    input logic                             cond_branch [`N-1:0],
+    input logic                             is_branch [`N-1:0],
     input logic                             mispredicted        ,
 
     //output logic                            full,
@@ -70,8 +70,8 @@ module freelist(
                     t[1] = freelist[head + 1];
                 end
 
-                if (cond_branch[0]) BS_head[0] = head;
-                if (cond_branch[1]) BS_head[1] = head + 1;
+                if (is_branch[0]) BS_head[0] = head;
+                if (is_branch[1]) BS_head[1] = head + 1;
 
                
                 cnt_n  = cnt + (retire_valid ? retire_num   : '0)

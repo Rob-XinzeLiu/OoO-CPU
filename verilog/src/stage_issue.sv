@@ -20,7 +20,6 @@ module stage_issue(
 ////////////make sure not to latch a valid on mispredict on the top level module (CPU) and the register file is BYPASS_EN = 1
     always_comb begin 
         for (int i = 0; i < `N + 1; i++)begin
-
             next_s_x_pack[i].valid = issue_pack[i].valid;
             next_s_x_pack[i].opa_select = issue_pack[i].opa_select;
             next_s_x_pack[i].opb_select = issue_pack[i].opb_select;

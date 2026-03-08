@@ -8,7 +8,7 @@ module stage_dispatch (
     input BSTACK_CNT                        branch_stack_space_avail            , //from branch stack
     //from freelist
     input PRF_IDX                           t_new                       [`N-1:0], // from freelist
-    input logic   [`N-1:0]                  avail_num                           , // from freelist   
+    input FLIST_CNT                         avail_num                           , // from freelist   
     output logic  [`N-1:0]                  dispatch_valid                      , // to freelist
                        
     input X_C_PACKET                        cdb                         [`N-1:0], // updating map table ready bit

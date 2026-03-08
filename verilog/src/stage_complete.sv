@@ -7,7 +7,7 @@ module stage_complete(
 
     input  logic                     branch_mispredicted   , 
     //input  logic                     branch_resolved       ,
-    input  BMASK                     mis_mask_idx          ,
+    input  BMASK                     mispred_mask_idx          ,
     //input  BMASK                     res_mask_idx          ,
     //data for the regfile
     output X_C_PACKET                cdb           [`N-1:0],
@@ -34,7 +34,7 @@ module stage_complete(
         //             cdb[i].bmask = cdb[i].bmask & ~(res_mask_index);
         //         end
         //     end
-        // end 
+        // end mis
         if(branch_mispredicted)begin
             for(int i = 0; i < `N; i++)begin
                 if (cdb[i].valid && (cdb[i].bmask & mispred_mask_idx)) begin
