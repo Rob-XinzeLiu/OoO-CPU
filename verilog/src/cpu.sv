@@ -538,7 +538,7 @@ module cpu (
         .mispredicted(global_mispredict),
         .mispredicted_idx(global_mispredict_index),
         .tail_ptr_in(BS_head),
-        .branch_encountered(),
+        .branch_encountered(branch_encountered),
         .branch_idx(branch_index),
         .pc_snapshop_in(pc_snapshot_out),
         .resolved(global_resolve),
