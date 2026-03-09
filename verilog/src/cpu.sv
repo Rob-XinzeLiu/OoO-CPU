@@ -202,7 +202,7 @@ module cpu (
     //                Dispatch-Stage                //
     //                                              //
     //////////////////////////////////////////////////
-    logic [`N-1:0]  dispatch_valid;
+    logic           dispatch_valid [`N-1:0];
     logic           branch_encountered;
     B_MASK          branch_index;
     logic [`MT_SIZE-1:0] maptable_snapshot_out;

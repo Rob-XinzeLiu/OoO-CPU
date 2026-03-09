@@ -21,7 +21,7 @@ module rs(
     output logic                            cdb_req_alu                 [`N-1:0],
     //to issue stage
     output D_S_PACKET                       issue_pack                    [`N:0], //conditional branch goes to issue_pack[2]
-    output RS_CNT                           rs_empty_entries_num                ,
+    output logic [1:0]                      rs_empty_entries_num                ,
     output logic [1:0]                      dbg_issue_count
 );
 
@@ -127,10 +127,8 @@ module rs(
         issue_pack = '{default:'0};
         mult_mask = '0;
         cdb_req_alu = '{default:'0};
-        issue_case = ISSUE_NOTHING;
         dbg_issue_count = 'd0;
         cond_branch_mask =  '0;
-        empty_entries_num = 'd0;
 
         for (int i = 0; i< `RS_SZ; i++)begin
             next_empty_entry_mask[i] = !rs_entry[i].busy;
@@ -545,11 +543,14 @@ module rs(
             end
         end
 
-        for(int j = 0; j < `RS_SZ; j++) begin 
-            if(!next_rs_entry[j].busy) begin 
-                empty_entries_num = empty_entries_num + 1;
-            end
-        end
+        // for(int j = 0; j < `RS_SZ; j++) begin 
+        //     if(!next_rs_entry[j].busy) begin 
+        //         empty_entries_num = empty_entries_num + 1;
+        //     end
+        // end
+        rs_empty_entries_num <= $countones(next_empty_entry_mask) >= 2? 'd2 : 
+                                $countones(next_empty_entry_mask) >= 1? 'd1 : 'd0;
+
     end
     ///////////////////////////////////////////////////////////////////////
     //////////////////////                         ////////////////////////

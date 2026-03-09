@@ -1,39 +1,38 @@
 `include "sys_defs.svh"
 module freelist(
-    input logic                             clock               ,
-    input logic                             reset               ,
-    input logic [1:0]                       retire_num          ,  //from retire
-    input logic                             retire_valid        ,  // from rob
-    input FLIST_SZ                          Branch_stack_H      ,  // Head output from BS
-    input logic [`N-1:0]                    dispatch_valid      ,  // from dispatcher
-    input logic                             is_branch [`N-1:0],
-    input logic                             mispredicted        ,
+    input logic                             clock                   ,
+    input logic                             reset                   ,
+    input logic [1:0]                       retire_num              ,  //from retire
+    input logic                             retire_valid            ,  // from rob
+    input FLIST_SZ                          Branch_stack_H          ,  // Head output from BS
+    input logic                             dispatch_valid  [`N-1:0],  // from dispatch stage
+    input logic                             is_branch       [`N-1:0],  // from dispatch stage
+    input logic                             mispredicted            ,  //from execute stage
 
-    //output logic                            full,
-    output FLIST_CNT                        BS_head [`N-1:0]    ,  //to BS
-    output PRF_IDX                          t       [`N-1:0]    ,                              // to dispatch
-    output FLIST_CNT                        avail_num     // to dispatch
+    output FLIST_CNT                        BS_head         [`N-1:0],  //to BS
+    output PRF_IDX                          t               [`N-1:0],  // to dispatch stage
+    output logic [1:0]                        avail_num                  // to dispatch stage
 );
 
-    logic [3:0][4:0] cnt_list;
-    FLIST_SZ head, head_n;
-    FLIST_SZ tail, tail_n;   
-    FLIST_CNT   cnt,  cnt_n;
-    logic do_disp;//do dispatch this cycle
+    logic [3:0][4:0]    cnt_list;
+    FLIST_SZ            head, head_n;
+    FLIST_SZ            tail, tail_n;   
+    FLIST_CNT           cnt,  cnt_n;
+    logic               do_disp;//do dispatch this cycle
 
-    PRF_IDX freelist [`ROB_SZ-1:0];//freelist register
-    logic [1:0] req_num;
+    PRF_IDX             freelist [`FLIST_SZ-1:0];//freelist register
+    logic [1:0]         req_num;
 
     always_comb begin
+        //default
         head_n  = head;
         tail_n  = tail;
         cnt_n   = cnt;
-
         t       = '{default:'0};
         BS_head = '{default:'0};
-
-        // count requests 
         req_num = '0;
+        
+        // count requests 
         for (int i = 0; i < `N; i++) begin
             if (dispatch_valid[i]) begin
                 req_num++;

@@ -18,9 +18,7 @@ module branch_stack (
     output logic [`MT_SIZE-1:0]                         mt_snapshot_out                  ,   //to maptable
     output logic [`FLIST_SIZE-1:0]                      tail_ptr_out                     ,   //to freelist
     output ROB_IDX                                      rob_index_out                    ,   //to rob
-    //output logic                                        stack_full                     ,   //to dispatch stage
-    //output logic                                      stack_empty                      ,   //to dispatch stage
-    output BSTACK_CNT                                   branch_stack_space_avail         ,   //to dispatch stage
+    output logic [1:0]                                  branch_stack_space_avail         ,   //to dispatch stage
     output ADDR                                         pc_snapshot_out                      //to fetch stage
 );
 
@@ -47,7 +45,8 @@ module branch_stack (
     always_comb begin
         //default
         stack_ptr_next = stack_ptr;
-        stack_ptr_temp = stack_ptr;
+        stack_ptr_temp1 = stack_ptr;
+        stack_ptr_temp2 = stack_ptr;
         stack_next = stack; 
         
         //step 1 : mark as resolved
@@ -96,8 +95,6 @@ module branch_stack (
                 stack_next[i] = '0;
             end
         end 
-
-        branch_stack_space_avail = `BRANCH_STACK_DEPTH - stack_ptr_next;
     
         //step 4 : enqueue logic
         stack_ptr_temp2 = stack_ptr_next;
@@ -114,8 +111,7 @@ module branch_stack (
         end
         stack_ptr_next = stack_ptr_temp2;
 
-        // stack_empty = (stack_ptr_next == 0);
-        // stack_full  = (stack_ptr_next == `BRANCH_STACK_DEPTH);
+        branch_stack_space_avail = (`BRANCH_STACK_DEPTH - stack_ptr_next) >= 2 ? 2 : (`BRANCH_STACK_DEPTH - stack_ptr_next) == 1 ? 1 : 0; 
     end
 
     ///////////////////////////////////////////////////////////////////////
@@ -127,9 +123,6 @@ module branch_stack (
         if(reset) begin
             stack_ptr <= '0;
             stack <= '{default: '0};
-            // stack_empty <= 1'b1;
-            // stack_full <= 1'b0;
-            branch_stack_space_avail <= `BRANCH_STACK_DEPTH;
         end else begin
             stack_ptr <= stack_ptr_next;
             stack <= stack_next;

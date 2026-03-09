@@ -60,8 +60,6 @@ module fetch_buffer #(
             end
         end
 
-        can_fetch_num <= (DEPTH - count_n >= 2) ? 2'd2 :
-                             (DEPTH - count_n >= 1) ? 2'd1 : 2'd0;
     end
 
     always_ff @(posedge clock) begin
@@ -70,13 +68,14 @@ module fetch_buffer #(
             tail  <= '0;
             count <= '0;
             buffer <= '{default:'0};
+            can_fetch_num <= 2'd2; // can fetch 2 instructions when reset or mispredicted
         end else begin
             head   <= head_n;
             tail   <= tail_n;
             count  <= count_n;
             buffer <= buffer_n;
-            // can_fetch_num <= (DEPTH - count_n >= 2) ? 2'd2 :
-            //                  (DEPTH - count_n >= 1) ? 2'd1 : 2'd0;
+            can_fetch_num <= (DEPTH - count_n >= 2) ? 2'd2 :
+                             (DEPTH - count_n >= 1) ? 2'd1 : 2'd0;
         end
     end
 

@@ -10,7 +10,7 @@ module rob(
 
     output logic                retire_valid                    ,//to freelist
     output logic [1:0]          retire_num                      ,//to freelist
-    output ROB_CNT              rob_space_avail                 ,//to dispatch stage
+    output logic [1:0]          rob_space_avail                 ,//to dispatch stage
     output ROB_IDX              rob_index               [`N-1:0] //to rs & branch stack
 );
 
@@ -60,8 +60,6 @@ module rob(
         next_tail_ptr = tail_ptr;
         next_rob_count = rob_count;
         next_rob_array = rob_array;
-        retire_valid = 'b0;
-        retire_num = 2'b00;
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
 //////////////////////      Commit(Retire)     ////////////////////////
@@ -111,12 +109,7 @@ module rob(
             next_tail_ptr = mispredicted_index + 1;
             next_rob_count = ROB_CNT'(ROB_IDX'(mispredicted_index - next_head_ptr) + 1'b1) ;
         end
-///////////////////////////////////////////////////////////////////////
-//////////////////////                         ////////////////////////
-//////////////////////  space count            ////////////////////////
-//////////////////////                         ////////////////////////
-///////////////////////////////////////////////////////////////////////
-        rob_space_avail = `ROB_SZ - next_rob_count;
+
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
 //////////////////////  Enqueue(Dispatch)      ////////////////////////
@@ -141,6 +134,9 @@ module rob(
             next_tail_ptr = tail_ptr + 2;            
             next_rob_count = next_rob_count + 2;
         end
+
+        rob_space_avail = (`ROB_SZ - next_rob_count >= 2)? 2 :
+                          (`ROB_SZ - next_rob_count == 1)? 1 : 0;
     end
     
 ///////////////////////////////////////////////////////////////////////

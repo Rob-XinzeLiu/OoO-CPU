@@ -9,7 +9,7 @@ module stage_dispatch (
     //from freelist
     input PRF_IDX                           t_new                       [`N-1:0], // from freelist
     input FLIST_CNT                         avail_num                           , // from freelist   
-    output logic  [`N-1:0]                  dispatch_valid                      , // to freelist
+    output logic                            dispatch_valid              [`N-1:0], // to freelist
                        
     input X_C_PACKET                        cdb                         [`N-1:0], // updating map table ready bit
     
@@ -33,9 +33,9 @@ module stage_dispatch (
     output logic [1:0]                      dispatch_num             
 );
 
-    function automatic int unsigned min2(
-        input int unsigned   a,
-        input int unsigned   b
+    function automatic logic [1:0] min2(
+        input logic [1:0]   a,
+        input logic [1:0]   b
     );
         return (a < b) ? a : b;
     endfunction
@@ -536,14 +536,12 @@ module stage_dispatch (
                 end
 
             endcase        
-            
-            // Calculate how many instructions we can dispatch in the next cycle
+            // Calculate how many instructions we can dispatch in next cycle
             branch_avail_slot = (next_branch_count < 3)? 'd2:(next_branch_count == 3)? 'd1:'d0; 
-            small1 = min2(branch_avail_slot, rs_empty_entries_num);
-            small2 = min2(small1, rob_space_avail);
-            small3 = min2(small2, avail_num);
-            small4 = min2(small3, branch_stack_space_avail);
-            dispatch_num = small4;
+            small1 = min2(branch_avail_slot,  rs_empty_entries_num);   
+            small2 = min2(rob_space_avail,    avail_num);              
+            small3 = min2(small1, small2);                             
+            dispatch_num = min2(small3, branch_stack_space_avail);    
         end
     end
 
