@@ -26,7 +26,7 @@ module cpu (
     output MEM_SIZE    proc2mem_size,    // Data size sent to memory
 
     // Note: these are assigned at the very bottom of the module
-    output COMMIT_PACKET [`N-1:0] committed_insts,
+    output RETIRE_PACKET [`N-1:0] committed_insts,
 
     // Debug outputs: these signals are solely used for debugging in testbenches
     // You should definitely change these for the final project
@@ -81,6 +81,7 @@ module cpu (
     X_C_PACKET x_c_pack [`N-1:0];
     X_C_PACKET x_c_pack_reg [`N-1:0];
     COND_BRANCH_PACKET cond_pack, cond_pack_reg;
+    MISPREDICT_PACKET mispredict_pack_out, mispredict_pack_reg;
     ETB_TAG_PACKET  etb_bus [`N-1:0];
 
     // Outputs from COM-Stage
@@ -94,8 +95,8 @@ module cpu (
     MEM_COMMAND Dmem_command;
     MEM_SIZE    Dmem_size;
 
-    // Outputs from WB-Stage (These loop back to the register file in ID)
-    COMMIT_PACKET wb_packet;
+    // Outputs from Retire stage
+    RETIRE_PACKET commit_pack [`N-1:0];
 
     // Logic for stalling memory stage
     logic       load_stall;
@@ -137,7 +138,7 @@ module cpu (
     // This state controls the stall signal that artificially forces IF
     // to stall until the previous instruction has completed.
 
-    logic if_valid, start_valid_on_reset, wb_valid;
+    logic if_valid, start_valid_on_reset;
 
 
     always_ff @(posedge clock) begin
@@ -148,7 +149,8 @@ module cpu (
     end
 
     // valid bit will cycle through the pipeline and come back from the wb stage
-    assign if_valid = start_valid_on_reset || wb_valid;
+    //make sure it goes low on mispredict
+    assign if_valid = start_valid_on_reset && ! global_mispredict;
 
     //////////////////////////////////////////////////
     //                                              //
@@ -157,10 +159,17 @@ module cpu (
     //////////////////////////////////////////////////
 
     stage_if stage_if_0 (
+        //Input
         .clock(clock),
-
-
-
+        .reset(reset),
+        .if_valid(if_valid),
+        .Imem_data(mem2proc_data),
+        .mispredict_pack(mispredict_pack_reg),
+        .fetch_req(can_fetch_num),
+        
+        //Output
+        .if_packet(f_pack),
+        .Imem_addr(proc2mem_addr)
     );
 
     //////////////////////////////////////////////////
@@ -317,7 +326,8 @@ module cpu (
         .mispredict_bmask_out(global_mispredict_bmask),
         .resolve_index_out(global_resolve_index),
         .resolve_signal_out(global_resolve),
-        .early_tag_bus(etb_bus)
+        .early_tag_bus(etb_bus),
+        .mispredict_pack_out(mispredict_pack_out)
     );
 
     //////////////////////////////////////////////////
@@ -325,14 +335,16 @@ module cpu (
     //           EX/COM Pipeline Register           //
     //                                              //
     //////////////////////////////////////////////////
-
+    //don't need to flush the reg here
     always_ff @(posedge clock) begin
-        if(reset || global_mispredict) begin
+        if(reset) begin
             x_c_pack_reg    <= '0;
             cond_pack_reg   <= '0;
+            mispredict_pack_reg <= '0;
         end else begin
             x_c_pack_reg    <= x_c_pack;
             cond_pack_reg   <= cond_pack;
+            mispredict_pack_reg <= mispredict_pack_out;
         end
     end
 
@@ -342,10 +354,10 @@ module cpu (
     //                                              //
     //////////////////////////////////////////////////
     typedef enum logic [2:0] {
-        1_MULT,
-        1_MULT_1_ALU,
-        1_ALU,
-        2_ALU,
+        MULT_1,
+        MULT_1_ALU_1,
+        ALU_1,
+        ALU_2,
         NONE,
     } cdb_arbiter_state_t;
 
@@ -357,29 +369,29 @@ module cpu (
     always_comb begin
         cdb_arbiter_state = NONE;  // default
         if(cdb_req_alu[0] && cdb_req_mult) begin
-            cdb_arbiter_state = 1_MULT_1_ALU;
+            cdb_arbiter_state = MULT_1_ALU_1;
         end else if(cdb_req_mult && !cdb_req_alu[0]) begin
-            cdb_arbiter_state = 1_MULT;
+            cdb_arbiter_state = MULT_1;
         end else if(!cdb_req_mult && cdb_req_alu[0] && !cdb_req_alu[1]) begin
-            cdb_arbiter_state = 1_ALU;
+            cdb_arbiter_state = ALU_1;
         end else if(!cdb_req_mult && cdb_req_alu[0] && cdb_req_alu[1])  begin           
-            cdb_arbiter_state = 2_ALU;
+            cdb_arbiter_state = ALU_2;
         end
 
         case (cdb_arbiter_state)
-            1_MULT: begin
+            MULT_1: begin
                 cdb_grant_alu[0] = 0;
                 cdb_grant_alu[1] = 0;
             end
-            1_MULT_1_ALU: begin
+            MULT_1_ALU_1: begin
                 cdb_grant_alu[0] = 1;
                 cdb_grant_alu[1] = 0;
             end
-            1_ALU: begin
+            ALU_1: begin
                 cdb_grant_alu[0] = 1;
                 cdb_grant_alu[1] = 0;
             end
-            2_ALU: begin
+            ALU_2: begin
                 cdb_grant_alu[0] = 1;
                 cdb_grant_alu[1] = 1;
             end
@@ -427,8 +439,23 @@ module cpu (
         .data_for_prf(write_data)
     );
 
+    //////////////////////////////////////////////////
+    //                                              //
+    //           Retire stage                       //
+    //                                              //
+    //////////////////////////////////////////////////
+//TODO
+    stage_retire stage_retire_0 (
+        // Input
+        .clock(clock),
+        .reset(reset),
+        .rob_commit_pack(rob_commit_pack),
 
-
+        // Output
+        .freelist_free_num(freelist_free_num),
+        .commit_pack(commit_pack),
+        .stall_fetch(stall_fetch)
+    );
 
     //////////////////////////////////////////////////
     //                                              //
@@ -590,6 +617,6 @@ module cpu (
     //////////////////////////////////////////////////
 
     // Output the committed instruction to the testbench for counting
-    assign committed_insts[0] = wb_packet;
+    assign committed_insts = commit_pack;
 
 endmodule // pipeline

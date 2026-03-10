@@ -32,7 +32,7 @@
 `define PHYS_REG_SZ_P6 32
 `define PHYS_REG_SZ_R10K (32 + `ROB_SZ)
 `define TAG_CNT $clog2(`PHYS_REG_SZ_R10K)
-`define MT_SIZE       (`ARCH_REG_SZ*($clog2(`PHYS_REG_SZ_R10K)+1))
+`define MT_SIZE       (`ARCH_REG_SZ*($clog2(`PHYS_REG_SZ_R10K)))
 `define BRANCH_STACK_DEPTH (2*`N)
 // worry about these later
 `define BRANCH_PRED_SZ xx
@@ -297,10 +297,10 @@ typedef enum logic [2:0] {
 ////////////////////////////////
 
 
-typedef struct packed {
-    logic [$clog2(`PHYS_REG_SZ_R10K)-1:0]   p_tag; 
-    logic                                   ready;
-} MT_ENTRY;
+// typedef struct packed {
+//     logic [$clog2(`PHYS_REG_SZ_R10K)-1:0]   p_tag; 
+//     logic                                   ready;
+// } MT_ENTRY;
 
 
 
@@ -448,6 +448,8 @@ typedef struct packed{
     ROB_IDX         rob_index;
     ADDR            predict_addr;     // predict address
     logic           predict_taken;    // predict taken
+
+    REG_IDX         dest_reg_idx;//for debug
 } D_S_PACKET;
 
 typedef struct packed{
@@ -484,10 +486,16 @@ typedef struct packed{
 
 typedef struct packed{
     logic           valid;
-    logic           take_branch;
     ROB_IDX         br_rob_idx;
-    ADDR            correct_next_pc;
 } COND_BRANCH_PACKET;
+
+typedef struct packed{
+    logic           valid;
+    logic           take_branch;
+    ADDR            correct_next_pc;
+    logic           is_cond_branch;
+    logic           is_uncond_branch;
+} MISPREDICT_PACKET;
 
 typedef struct packed{
     logic           valid;
@@ -500,6 +508,17 @@ typedef struct packed{
     DATA            result;//write to PRF
     ADDR            NPC;//for unconditional branches, write NPC into PRF
 } X_C_PACKET;
+
+typedef struct packed{
+    logic           valid;
+    ADDR            PC;
+    ADDR            NPC;
+    logic           has_dest;//for freelist recovery, whether this instruction has a destination register
+    REG_IDX         dest_reg_idx;//for tb
+    PRF_IDX         t_old;//for tb
+    logic           halt;
+    logic           illegal;
+} RETIRE_PACKET;
 
 
 `endif // __SYS_DEFS_SVH__

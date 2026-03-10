@@ -182,7 +182,7 @@ module stage_dispatch (
             if(resolved) begin
 
                 next_bmask = next_bmask & (~resolved_bmask_index);
-                next_branch_count = next_branch_count - 1;
+                next_branch_count = $countone(next_bmask);
 
             end
 
@@ -242,6 +242,8 @@ module stage_dispatch (
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
                     dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
                     dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    //debug
+                    dispatch_pack[0].dest_reg_idx = rd[0];
                     //send to branch stack
                     branch_encountered[0] = 1'b1;
                     branch_index[0] = bmask_idx_0;
@@ -276,6 +278,8 @@ module stage_dispatch (
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
                     dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
                     dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    //debug
+                    dispatch_pack[0].dest_reg_idx = rd[0];
                 end
 
                 TWO_BRANCH: begin
@@ -313,6 +317,8 @@ module stage_dispatch (
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
                     dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
                     dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    //debug
+                    dispatch_pack[0].dest_reg_idx = rd[0];
                     //send to branch stack
                     branch_encountered[0] = 1'b1;
                     branch_index[0] = bmask_idx_0;
@@ -350,6 +356,8 @@ module stage_dispatch (
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
                     dispatch_pack[1].predict_addr = f_d_pack[1].predict_addr;
                     dispatch_pack[1].predict_taken = f_d_pack[1].predict_taken;
+                    //debug
+                    dispatch_pack[1].dest_reg_idx = rd[1];
                     //send to branch stack
                     branch_encountered[1] = 1'b1;
                     branch_index[1] = bmask_idx_1;
@@ -385,6 +393,8 @@ module stage_dispatch (
                         dispatch_pack[i].illegal = decode_pack[i].illegal;
                         dispatch_pack[i].predict_addr = f_d_pack[i].predict_addr;
                         dispatch_pack[i].predict_taken = f_d_pack[i].predict_taken;
+                        //debug
+                         dispatch_pack[i].dest_reg_idx = rd[i];
                     end
                 end
 
@@ -415,7 +425,9 @@ module stage_dispatch (
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
                     dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
-                    dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;               
+                    dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken; 
+                    //debug
+                    dispatch_pack[0].dest_reg_idx = rd[0];              
                     //inst 1 is branch
                     for(int i = 0; i < 2*`N; i++) begin
                         if(~next_bmask[i]) begin
@@ -450,6 +462,8 @@ module stage_dispatch (
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
                     dispatch_pack[1].predict_addr = f_d_pack[1].predict_addr;
                     dispatch_pack[1].predict_taken = f_d_pack[1].predict_taken;
+                    //debug
+                    dispatch_pack[1].dest_reg_idx = rd[1];
                     //send to branch stack
                     branch_encountered[0] = 1'b1;
                     branch_index[0] = bmask_idx_1;
@@ -492,6 +506,8 @@ module stage_dispatch (
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
                     dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
                     dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    //debug
+                    dispatch_pack[0].dest_reg_idx = rd[0];
                     //send to branch stack
                     branch_encountered[0] = 1'b1;
                     branch_index[0] = bmask_idx_0;
@@ -523,6 +539,8 @@ module stage_dispatch (
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
                     dispatch_pack[1].predict_addr = f_d_pack[1].predict_addr;
                     dispatch_pack[1].predict_taken = f_d_pack[1].predict_taken;
+                    //debug
+                    dispatch_pack[1].dest_reg_idx = rd[1];
                     //update branch count
                     next_branch_count = next_branch_count + 1;
                 end

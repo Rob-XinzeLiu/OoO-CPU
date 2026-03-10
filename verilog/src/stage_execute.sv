@@ -10,8 +10,10 @@ module execute_stage(
     
     //to complete stage
     output X_C_PACKET                       x_c_pack                    [`N-1:0],
-    //to rob and fetch stage
-    output COND_BRANCH_PACKET               conditional_branch_out              ,              
+    //to rob 
+    output COND_BRANCH_PACKET               conditional_branch_out              , 
+    //to fetch stage
+    output MISPREDICT_PACKET                mispredict_pack_out                 ,             
     //to cdb arbiter 
     output logic                            cdb_req_mult                        ,
     //mispredict and resolve logic to other stages and registers                            
@@ -103,11 +105,13 @@ module execute_stage(
         mis_direction = s_x_pack[2].valid && (s_x_pack[2].predict_taken != take);
     end
     
-    
+    logic mispredicted;
     B_MASK mispredicted_bmask_index;
     logic resolved;
     B_MASK resolved_bmask_index;
     B_MASK mispredicted_mask;
+    MISPREDICT_PACKET mispredict_pack;
+    assign mispredict_pack_out = mispredict_pack;
 
     always_comb begin
         mispredicted = 1'b0;
@@ -117,6 +121,7 @@ module execute_stage(
         mispredicted_mask = '1;
         mispredict_pc       = '0;
         mispredict_result   = '0;
+        mispredict_pack = '{default:'0};
 
         if(s_x_pack[2].valid && !mis_direction) begin
             resolved_bmask_index |= s_x_pack[2].bmask_index;
@@ -135,11 +140,20 @@ module execute_stage(
         if (s_x_pack[2].valid && mis_direction && (s_x_pack[2].bmask == mispredicted_mask)) begin
             mispredicted = 1'b1;
             mispredicted_bmask_index = s_x_pack[2].bmask_index;
+            //mispredict pack for fetch stage
+            mispredict_pack.valid = 1'b1;
+            mispredict_pack.is_cond_branch = 1'b1;
+            mispredict_pack.take_branch = take;
+            mispredict_pack.correct_next_pc = take ? (s_x_pack[2].PC + `RV32_signext_Bimm(s_x_pack[2].inst)) : s_x_pack[2].NPC;
         end else begin
             for (int i = 0; i < 2; i++) begin
                 if (s_x_pack[i].valid && s_x_pack[i].uncond_branch && mis_target[i] && (s_x_pack[i].bmask == mispredicted_mask)) begin
                     mispredicted = 1'b1;
                     mispredicted_bmask_index = s_x_pack[i].bmask_index;
+                    //mispredict pack for fetch stage
+                    mispredict_pack.valid = 1'b1;
+                    mispredict_pack.is_uncond_branch = 1'b1;
+                    mispredict_pack.correct_next_pc = (i==0) ? result1_alu : result2_alu;
                 end
             end
         end
@@ -316,18 +330,22 @@ module execute_stage(
                 early_tag_bus[0].tag = mult_out.complete_tag;
             end
             BROADCAST_2_ALU: begin
-                x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_idx == mispredicted_bmask_index))? 1'b1: (s_x_pack[0].valid && !|(effective_bmask_alu0 & mispredicted_bmask_index)) ;
+                x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_idx == mispredicted_bmask_index))? 1'b1: 
+                                             (s_x_pack[0].valid && !(mispredicted && |(effective_bmask_alu0 & mispredicted_bmask_index)));
                 x_c_pack[0].complete_index = s_x_pack[0].rob_index;
                 x_c_pack[0].complete_tag   = s_x_pack[0].tag;
                 x_c_pack[0].bmask          = effective_bmask_alu0;
                 x_c_pack[0].result         = result1_alu;
                 x_c_pack[0].has_dest       = s_x_pack[0].has_dest;
-                x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_idx == mispredicted_bmask_index))? 1'b1: (s_x_pack[1].valid && !|(effective_bmask_alu1 & mispredicted_bmask_index)) ;
+                x_c_pack[0].uncond_branch  = s_x_pack[0].uncond_branch;
+                x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_idx == mispredicted_bmask_index))? 1'b1: 
+                                             (s_x_pack[1].valid && !(mispredicted && |(effective_bmask_alu1 & mispredicted_bmask_index)));
                 x_c_pack[1].complete_index = s_x_pack[1].rob_index;
                 x_c_pack[1].complete_tag   = s_x_pack[1].tag;
                 x_c_pack[1].bmask          = effective_bmask_alu1;
                 x_c_pack[1].result         = result2_alu;
                 x_c_pack[1].has_dest       = s_x_pack[1].has_dest;
+                x_c_pack[1].uncond_branch  = s_x_pack[1].uncond_branch;
                 //etb
                 early_tag_bus[0].valid = s_x_pack[0].has_dest;
                 early_tag_bus[0].tag = s_x_pack[0].tag;
@@ -341,12 +359,14 @@ module execute_stage(
                 x_c_pack[0].bmask          = effective_bmask_mult;
                 x_c_pack[0].result         = mult_out.result;
                 x_c_pack[0].has_dest       = 'b1;
-                x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_idx == mispredicted_bmask_index))? 1'b1: (s_x_pack[1].valid && !|(effective_bmask_alu1 & mispredicted_bmask_index)) ;
+                x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_idx == mispredicted_bmask_index))? 1'b1: 
+                                             (s_x_pack[1].valid && !(mispredicted && |(effective_bmask_alu1 & mispredicted_bmask_index)));
                 x_c_pack[1].complete_index = s_x_pack[1].rob_index;
                 x_c_pack[1].complete_tag   = s_x_pack[1].tag;
                 x_c_pack[1].bmask          = effective_bmask_alu1;
                 x_c_pack[1].result         = result1_alu;
                 x_c_pack[1].has_dest       = s_x_pack[1].has_dest;
+                x_c_pack[1].uncond_branch  = s_x_pack[1].uncond_branch;
                 //etb
                 early_tag_bus[0].valid = 1;
                 early_tag_bus[0].tag = mult_out.complete_tag;
@@ -354,12 +374,14 @@ module execute_stage(
                 early_tag_bus[1].tag = s_x_pack[1].tag;
             end
             BROADCAST_1_ALU: begin
-                x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_idx == mispredicted_bmask_index))? 1'b1: (s_x_pack[0].valid && !|(effective_bmask_alu0 & mispredicted_bmask_index)) ;
+                x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_idx == mispredicted_bmask_index))? 1'b1: 
+                                             (s_x_pack[0].valid && !(mispredicted && |(effective_bmask_alu0 & mispredicted_bmask_index)));
                 x_c_pack[0].complete_index = s_x_pack[0].rob_index;
                 x_c_pack[0].complete_tag   = s_x_pack[0].tag;
                 x_c_pack[0].bmask          = effective_bmask_alu0;
                 x_c_pack[0].result         = result1_alu;
                 x_c_pack[0].has_dest       = s_x_pack[0].has_dest;
+                x_c_pack[0].uncond_branch  = s_x_pack[0].uncond_branch;
                 x_c_pack[1].valid          = 1'b0;
                 //etb
                 early_tag_bus[0].valid = s_x_pack[0].has_dest;
@@ -377,24 +399,34 @@ module execute_stage(
             end
         endcase
     end
-    
+
     ///////////////////////////////////////////////////////////////////////
     //////////////////////                         ////////////////////////
     ////////////////////// conditional branch  out ////////////////////////
     //////////////////////                         ////////////////////////
     ///////////////////////////////////////////////////////////////////////
     
-    DATA branch_target;
-    assign branch_target = s_x_pack[2].valid? (s_x_pack[2].PC + `RV32_signext_Bimm(s_x_pack[2].inst)) : 'b0;
+   // DATA branch_target;
+   // assign branch_target = s_x_pack[2].valid? (s_x_pack[2].PC + `RV32_signext_Bimm(s_x_pack[2].inst)) : 'b0;
     always_comb begin
         conditional_branch_out = '{default:'0};
-        if (s_x_pack[2].valid && s_x_pack[2].cond_branch) begin
+        if (s_x_pack[2].valid && !|(s_x_pack[2].bmask & mispredicted_bmask_index) ||
+            (s_x_pack[2].bmask_idx == mispredicted_bmask_index ) || !mispredicted) begin
             conditional_branch_out.valid = 1'b1;
-            conditional_branch_out.take_branch = take;
+            //conditional_branch_out.take_branch = take;
             conditional_branch_out.br_rob_idx = s_x_pack[2].rob_index;
-            conditional_branch_out.correct_next_pc = take ? branch_target : s_x_pack[2].NPC;
+           // conditional_branch_out.correct_next_pc = take ? branch_target : s_x_pack[2].NPC;
         end
     end
+
+    ///////////////////////////////////////////////////////////////////////
+    //////////////////////                         ////////////////////////
+    ////////////////////// mispredict out to fetch ////////////////////////
+    //////////////////////                         ////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+
+
+
     
 endmodule
 

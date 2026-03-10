@@ -6,19 +6,26 @@ module rob(
     input logic                 mispredicted                    ,//from execute
     input ROB_IDX               mispredicted_index              ,//from branch stack
     input X_C_PACKET            cdb                     [`N-1:0],//set complete bit
-    input COND_BRANCH_PACKET    cond_branch_in                  ,//from execute, set complete 1 cycle earlier than cdb 
+    input COND_BRANCH_PACKET    cond_branch_in                  ,//from execute
 
-    output logic                retire_valid                    ,//to freelist
-    output logic [1:0]          retire_num                      ,//to freelist
+    output RETIRE_PACKET        rob_commit              [`N-1:0],//to retire stage
+    
+    //output logic [1:0]          retire_num                      ,//to retire stage
     output logic [1:0]          rob_space_avail                 ,//to dispatch stage
     output ROB_IDX              rob_index               [`N-1:0] //to rs & branch stack
 );
 
     typedef struct packed {
-        PRF_IDX t;
-        PRF_IDX told;
-        logic ready_retire;//how many inst can we retire per cycle?
-        ROB_IDX index;
+        PRF_IDX         t;
+        PRF_IDX         told;
+        logic           ready_retire;//how many inst can we retire per cycle?
+        logic           halt;//for tb
+        logic           illegal;//for tb
+        ADDR            PC;//for debug
+        ADDR            NPC;//for debug
+        logic           has_dest;//for debug
+        REG_IDX         dest_reg_idx;//for debug
+
         //logic is_load;
         //logic is_store;
     } ROB_ENTRY;
@@ -28,8 +35,8 @@ module rob(
     ROB_IDX         head_ptr, next_head_ptr;
     ROB_IDX         tail_ptr, next_tail_ptr;//tail pointer point to next free slot
     ROB_CNT         rob_count, next_rob_count;//how many entries used
-    //retire
-    logic           retire_valid;
+    logic [1:0]   retire_num; //how many instructions can we retire in this cycle
+
     //output current head ptr to execute stage
     assign          rob_head_ptr_out = head_ptr;
     //combinational output to rs
@@ -60,6 +67,7 @@ module rob(
         next_tail_ptr = tail_ptr;
         next_rob_count = rob_count;
         next_rob_array = rob_array;
+        rob_commit = '{default: '0};
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
 //////////////////////      Commit(Retire)     ////////////////////////
@@ -68,16 +76,32 @@ module rob(
         retire_num = (rob_array[head_ptr].ready_retire && rob_array[head_ptr + 1 ].ready_retire)? 2 : 
                      (rob_array[head_ptr].ready_retire && !rob_array[head_ptr + 1 ].ready_retire)? 1 : 0;
         
-        retire_valid = (rob_array[head_ptr].ready_retire)? 1'b1 : 1'b0;
 
         if(retire_num == 2)begin
             for(int i = 0; i < `N; ++i)begin
-                next_rob_array[head_ptr+i].ready_retire = 1'b0; 
+                next_rob_array[head_ptr+i].ready_retire = 1'b0;
+                rob_commit[i].valid = 1'b1;
+                rob_commit[i].halt = next_rob_array[head_ptr+i].halt;
+                rob_commit[i].illegal = next_rob_array[head_ptr+i].illegal;
+                rob_commit[i].PC = next_rob_array[head_ptr+i].PC;
+                rob_commit[i].NPC = next_rob_array[head_ptr+i].NPC;
+                rob_commit[i].has_dest = next_rob_array[head_ptr+i].has_dest;
+                rob_commit[i].dest_reg_idx = next_rob_array[head_ptr+i].dest_reg_idx;
+                rob_commit[i].t_old = next_rob_array[head_ptr+i].told;
+
             end
             next_head_ptr = head_ptr + 2;
             next_rob_count = rob_count - 2;
 
         end else if(retire_num == 1)begin
+            rob_commit[0].valid = 1'b1;
+            rob_commit[0].halt = next_rob_array[head_ptr].halt;
+            rob_commit[0].illegal = next_rob_array[head_ptr].illegal;
+            rob_commit[0].PC = next_rob_array[head_ptr].PC;
+            rob_commit[0].NPC = next_rob_array[head_ptr].NPC;
+            rob_commit[0].has_dest = next_rob_array[head_ptr].has_dest;
+            rob_commit[0].dest_reg_idx = next_rob_array[head_ptr].dest_reg_idx;
+            rob_commit[0].t_old = next_rob_array[head_ptr].told;
             next_head_ptr = head_ptr + 1;
             next_rob_count = rob_count - 1;
             next_rob_array[head_ptr].ready_retire = 1'b0;
@@ -119,6 +143,13 @@ module rob(
             next_rob_array[tail_ptr].t = dispatch_pack[0].T;
             next_rob_array[tail_ptr].told = dispatch_pack[0].Told;
             next_rob_array[tail_ptr].ready_retire = 1'b0;
+            next_rob_array[tail_ptr].halt = dispatch_pack[0].halt;
+            next_rob_array[tail_ptr].illegal = dispatch_pack[0].illegal
+            next_rob_array[tail_ptr].PC = dispatch_pack[0].PC
+            next_rob_array[tail_ptr].NPC = dispatch_pack[0].NPC
+            next_rob_array[tail_ptr].has_dest = dispatch_pack[0].has_dest;
+            next_rob_array[tail_ptr].dest_reg_idx = dispatch_pack[0].dest_reg_idx;
+
 
             next_tail_ptr = tail_ptr + 1;            
             next_rob_count = next_rob_count + 1;
@@ -126,10 +157,22 @@ module rob(
             next_rob_array[tail_ptr].t = dispatch_pack[0].T;
             next_rob_array[tail_ptr].told = dispatch_pack[0].Told;
             next_rob_array[tail_ptr].ready_retire = 1'b0;
+            next_rob_array[tail_ptr].halt = dispatch_pack[0].halt;
+            next_rob_array[tail_ptr].illegal = dispatch_pack[0].illegal
+            next_rob_array[tail_ptr].PC = dispatch_pack[0].PC
+            next_rob_array[tail_ptr].NPC = dispatch_pack[0].NPC
+            next_rob_array[tail_ptr].has_dest = dispatch_pack[0].has_dest;
+            next_rob_array[tail_ptr].dest_reg_idx = dispatch_pack[0].dest_reg_idx;            
 
             next_rob_array[tail_ptr + 1].t = dispatch_pack[1].T;
             next_rob_array[tail_ptr + 1].told = dispatch_pack[1].Told;
             next_rob_array[tail_ptr + 1].ready_retire = 1'b0;
+            next_rob_array[tail_ptr + 1].halt = dispatch_pack[1].halt;
+            next_rob_array[tail_ptr + 1].illegal = dispatch_pack[1].illegal
+            next_rob_array[tail_ptr + 1].PC = dispatch_pack[1].PC
+            next_rob_array[tail_ptr + 1].NPC = dispatch_pack[1].NPC
+            next_rob_array[tail_ptr + 1].has_dest = dispatch_pack[1].has_dest;
+            next_rob_array[tail_ptr + 1].dest_reg_idx = dispatch_pack[1].dest_reg_idx;
 
             next_tail_ptr = tail_ptr + 2;            
             next_rob_count = next_rob_count + 2;
