@@ -13,7 +13,7 @@ module rs(
     //from dispatch stage
     input D_S_PACKET                        dispatch_pack               [`N-1:0],//from dispatcher
     //from cdb
-    input X_C_PACKET                        cdb                         [`N-1:0], 
+    input X_C_PACKET       [`N-1:0]         cdb                                 ,    
     //etb tag input
     input ETB_TAG_PACKET                    early_tag_bus               [`N-1:0],
     //arbitrate for CDB one cycle earlier
@@ -44,7 +44,6 @@ module rs(
         logic               illegal;
         B_MASK              bmask;          
         B_MASK              bmask_index;    //which bit of bmask is for this branch
-        logic [6:0]         opcode;
         PRF_IDX             T;
         PRF_IDX             t1;
         PRF_IDX             t2;
@@ -157,7 +156,6 @@ module rs(
                     next_rs_entry[i].illegal= dispatch_pack[0].illegal;
                     next_rs_entry[i].bmask= dispatch_pack[0].bmask;
                     next_rs_entry[i].bmask_index= dispatch_pack[0].bmask_index;
-                    next_rs_entry[i].opcode= dispatch_pack[0].opcode;
                     next_rs_entry[i].T= dispatch_pack[0].T;
                     next_rs_entry[i].t1= dispatch_pack[0].t1;
                     next_rs_entry[i].t2= dispatch_pack[0].t2;
@@ -193,7 +191,6 @@ module rs(
                     next_rs_entry[i].illegal= dispatch_pack[1].illegal;
                     next_rs_entry[i].bmask_index= dispatch_pack[1].bmask_index;
                     next_rs_entry[i].bmask= dispatch_pack[1].bmask;
-                    next_rs_entry[i].opcode= dispatch_pack[1].opcode;
                     next_rs_entry[i].T= dispatch_pack[1].T;
                     next_rs_entry[i].t1= dispatch_pack[1].t1;
                     next_rs_entry[i].t2= dispatch_pack[1].t2;
@@ -313,7 +310,6 @@ module rs(
                         issue_pack[0].illegal= next_rs_entry[i].illegal;
                         issue_pack[0].bmask_index= next_rs_entry[i].bmask_index;
                         issue_pack[0].bmask= next_rs_entry[i].bmask;
-                        issue_pack[0].opcode= next_rs_entry[i].opcode;
                         issue_pack[0].T= next_rs_entry[i].T;
                         issue_pack[0].t1= next_rs_entry[i].t1;
                         issue_pack[0].t2= next_rs_entry[i].t2;
@@ -344,7 +340,6 @@ module rs(
                         issue_pack[1].illegal= next_rs_entry[i].illegal;
                         issue_pack[1].bmask_index= next_rs_entry[i].bmask_index;
                         issue_pack[1].bmask= next_rs_entry[i].bmask;
-                        issue_pack[1].opcode= next_rs_entry[i].opcode;
                         issue_pack[1].T= next_rs_entry[i].T;
                         issue_pack[1].t1= next_rs_entry[i].t1;
                         issue_pack[1].t2= next_rs_entry[i].t2;
@@ -381,7 +376,6 @@ module rs(
                         issue_pack[0].illegal= next_rs_entry[i].illegal;
                         issue_pack[0].bmask_index= next_rs_entry[i].bmask_index;
                         issue_pack[0].bmask= next_rs_entry[i].bmask;
-                        issue_pack[0].opcode= next_rs_entry[i].opcode;
                         issue_pack[0].T= next_rs_entry[i].T;
                         issue_pack[0].t1= next_rs_entry[i].t1;
                         issue_pack[0].t2= next_rs_entry[i].t2;
@@ -419,7 +413,6 @@ module rs(
                         issue_pack[0].illegal= next_rs_entry[i].illegal;
                         issue_pack[0].bmask_index= next_rs_entry[i].bmask_index;
                         issue_pack[0].bmask= next_rs_entry[i].bmask;
-                        issue_pack[0].opcode= next_rs_entry[i].opcode;
                         issue_pack[0].T= next_rs_entry[i].T;
                         issue_pack[0].t1= next_rs_entry[i].t1;
                         issue_pack[0].t2= next_rs_entry[i].t2;
@@ -450,7 +443,6 @@ module rs(
                         issue_pack[1].illegal= next_rs_entry[i].illegal;
                         issue_pack[1].bmask_index= next_rs_entry[i].bmask_index;
                         issue_pack[1].bmask= next_rs_entry[i].bmask;
-                        issue_pack[1].opcode= next_rs_entry[i].opcode;
                         issue_pack[1].T= next_rs_entry[i].T;
                         issue_pack[1].t1= next_rs_entry[i].t1;
                         issue_pack[1].t2= next_rs_entry[i].t2;
@@ -486,7 +478,6 @@ module rs(
                         issue_pack[1].illegal= next_rs_entry[i].illegal;
                         issue_pack[1].bmask_index= next_rs_entry[i].bmask_index;
                         issue_pack[1].bmask= next_rs_entry[i].bmask;
-                        issue_pack[1].opcode= next_rs_entry[i].opcode;
                         issue_pack[1].T= next_rs_entry[i].T;
                         issue_pack[1].t1= next_rs_entry[i].t1;
                         issue_pack[1].t2= next_rs_entry[i].t2;
@@ -532,7 +523,6 @@ module rs(
                     issue_pack[2].illegal= next_rs_entry[i].illegal;
                     issue_pack[2].bmask_index= next_rs_entry[i].bmask_index;
                     issue_pack[2].bmask= next_rs_entry[i].bmask;
-                    issue_pack[2].opcode= next_rs_entry[i].opcode;
                     issue_pack[2].T= next_rs_entry[i].T;
                     issue_pack[2].t1= next_rs_entry[i].t1;
                     issue_pack[2].t2= next_rs_entry[i].t2;

@@ -4,8 +4,8 @@ module stage_issue(
     input logic                             reset                               , 
     input D_S_PACKET                        issue_pack                    [`N:0],
     //from prf
-    input DATA                              rs1_value                     [`N:0],
-    input DATA                              rs2_value                     [`N:0],
+    input DATA          [`N:0]                    rs1_value                     ,
+    input DATA          [`N:0]                    rs2_value                     ,
     //For branch resolve
     input logic                             resolved                            ,
     input B_MASK                            resolved_bmask_index                , 
@@ -40,7 +40,7 @@ module stage_issue(
             next_s_x_pack[i].rs1_value = rs1_value[i];
             next_s_x_pack[i].rs2_value = rs2_value[i];
             next_s_x_pack[i].predict_taken = issue_pack[i].predict_taken;
-            next_s_x_pack[i].predict_address = issue_pack[i].predict_address;     
+            next_s_x_pack[i].predict_addr = issue_pack[i].predict_addr;     
         end
 
         if (resolved && !mispredicted) begin

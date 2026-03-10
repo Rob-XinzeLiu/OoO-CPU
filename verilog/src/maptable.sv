@@ -1,29 +1,29 @@
 `include "sys_defs.svh"
 
 module maptable(
-    input logic                         clock,
-    input logic                         reset,
-    input logic                         mispredicted,
-    input ALU_OPA_SELECT                opa_select              [`N-1:0],  // Whether to read src1 mapping
-    input ALU_OPB_SELECT                opb_select              [`N-1:0],  // Whether to read src2 mapping
-    input logic                         has_dest                [`N-1:0],
-    input logic                         cond_branch             [`N-1:0],
-    input logic                         halt                    [`N-1:0],
-    input X_C_PACKET                    cdb                     [`N-1:0],
-    input PRF_IDX                       t_from_freelist         [`N-1:0],
-    input REG_IDX                       rd                      [`N-1:0],
-    input REG_IDX                       r1                      [`N-1:0],
-    input REG_IDX                       r2                      [`N-1:0],
-    input logic [`MT_SIZE-1:0]          snapshot_in                     ,
-    input logic                         is_branch               [`N-1:0],
-    input logic                         valid                   [`N-1:0], 
+    input logic                                         clock   ,
+    input logic                                         reset   ,
+    input logic                                         mispredicted,
+    input ALU_OPA_SELECT[`N-1:0]                        opa_select             ,  // Whether to read src1 mapping
+    input ALU_OPB_SELECT[`N-1:0]                        opb_select            ,  // Whether to read src2 mapping
+    input logic         [`N-1:0]                        has_dest               ,
+    input logic         [`N-1:0]                        cond_branch           ,
+    input logic         [`N-1:0]                        halt                  ,
+    input X_C_PACKET    [`N-1:0]                        cdb                    ,
+    input PRF_IDX       [`N-1:0]                        t_from_freelist        ,
+    input REG_IDX       [`N-1:0]                        rd                    ,
+    input REG_IDX       [`N-1:0]                        r1                   ,
+    input REG_IDX       [`N-1:0]                        r2                    ,
+    input logic                 [`MT_SIZE-1:0]          snapshot_in                     ,
+    input logic         [`N-1:0]                        is_branch             ,
+    input logic         [`N-1:0]                        valid                 , 
     
-    output  PRF_IDX                     t1                      [`N-1:0],
-    output  PRF_IDX                     t2                      [`N-1:0],
-    output  PRF_IDX                     told                    [`N-1:0],
-    output  logic                       t1_ready                [`N-1:0],
-    output  logic                       t2_ready                [`N-1:0],
-    output  logic [`MT_SIZE-1:0]        snapshot_out            [`N-1:0]
+    output  PRF_IDX     [`N-1:0]                        t1                  ,
+    output  PRF_IDX     [`N-1:0]                        t2                 ,
+    output  PRF_IDX     [`N-1:0]                        told                  ,
+    output  logic       [`N-1:0]                        t1_ready         ,
+    output  logic       [`N-1:0]                        t2_ready             ,
+    output  logic       [`N-1:0][`MT_SIZE-1:0]          snapshot_out
 );
     PRF_IDX    [`ARCH_REG_SZ-1:0]          mt, next_mt;
     logic       [`PHYS_REG_SZ_R10K-1:0]     prf_ready, next_prf_ready;
@@ -55,12 +55,12 @@ module maptable(
 //////////////////////                         ////////////////////////
 ///////////////////////////////////////////////////////////////////////
     always_comb begin
-        t1_ready            = '{default:'1};
-        t2_ready            = '{default:'1};
-        t1                  = '{default:'0};
-        t2                  = '{default:'0};
-        told                = '{default:'0};
-        snapshot_out        = '{default:'0};
+        t1_ready            = '1;
+        t2_ready            = '1;
+        t1                  = '0;
+        t2                  = '0;
+        told                = '0;
+        snapshot_out        = '0;
         next_mt             = mt;
         next_prf_ready      = prf_ready;
 

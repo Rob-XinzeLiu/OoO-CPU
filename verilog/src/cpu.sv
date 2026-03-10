@@ -46,7 +46,12 @@ module cpu (
     output DATA  mem_wb_inst_dbg,
     output logic mem_wb_valid_dbg
 );
-
+    logic   global_mispredict;
+    logic   global_resolve;
+    B_MASK  global_mispredict_index;
+    B_MASK  global_resolve_index;
+    B_MASK  global_mispredict_bmask;
+    
     //////////////////////////////////////////////////
     //                                              //
     //                Pipeline Wires                //
@@ -70,12 +75,12 @@ module cpu (
     D_S_PACKET  dispatch_out_pack [`N-1:0];
 
     // Outputs from RS and D/S Pipeline Register
-    D_S_PACKET  d_s_pack [`N-1:0];
-    D_S_PACKET  d_s_pack_reg [`N-1:0];
+    D_S_PACKET  d_s_pack [`N:0];
+    D_S_PACKET  d_s_pack_reg [`N:0];
 
     // Outputs from ISSUE stage and ISSUE/EX Pipeline Register
-    S_X_PACKET s_x_pack [`N-1:0];
-    S_X_PACKET s_x_pack_reg [`N-1:0];
+    S_X_PACKET s_x_pack [`N:0];
+    S_X_PACKET s_x_pack_reg [`N:0];
 
     // Outputs from EX-Stage and EX/COM Pipeline Register
     X_C_PACKET x_c_pack [`N-1:0];
@@ -85,7 +90,7 @@ module cpu (
     ETB_TAG_PACKET  etb_bus [`N-1:0];
 
     // Outputs from COM-Stage
-    X_C_PACKET cdb [`N-1:0];
+    X_C_PACKET [`N-1:0] cdb;
 
 
 
@@ -96,7 +101,7 @@ module cpu (
     MEM_SIZE    Dmem_size;
 
     // Outputs from Retire stage
-    RETIRE_PACKET commit_pack [`N-1:0];
+    RETIRE_PACKET [`N-1:0] commit_pack;
 
     // Logic for stalling memory stage
     logic       load_stall;
@@ -116,18 +121,18 @@ module cpu (
     // we give precedence to the mem stage over instruction fetch
     // note: there will be a 100ns memory latency in the final project
 
-    always_comb begin
-        if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
-            proc2mem_command = Dmem_command_filtered;
-            proc2mem_size    = Dmem_size;
-            proc2mem_addr    = Dmem_addr;
-        end else begin                      // read an INSTRUCTION from memory
-            proc2mem_command = Imem_command;
-            proc2mem_addr    = Imem_addr;
-            proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
-        end
-        proc2mem_data = Dmem_store_data;
-    end
+    // always_comb begin
+    //     if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
+    //         proc2mem_command = Dmem_command_filtered;
+    //         proc2mem_size    = Dmem_size;
+    //         proc2mem_addr    = Dmem_addr;
+    //     end else begin                      // read an INSTRUCTION from memory
+    //         proc2mem_command = Imem_command;
+    //         proc2mem_addr    = Imem_addr;
+    //         proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
+    //     end
+    //     proc2mem_data = Dmem_store_data;
+    // end
 
     //////////////////////////////////////////////////
     //                                              //
@@ -166,6 +171,7 @@ module cpu (
         .Imem_data(mem2proc_data),
         .mispredict_pack(mispredict_pack_reg),
         .fetch_req(can_fetch_num),
+        .stop_fetch(stall_fetch),
         
         //Output
         .if_packet(f_pack),
@@ -180,7 +186,7 @@ module cpu (
 
     always_ff @(posedge clock) begin
         if(reset || global_mispredict) begin
-            f_pack_reg    <= '0;
+            f_pack_reg    <= '{default: '0};;
         end else begin
             f_pack_reg    <= f_pack;
         end
@@ -212,11 +218,12 @@ module cpu (
     //                                              //
     //////////////////////////////////////////////////
     logic           dispatch_valid [`N-1:0];
-    logic           branch_encountered;
-    B_MASK          branch_index;
-    logic [`MT_SIZE-1:0] maptable_snapshot_out;
-    ADDR            pc_snapshot_out;
+    logic           branch_encountered [`N-1:0];
+    B_MASK          branch_index [`N-1:0];
+    logic [`MT_SIZE-1:0] maptable_snapshot_out [`N-1:0];
+    ADDR            pc_snapshot_out [`N-1:0];
     logic [1:0]     dispatch_num;
+    PRF_IDX  [`N-1:0] t_new ;
 
     stage_dispatch stage_dispatch_0 (
         // Input
@@ -234,7 +241,7 @@ module cpu (
         .mispredicted(global_mispredict),
         .mispredicted_bmask_index(global_mispredict_index),
         .mispredicted_bmask(global_mispredict_bmask),
-        .maptable_snapshot_in(mt_BS_out)
+        .maptable_snapshot_in(mt_BS_out),
 
         // Output
         .dispatch_valid(dispatch_valid),
@@ -255,7 +262,7 @@ module cpu (
 
     always_ff @(posedge clock) begin
         if(reset || global_mispredict) begin
-            d_s_pack_reg    <= '0;
+            d_s_pack_reg    <= '{default: '0};
         end else begin
             d_s_pack_reg    <= d_s_pack;
         end
@@ -291,7 +298,7 @@ module cpu (
 
     always_ff @(posedge clock) begin
         if(reset || global_mispredict) begin
-            s_x_pack_reg    <= '0;
+            s_x_pack_reg    <= '{default: '0};;
         end else begin
             s_x_pack_reg    <= s_x_pack;
         end
@@ -303,19 +310,14 @@ module cpu (
     //                                              //
     //////////////////////////////////////////////////
     
-    logic   global_mispredict;
-    logic   global_resolve;
-    B_MASK  global_mispredict_index;
-    B_MASK  global_resolve_index;
-    B_MASK  global_mispredict_bmask;
 
     stage_execute stage_execute_0 (
         // Input
         .clock (clock),
         .reset (reset),
         .s_x_pack(s_x_pack_reg),
-        .mult_ready(mult_ready_reg),
-        .alu_ready(alu_ready_reg),
+        .mult_ready(mult_ready_reg_in),
+        .alu_ready(alu_ready_reg_in),
         
         // Output
         .x_c_pack(x_c_pack),
@@ -338,9 +340,9 @@ module cpu (
     //don't need to flush the reg here
     always_ff @(posedge clock) begin
         if(reset) begin
-            x_c_pack_reg    <= '0;
-            cond_pack_reg   <= '0;
-            mispredict_pack_reg <= '0;
+            x_c_pack_reg    <= '{default: '0};;
+            cond_pack_reg   <= '{default: '0};;
+            mispredict_pack_reg <= '{default: '0};;
         end else begin
             x_c_pack_reg    <= x_c_pack;
             cond_pack_reg   <= cond_pack;
@@ -354,12 +356,12 @@ module cpu (
     //                                              //
     //////////////////////////////////////////////////
     typedef enum logic [2:0] {
-        MULT_1,
-        MULT_1_ALU_1,
-        ALU_1,
-        ALU_2,
-        NONE,
-    } cdb_arbiter_state_t;
+        MULT_1 = 3'd0,
+        MULT_1_ALU_1 = 3'd1,
+        ALU_1 = 3'd2,
+        ALU_2 = 3'd3,
+        NONE  = 3'd4
+     } cdb_arbiter_state_t;
 
     logic   cdb_req_mult, cdb_gnt_mult;
     logic   cdb_req_alu [`N-1:0];
@@ -380,43 +382,48 @@ module cpu (
 
         case (cdb_arbiter_state)
             MULT_1: begin
-                cdb_grant_alu[0] = 0;
-                cdb_grant_alu[1] = 0;
+                cdb_gnt_alu[0] = 0;
+                cdb_gnt_alu[1] = 0;
             end
             MULT_1_ALU_1: begin
-                cdb_grant_alu[0] = 1;
-                cdb_grant_alu[1] = 0;
+                cdb_gnt_alu[0] = 1;
+                cdb_gnt_alu[1] = 0;
             end
             ALU_1: begin
-                cdb_grant_alu[0] = 1;
-                cdb_grant_alu[1] = 0;
+                cdb_gnt_alu[0] = 1;
+                cdb_gnt_alu[1] = 0;
             end
             ALU_2: begin
-                cdb_grant_alu[0] = 1;
-                cdb_grant_alu[1] = 1;
+                cdb_gnt_alu[0] = 1;
+                cdb_gnt_alu[1] = 1;
             end
             NONE: begin
-                cdb_grant_alu[0] = 0;
-                cdb_grant_alu[1] = 0;
+                cdb_gnt_alu[0] = 0;
+                cdb_gnt_alu[1] = 0;
             end
         endcase
     end
 
-    logic alu_ready_reg [`N-1:0];
+    logic [`N-1:0] alu_ready_reg;
     logic mult_ready_reg ;
     always_ff @(posedge clock) begin
         if (reset) begin
             for (int i = 0; i < `N; i++) begin
-                alu_ready_reg[i] <= 1'b0;
+                alu_ready_reg[i] <= 'd0;
             end
             mult_ready_reg <= 1'b0;
         end else begin
             for (int i = 0; i < `N; i++) begin
-                alu_ready_reg[i] <= cdb_grant_alu[i];
+                alu_ready_reg[i] <= cdb_gnt_alu[i];
             end
             mult_ready_reg <= cdb_req_mult; // we always grant mult, so just check if there's a mult request
         end
     end
+
+    logic [`N-1:0] alu_ready_reg_in;
+    logic mult_ready_reg_in;
+    assign alu_ready_reg_in = alu_ready_reg;
+    assign mult_ready_reg_in = mult_ready_reg;  
 
     //////////////////////////////////////////////////
     //                                              //
@@ -444,7 +451,9 @@ module cpu (
     //           Retire stage                       //
     //                                              //
     //////////////////////////////////////////////////
-//TODO
+    logic [1:0] freelist_free_num;
+    logic       stall_fetch;
+
     stage_retire stage_retire_0 (
         // Input
         .clock(clock),
@@ -465,9 +474,10 @@ module cpu (
     logic      [`N-1:0] write_enable;
     PRF_IDX    [`N-1:0] write_index;
     DATA       [`N-1:0] write_data;
-    DATA       rs1_value, rs2_value;
-    PRF_IDX    [`N-1:0] read_idx_1;
-    PRF_IDX    [`N-1:0] read_idx_2;
+    DATA       [`N:0] rs1_value;
+    DATA       [`N:0] rs2_value;
+    PRF_IDX    [`N:0] read_idx_1;
+    PRF_IDX    [`N:0] read_idx_2;
 
     always_comb begin
         for(int i = 0; i < `N; i++) begin
@@ -496,24 +506,23 @@ module cpu (
     //           Rob                                //
     //                                              //
     //////////////////////////////////////////////////
-    logic           retire_valid;
-    logic   [1:0]   retire_num;
+
     ROB_CNT         rob_space_avail;
     ROB_IDX         rob_index [`N-1:0];
+    RETIRE_PACKET   [`N-1:0] rob_commit_pack;
 
     rob rob_0 (
         // Input
         .clock(clock),
         .reset(reset),
-        .dispatch_pack(),
+        .dispatch_pack(dispatch_out_pack),
         .mispredicted(global_mispredict),
         .mispredicted_index(rob_index_out), 
         .cdb(cdb),
         .cond_branch_in(cond_pack_reg),
 
         // Output
-        .retire_valid(retire_valid),
-        .retire_num(retire_num),
+        .rob_commit(rob_commit_pack),
         .rob_space_avail(rob_space_avail),
         .rob_index(rob_index)
     );
@@ -523,8 +532,7 @@ module cpu (
     //           Freelist                           //
     //                                              //
     //////////////////////////////////////////////////
-    FLIST_CNT   BS_head [`N-1:0];
-    PRF_IDX     t_new   [`N-1:0];
+    FLIST_IDX   BS_tail [`N-1:0];
     FLIST_CNT   avail_num;
 
     freelist freelist_0 (
@@ -532,14 +540,13 @@ module cpu (
         .clock(clock),
         .reset(reset),
         .retire_num(retire_num),
-        .retire_valid(retire_valid),
-        .Branch_stack_H(Branch_stack_H),
+        .Branch_stack_H(tail_ptr_out),
         .dispatch_valid(dispatch_valid),
         .is_branch(branch_encountered),
         .mispredicted(global_mispredict),
         
         // Output 
-        .BS_head(BS_head),
+        .BS_tail(BS_tail),
         .t(t_new),
         .avail_num(avail_num)
     );
@@ -549,11 +556,11 @@ module cpu (
     //           Branch Stack                       //
     //                                              //
     //////////////////////////////////////////////////
-    FLIST_SZ    Branch_stack_H;
+
     logic [`MT_SIZE-1:0]    mt_BS_out;
-    logic [`FLIST_SIZE-1:0] tail_ptr_out;
+    FLIST_IDX       tail_ptr_out;
     ROB_IDX         rob_index_out;
-    BSTACK_CNT      branch_stack_space_avail;
+    logic [1:0]     branch_stack_space_avail;
     ADDR            pc_BS_out;
 
 
@@ -564,10 +571,10 @@ module cpu (
         .mt_snapshot_in(maptable_snapshot_out),
         .mispredicted(global_mispredict),
         .mispredicted_idx(global_mispredict_index),
-        .tail_ptr_in(BS_head),
+        .tail_ptr_in(BS_tail),
         .branch_encountered(branch_encountered),
         .branch_idx(branch_index),
-        .pc_snapshop_in(pc_snapshot_out),
+        .pc_snapshot_in(pc_snapshot_out),
         .resolved(global_resolve),
         .resolved_bmask_index(global_resolve_index),
         .rob_index_in(rob_index),
@@ -575,7 +582,7 @@ module cpu (
         // Output
         .mt_snapshot_out(mt_BS_out),
         .tail_ptr_out(tail_ptr_out),
-        .rob_index_out(rob_idx_out),
+        .rob_index_out(rob_index_out),
         .branch_stack_space_avail(branch_stack_space_avail),
         .pc_snapshot_out(pc_BS_out)
     );
@@ -585,7 +592,7 @@ module cpu (
     //           Reservation Station                //
     //                                              //
     //////////////////////////////////////////////////
-    RS_CNT rs_empty_entries_num;
+    logic [1:0] rs_empty_entries_num;
 
     rs rs_0 (
         // Input

@@ -1,4 +1,4 @@
-`include "verilog/sys_defs.svh"
+`include "sys_defs.svh"
 
 module fetch_buffer #(
     parameter int DEPTH = 5 * `N
@@ -10,7 +10,7 @@ module fetch_buffer #(
     input F_D_PACKET           fetch_pack [`N-1:0],          //from fetch stage
 
     output logic  [1:0]         can_fetch_num,                   //to fetch stage
-    output F_D_PACKET           dispatch_pack [`N-1:0],       //to dispatch stage
+    output F_D_PACKET           dispatch_pack [`N-1:0]        //to dispatch stage
 );
 
     F_D_PACKET         buffer         [DEPTH-1:0];

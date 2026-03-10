@@ -11,23 +11,22 @@
 module regfile #(
     parameter WIDTH      = 32,
     parameter DEPTH      = 32,
-    parameter READ_PORTS = 1,
     parameter BYPASS_EN  = 0 // ensure it is only ever 0 or 1
 )(
     input         clock, // system clock
     input         reset,
-    input PRF_IDX [`N-1:0] read_idx_1, 
-    input PRF_IDX [`N-1:0] read_idx_2, 
+    input PRF_IDX [`N:0] read_idx_1, 
+    input PRF_IDX [`N:0] read_idx_2, 
     input PRF_IDX [`N-1:0] write_idx,
-    input         [`N-1:0] write_en,
+    input logic   [`N-1:0] write_en,
     input DATA    [`N-1:0] write_data,
 
-    output DATA   [`N-1:0] read_out_1, 
-    output DATA   [`N-1:0] read_out_2
+    output DATA   [`N:0] read_out_1, 
+    output DATA   [`N:0] read_out_2
 );
     // Don't read or write when dealing with register 0
-    logic [1:0] re2; 
-    logic [1:0] re1;
+    logic [2:0] re2; 
+    logic [2:0] re1;
     logic [1:0] we;
 
     logic [DEPTH-1:0][WIDTH-1:0]  memData;
@@ -39,8 +38,12 @@ module regfile #(
     /////////////////////////////
     assign re1[0] = !(read_idx_1[0] == `ZERO_REG);
     assign re1[1] = !(read_idx_1[1] == `ZERO_REG);
+    assign re1[2] = !(read_idx_1[2] == `ZERO_REG);
+
     assign re2[0] = !(read_idx_2[0] == `ZERO_REG);
     assign re2[1] = !(read_idx_2[1] == `ZERO_REG);
+    assign re2[2] = !(read_idx_2[2] == `ZERO_REG);
+
     assign we[0]  = write_en[0] && (write_idx[0] != `ZERO_REG);
     assign we[1]  = write_en[1] && (write_idx[1] != `ZERO_REG);
 
@@ -57,6 +60,14 @@ module regfile #(
 
     wire mux21_0 = BYPASS_EN && we[0] && (read_idx_2[1] == write_idx[0]); //read_idx_2 slot 1 needs write_data 0
     wire mux21_1 = BYPASS_EN && we[1] && (read_idx_2[1] == write_idx[1]); // read_idx_2 slot 1 needs write_data 1
+    
+    ////// branch inst ////// go in slot 2 always
+    wire mux12_0 = BYPASS_EN && we[0] && (read_idx_1[2] == write_idx[0]);
+    wire mux12_1 = BYPASS_EN && we[1] && (read_idx_1[2] == write_idx[1]);
+
+    wire mux22_0 = BYPASS_EN && we[0] && (read_idx_2[2] == write_idx[0]);
+    wire mux22_1 = BYPASS_EN && we[1] && (read_idx_2[2] == write_idx[1]);
+
 
     assign read_out_1[0] = !re1[0] ? '0 :
                             mux10_1 ? write_data[1] :
@@ -68,6 +79,12 @@ module regfile #(
                             mux11_0 ? write_data[0] :
                             memData [read_idx_1[1]];
 
+    assign read_out_1[2] = !re1[2] ? '0 : 
+                            mux12_1 ? write_data[1] :
+                            mux12_0 ? write_data[0] :
+                            memData [read_idx_1[2]];
+
+
     assign read_out_2[0] = !re2[0] ? '0 :
                             mux20_1 ? write_data[1] :
                             mux20_0 ? write_data[0] :
@@ -77,6 +94,13 @@ module regfile #(
                             mux21_1 ? write_data[1] :
                             mux21_0 ? write_data[0] :
                             memData [read_idx_2[1]];
+
+    assign read_out_2[2] = !re2[2] ? '0 :
+                            mux22_1 ? write_data[1] :
+                            mux22_0 ? write_data[0] :
+                            memData [read_idx_2[2]];
+
+   
 
     /////////////////////////////
     //                         //

@@ -3,15 +3,15 @@ module stage_dispatch (
     input logic                             clock                               , 
     input logic                             reset                               , 
     input F_D_PACKET                        f_d_pack                    [`N-1:0], // from fetch buffer
-    input RS_CNT                            rs_empty_entries_num                , // from RS
+    input logic [1:0]                       rs_empty_entries_num                , // from RS
     input ROB_CNT                           rob_space_avail                     , // from ROB
     input BSTACK_CNT                        branch_stack_space_avail            , //from branch stack
     //from freelist
-    input PRF_IDX                           t_new                       [`N-1:0], // from freelist
+    input PRF_IDX           [`N-1:0]        t_new                               , // from freelist
     input FLIST_CNT                         avail_num                           , // from freelist   
     output logic                            dispatch_valid              [`N-1:0], // to freelist
                        
-    input X_C_PACKET                        cdb                         [`N-1:0], // updating map table ready bit
+    input X_C_PACKET                        [`N-1:0]  cdb                       , // updating map table ready bit
     
     //For branch resolve
     input logic                             resolved                            ,
@@ -41,19 +41,21 @@ module stage_dispatch (
     endfunction
 
     typedef struct packed {
-    ALU_OPA_SELECT opa_select,
-    ALU_OPB_SELECT opb_select,
-    logic          has_dest, // if there is a destination register
-    ALU_FUNC       alu_func,
-    logic          mult, rd_mem, wr_mem, cond_branch, uncond_branch,
-    logic          csr_op, // used for CSR operations, we only use this as a cheap way to get the return code out
-    logic          halt,   // non-zero on a halt
-    logic          illegal
-    }DECODE_PACKET;
+        ALU_OPA_SELECT opa_select;
+        ALU_OPB_SELECT opb_select;
+        logic          has_dest; // if there is a destination register
+        ALU_FUNC       alu_func;
+        logic          mult, rd_mem, wr_mem, cond_branch, uncond_branch;
+        logic          csr_op; // used for CSR operations, we only use this as a cheap way to get the return code out
+        logic          halt;   // non-zero on a halt
+        logic          illegal;
+    } DECODE_PACKET;
 
     DECODE_PACKET   [`N-1:0]    decode_pack;
 
-    RED_IDX [`N-1:0] r1, r2, rd;
+    REG_IDX [`N-1:0] r1;
+    REG_IDX [`N-1:0] r2;
+    REG_IDX [`N-1:0] rd;
     ALU_OPA_SELECT [`N-1:0] opa_select;
     ALU_OPB_SELECT [`N-1:0] opb_select; 
     logic [`N-1:0] has_dest, is_branch, halt, cond_branch;
@@ -90,48 +92,26 @@ module stage_dispatch (
         );
     end
 
-    maptable maptable0(
-        .clock                  (clock),
-        .reset                  (reset),
-        .mispredicted           (mispredicted),
-        .opa_select             (opa_select),
-        .opb_select             (opb_select),
-        .has_dest               (has_dest),
-        .cond_branch            (cond_branch),
-        .halt                   (halt),
-        .cdb                    (cdb),
-        .t_from_freelist        (t_new),
-        .rd                     (rd),
-        .r1                     (r1),
-        .r2                     (r2),
-        .snapshot_in            (maptable_snapshot_in),
-        .is_branch              (is_branch),
-        .valid                  (f_d_pack[i].valid),
-        .t1                     (t1),
-        .t2                     (t2),
-        .told                   (told),
-        .t1_ready               (t1_ready),
-        .t2_ready               (t2_ready),
-        .snapshot_out           (snapshot_out)
-    );
 
     typedef enum logic [2:0] {
-        ONE_NON_BRANCH,
-        ONE_BRANCH,
-        TWO_BRANCH,
-        TWO_NON_BRANCH,
-        NON_BRANCH_AFTER_BRANCH,
-        BRANCH_AFTER_NON_BRANCH,
-        NONE
+        ONE_NON_BRANCH = 3'd0,
+        ONE_BRANCH = 3'd1,
+        TWO_BRANCH = 3'd2,
+        TWO_NON_BRANCH = 3'd3,
+        NON_BRANCH_AFTER_BRANCH = 3'd4,
+        BRANCH_AFTER_NON_BRANCH = 3'd5,
+        NONE = 3'd6
     } case_t;
 
     case_t dispatch_case;
+    logic [1:0] f_dpack_valid;
 
     always_comb begin
         for(int i = 0; i < `N; i++) begin
             r1[i] = f_d_pack[i].inst.r.rs1;
             r2[i] = f_d_pack[i].inst.r.rs2;
             rd[i] = f_d_pack[i].inst.r.rd;
+            f_dpack_valid[i] = f_d_pack[i].valid;
             opa_select[i] = decode_pack[i].opa_select;
             opb_select[i] = decode_pack[i].opb_select;
             has_dest[i] = decode_pack[i].has_dest;
@@ -154,7 +134,7 @@ module stage_dispatch (
     end
 
     always_comb begin
-        for (int i = 0; i < N; i++) begin
+        for (int i = 0; i < `N; i++) begin
             maptable_snapshot_out[i] = snapshot_out[i];
         end
     end
@@ -173,7 +153,7 @@ module stage_dispatch (
         if(mispredicted) begin
 
             next_bmask = mispredicted_bmask & ~mispredicted_bmask_index;//same as resolve
-            next_branch_count = $countone(next_bmask);
+            next_branch_count = $countones(next_bmask);
             dispatch_num = 'd0;
 
         end else begin
@@ -182,7 +162,7 @@ module stage_dispatch (
             if(resolved) begin
 
                 next_bmask = next_bmask & (~resolved_bmask_index);
-                next_branch_count = $countone(next_bmask);
+                next_branch_count = $countones(next_bmask);
 
             end
 
@@ -572,5 +552,30 @@ module stage_dispatch (
             branch_count <= next_branch_count;
         end
     end
+
+    maptable maptable0(
+        .clock                  (clock),
+        .reset                  (reset),
+        .mispredicted           (mispredicted),
+        .opa_select             (opa_select),
+        .opb_select             (opb_select),
+        .has_dest               (has_dest),
+        .cond_branch            (cond_branch),
+        .halt                   (halt),
+        .cdb                    (cdb),
+        .t_from_freelist        (t_new),
+        .rd                     (rd),
+        .r1                     (r1),
+        .r2                     (r2),
+        .snapshot_in            (maptable_snapshot_in),
+        .is_branch              (is_branch),
+        .valid                  (f_dpack_valid),
+        .t1                     (t1),
+        .t2                     (t2),
+        .told                   (told),
+        .t1_ready               (t1_ready),
+        .t2_ready               (t2_ready),
+        .snapshot_out           (snapshot_out)
+    );
 
 endmodule

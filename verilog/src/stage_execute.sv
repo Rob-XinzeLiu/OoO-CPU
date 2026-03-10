@@ -1,12 +1,13 @@
 `include "sys_defs.svh"
-module execute_stage(
+`include "ISA.svh"
+module stage_execute(
     input logic                             clock                               , 
     input logic                             reset                               ,
     // from RS                             
     input S_X_PACKET                        s_x_pack                      [`N:0],
     //from cdb arbiter, decide whick inst can go to cdb
     input  logic                            mult_ready                          ,
-    input  logic                            alu_ready                      [1:0],
+    input  logic          [1:0]             alu_ready                           ,
     
     //to complete stage
     output X_C_PACKET                       x_c_pack                    [`N-1:0],
@@ -26,7 +27,7 @@ module execute_stage(
 );
 
     //wires for function units
-    logic start_mult, done_mult;
+    logic start_mult, mult_done;
     DATA rs1_mult,rs2_mult, rs1_cond, rs2_cond;
     MULT_FUNC func_mult;
     ALU_FUNC func1_alu,func2_alu;
@@ -35,49 +36,7 @@ module execute_stage(
     logic [2:0] func_cond;
     X_C_PACKET mult_out;
 
-    //instantiate functional units
-    mult  mult1(
-        .clock(clock), 
-        .reset(reset), 
-        .start(start_mult),
-        .rs1(rs1_mult), 
-        .rs2(rs2_mult),
-        .func(func_mult),
-
-        .dest_tag_in(s_x_pack[0].tag),
-        .rob_idx_in(s_x_pack[0].rob_index),
-        .bmask_in(s_x_pack[0].bmask),
-        .mispredicted(mispredicted),
-        .mispredicted_bmask_index(mispredicted_bmask_index),
-        .resolved(resolved),
-        .resolved_bmask_index(resolved_bmask_index),
-        .bmask_out(mult_out.bmask),
-        .rob_idx_out(mult_out.complete_index),
-        .dest_tag_out(mult_out.complete_tag),
-        .cdb_req_mult(cdb_req_mult),
-
-        .result(mult_out.result),
-        .done(done_mult)
-    );
-
-    alu alu1 (
-        .opa(opa1_alu),
-        .opb(opb1_alu),
-        .alu_func(func1_alu),
-        .result(result1_alu)
-    );
-    alu alu2 (
-        .opa(opa2_alu),
-        .opb(opb2_alu),
-        .alu_func(func2_alu),
-        .result(result2_alu)
-    );
-    conditional_branch conditional_branch(
-        .rs1(rs1_cond),
-        .rs2(rs2_cond),
-        .func(func_cond),
-        .take(take)
-    );
+ 
 
     //broadcast combinations
     typedef enum logic [2:0] {
@@ -114,13 +73,11 @@ module execute_stage(
     assign mispredict_pack_out = mispredict_pack;
 
     always_comb begin
-        mispredicted = 1'b0;
-        resolved = 1'b0;
+        mispredicted = '0;
+        resolved = '0;
         mispredicted_bmask_index = '0;
         resolved_bmask_index = '0;
         mispredicted_mask = '1;
-        mispredict_pc       = '0;
-        mispredict_result   = '0;
         mispredict_pack = '{default:'0};
 
         if(s_x_pack[2].valid && !mis_direction) begin
@@ -330,7 +287,7 @@ module execute_stage(
                 early_tag_bus[0].tag = mult_out.complete_tag;
             end
             BROADCAST_2_ALU: begin
-                x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_idx == mispredicted_bmask_index))? 1'b1: 
+                x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_index == mispredicted_bmask_index))? 1'b1: 
                                              (s_x_pack[0].valid && !(mispredicted && |(effective_bmask_alu0 & mispredicted_bmask_index)));
                 x_c_pack[0].complete_index = s_x_pack[0].rob_index;
                 x_c_pack[0].complete_tag   = s_x_pack[0].tag;
@@ -338,7 +295,7 @@ module execute_stage(
                 x_c_pack[0].result         = result1_alu;
                 x_c_pack[0].has_dest       = s_x_pack[0].has_dest;
                 x_c_pack[0].uncond_branch  = s_x_pack[0].uncond_branch;
-                x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_idx == mispredicted_bmask_index))? 1'b1: 
+                x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_index == mispredicted_bmask_index))? 1'b1: 
                                              (s_x_pack[1].valid && !(mispredicted && |(effective_bmask_alu1 & mispredicted_bmask_index)));
                 x_c_pack[1].complete_index = s_x_pack[1].rob_index;
                 x_c_pack[1].complete_tag   = s_x_pack[1].tag;
@@ -359,7 +316,7 @@ module execute_stage(
                 x_c_pack[0].bmask          = effective_bmask_mult;
                 x_c_pack[0].result         = mult_out.result;
                 x_c_pack[0].has_dest       = 'b1;
-                x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_idx == mispredicted_bmask_index))? 1'b1: 
+                x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_index == mispredicted_bmask_index))? 1'b1: 
                                              (s_x_pack[1].valid && !(mispredicted && |(effective_bmask_alu1 & mispredicted_bmask_index)));
                 x_c_pack[1].complete_index = s_x_pack[1].rob_index;
                 x_c_pack[1].complete_tag   = s_x_pack[1].tag;
@@ -374,7 +331,7 @@ module execute_stage(
                 early_tag_bus[1].tag = s_x_pack[1].tag;
             end
             BROADCAST_1_ALU: begin
-                x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_idx == mispredicted_bmask_index))? 1'b1: 
+                x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_index == mispredicted_bmask_index))? 1'b1: 
                                              (s_x_pack[0].valid && !(mispredicted && |(effective_bmask_alu0 & mispredicted_bmask_index)));
                 x_c_pack[0].complete_index = s_x_pack[0].rob_index;
                 x_c_pack[0].complete_tag   = s_x_pack[0].tag;
@@ -411,7 +368,7 @@ module execute_stage(
     always_comb begin
         conditional_branch_out = '{default:'0};
         if (s_x_pack[2].valid && !|(s_x_pack[2].bmask & mispredicted_bmask_index) ||
-            (s_x_pack[2].bmask_idx == mispredicted_bmask_index ) || !mispredicted) begin
+            (s_x_pack[2].bmask_index == mispredicted_bmask_index ) || !mispredicted) begin
             conditional_branch_out.valid = 1'b1;
             //conditional_branch_out.take_branch = take;
             conditional_branch_out.br_rob_idx = s_x_pack[2].rob_index;
@@ -425,7 +382,49 @@ module execute_stage(
     //////////////////////                         ////////////////////////
     ///////////////////////////////////////////////////////////////////////
 
+       //instantiate functional units
+    mult  mult1(
+        .clock(clock), 
+        .reset(reset), 
+        .start(start_mult),
+        .rs1(rs1_mult), 
+        .rs2(rs2_mult),
+        .func(func_mult),
 
+        .dest_tag_in(s_x_pack[0].tag),
+        .rob_idx_in(s_x_pack[0].rob_index),
+        .bmask_in(s_x_pack[0].bmask),
+        .mispredicted(mispredicted),
+        .mispredicted_bmask_index(mispredicted_bmask_index),
+        .resolved(resolved),
+        .resolved_bmask_index(resolved_bmask_index),
+        .bmask_out(mult_out.bmask),
+        .rob_idx_out(mult_out.complete_index),
+        .dest_tag_out(mult_out.complete_tag),
+        .cdb_req_mult(cdb_req_mult),
+
+        .result(mult_out.result),
+        .done(mult_done)
+    );
+
+    alu alu1 (
+        .opa(opa1_alu),
+        .opb(opb1_alu),
+        .alu_func(func1_alu),
+        .result(result1_alu)
+    );
+    alu alu2 (
+        .opa(opa2_alu),
+        .opb(opb2_alu),
+        .alu_func(func2_alu),
+        .result(result2_alu)
+    );
+    conditional_branch conditional_branch(
+        .rs1(rs1_cond),
+        .rs2(rs2_cond),
+        .func(func_cond),
+        .take(take)
+    );
 
     
 endmodule

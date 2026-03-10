@@ -3,14 +3,13 @@ module freelist(
     input logic                             clock               ,
     input logic                             reset               ,
     input logic [1:0]                       retire_num          ,  //from retire
-    input logic                             retire_valid        ,  // from rob
     input FLIST_IDX                         Branch_stack_H      ,  // Head output from BS
-    input logic [`N-1:0]                    dispatch_valid      ,  // from dispatcher
+    input logic                             dispatch_valid [`N-1:0],  // from dispatcher
     input logic                             is_branch [`N-1:0],
     input logic                             mispredicted        ,
 
-    output FLIST_CNT                        BS_tail [`N-1:0]    ,  //to BS
-    output PRF_IDX                          t       [`N-1:0]    ,  // to dispatch
+    output FLIST_IDX                        BS_tail [`N-1:0]    ,  //to BS
+    output PRF_IDX          [`N-1:0]        t                   ,  // to dispatch
     output FLIST_CNT                        avail_num              // to dispatch
 );
 
@@ -29,7 +28,6 @@ module freelist(
         tail_n  = tail;
         cnt_n   = cnt;
         t       = '{default:'0};
-        BS_head = '{default:'0};
         req_num = '0;
         
         // count requests 
@@ -50,9 +48,7 @@ module freelist(
                 head_n = head + req_num;
             end
                 
-            if (retire_valid) begin
-                tail_n = tail + retire_num;
-            end
+            tail_n = tail + retire_num;
                
             if (do_disp && req_num == 1) begin
                 t[0] = freelist[head];
@@ -74,8 +70,7 @@ module freelist(
             end
 
                
-            cnt_n  = cnt + (retire_valid ? retire_num   : '0)
-                        - (do_disp ? req_num : '0);
+            cnt_n  = cnt + retire_num - (do_disp ? req_num : '0);
         end
 
         avail_num = cnt_n;

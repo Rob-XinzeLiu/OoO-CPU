@@ -1,5 +1,4 @@
 `include "sys_defs.svh"
-// TODO: redo
 
 module branch_stack (
     input logic                                         clock                            ,
@@ -9,14 +8,14 @@ module branch_stack (
     input B_MASK                                        resolved_bmask_index             ,
     input logic                                         mispredicted                     ,   //from execute stage
     input B_MASK                                        mispredicted_idx                 ,   //from execute stage
-    input logic [`FLIST_SIZE-1:0]                       tail_ptr_in              [`N-1:0],   //from freelist
+    input FLIST_IDX                                     tail_ptr_in              [`N-1:0],   //from freelist
     input logic                                         branch_encountered       [`N-1:0],   //from dispatch stage
     input B_MASK                                        branch_idx               [`N-1:0],   //from dispatch stage
-    input ADDR                                          pc_snapshop_in           [`N-1:0],   //from dispatch stage     
+    input ADDR                                          pc_snapshot_in           [`N-1:0],   //from dispatch stage     
     input ROB_IDX                                       rob_index_in             [`N-1:0],   //from rob                   
     
     output logic [`MT_SIZE-1:0]                         mt_snapshot_out                  ,   //to maptable
-    output logic [`FLIST_SIZE-1:0]                      tail_ptr_out                     ,   //to freelist
+    output FLIST_IDX                                    tail_ptr_out                     ,   //to freelist
     output ROB_IDX                                      rob_index_out                    ,   //to rob
     output logic [1:0]                                  branch_stack_space_avail         ,   //to dispatch stage
     output ADDR                                         pc_snapshot_out                      //to fetch stage
@@ -25,7 +24,7 @@ module branch_stack (
     typedef struct packed {
         B_MASK                         branch_idx;
         logic [`MT_SIZE-1:0]           maptable;
-        logic [`FLIST_SIZE-1:0]        freelist_tail_idx;
+        logic [`FLIST_SZ-1:0]        freelist_tail_idx;
         logic                          resolved;
         ADDR                           pc;
         ROB_IDX                        rob_index;
@@ -42,8 +41,11 @@ module branch_stack (
     //////////////////////  Combinational Logic    ////////////////////////
     //////////////////////                         ////////////////////////
     ///////////////////////////////////////////////////////////////////////
+    logic [1:0] first_not_resolved;
+
     always_comb begin
         //default
+        first_not_resolved = 'd0;
         stack_ptr_next = stack_ptr;
         stack_ptr_temp1 = stack_ptr;
         stack_ptr_temp2 = stack_ptr;
@@ -62,7 +64,7 @@ module branch_stack (
 
         if(mispredicted) begin
             for(int i = 0; i < stack_ptr; i++) begin
-                if(stack_next[i].branch_idx == mispredicted_bmask_index) begin
+                if(stack_next[i].branch_idx == mispredicted_idx) begin
                     mt_snapshot_out = stack[i].maptable;
                     tail_ptr_out    = stack[i].freelist_tail_idx;
                     rob_index_out   = stack[i].rob_index;
@@ -72,7 +74,7 @@ module branch_stack (
             end
 
             //clear all the younger entries
-            for (i = stack_ptr_temp1 + 1; i < stack_ptr; i++) begin
+            for (int i = stack_ptr_temp1 + 1; i < stack_ptr; i++) begin
                 stack_next[i].resolved = '0; 
             end
             stack_ptr_next = stack_ptr_temp1; //point to the next free entry
@@ -80,8 +82,7 @@ module branch_stack (
         end
 
         //step 3 : pop logic 
-        int first_not_resolved = 0;
-        for(i = 0; i < stack_ptr_next; i++)begin
+        for(int i = 0; i < stack_ptr_next; i++)begin
             if(!stack_next[i].resolved) begin
                 first_not_resolved = i;
                 break;
@@ -90,7 +91,7 @@ module branch_stack (
         
         if(first_not_resolved != 0) begin
             stack_ptr_next = stack_ptr_next - first_not_resolved; //pop all the resolved entries
-            for(i = first_not_resolved; i<`STACK_DEPTH; i++)begin
+            for(int i = first_not_resolved; i<`BRANCH_STACK_DEPTH; i++)begin
                 stack_next[i-first_not_resolved] = stack_next[i];
                 stack_next[i] = '0;
             end
@@ -98,7 +99,7 @@ module branch_stack (
     
         //step 4 : enqueue logic
         stack_ptr_temp2 = stack_ptr_next;
-        for(i = 0; i<`N; i++)begin
+        for(int i = 0; i<`N; i++)begin
             if(branch_encountered[i]) begin
                 stack_next[stack_ptr_temp2].branch_idx = branch_idx[i];
                 stack_next[stack_ptr_temp2].maptable = mt_snapshot_in[i];

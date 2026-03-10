@@ -6,14 +6,14 @@ module stage_complete(
     input  X_C_PACKET                x_c_packet       [1:0],
 
     input  logic                     branch_mispredicted   , 
-    //input  logic                     branch_resolved       ,
-    input  BMASK                     mispred_mask_idx          ,
-    //input  BMASK                     res_mask_idx          ,
+    //input  logic                     branch_resolved     ,
+    input  B_MASK                     mispred_mask_idx     ,
+    //input  BMASK                     res_mask_idx        ,
     //data for the regfile
-    output X_C_PACKET                cdb           [`N-1:0],
+    output X_C_PACKET     [`N-1:0]           cdb           ,
     output logic [`N-1:0]            write_en              ,
     output PRF_IDX [`N-1:0]          prf_index             ,
-    output DATA  [`N-1:0]            data_for_prf          ,
+    output DATA  [`N-1:0]            data_for_prf          
 );
     always_comb begin 
 
@@ -22,7 +22,7 @@ module stage_complete(
             if(x_c_packet[i].uncond_branch)begin
                 data_for_prf[i] = x_c_packet[i].NPC;
             end else begin
-                data_for_prf[i] = x_c_packet.result;
+                data_for_prf[i] = x_c_packet[i].result;
             end         
             prf_index[i] = x_c_packet[i].complete_tag;
             cdb[i] = x_c_packet[i];   

@@ -4,15 +4,17 @@ module stage_retire(
     input logic clock,
     input logic reset,
     //from rob
-    input  R_PACKET        rob_commit_pack [`N-1:0],       
+    input  RETIRE_PACKET   [`N-1:0]     rob_commit_pack,       
 
     output logic [1:0]     freelist_free_num  ,//to freelist
-    output R_PACKET        commit_pack [`N-1:0],//to tb
-    output logic           stall_fetch  ,//to fetch stage 
+    output RETIRE_PACKET  [`N-1:0] commit_pack,//to tb
+    output logic           stall_fetch  //to fetch stage 
 );
 
+    logic retiring_halt;
+
     always_comb begin
-        commit_pack    = '{default:'0};
+        commit_pack    = '0;
         retiring_halt  = 1'b0;
         freelist_free_num = '0;
 
