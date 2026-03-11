@@ -10,7 +10,7 @@ module freelist(
 
     output FLIST_IDX                        BS_tail [`N-1:0]    ,  //to BS
     output PRF_IDX          [`N-1:0]        t                   ,  // to dispatch
-    output FLIST_CNT                        avail_num              // to dispatch
+    output logic [1:0]                      avail_num              // to dispatch
 );
 
     FLIST_CNT cnt_list [`ROB_SZ-1:0];    
@@ -73,7 +73,7 @@ module freelist(
             cnt_n  = cnt + retire_num - (do_disp ? req_num : '0);
         end
 
-        avail_num = cnt_n;
+        avail_num = (cnt_n >= 2)? 'd2 :(cnt_n == 1)? 'd1:'d0;
     end
 
     always_ff @(posedge clock) begin

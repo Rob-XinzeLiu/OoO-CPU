@@ -39,7 +39,7 @@ module fetch_buffer #(
                 end else begin
                     tail_n = tail_n + 1;
                 end
-                count_n = count_n + 1;
+                count_n = count_n + 1'b1;
             end
         end
 
@@ -56,7 +56,7 @@ module fetch_buffer #(
                     head_n = '0;
                 else
                     head_n = head_n + 1;
-                count_n = count_n - 1;
+                count_n = count_n - 1'b1;
             end
         end
 

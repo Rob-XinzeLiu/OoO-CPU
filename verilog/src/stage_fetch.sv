@@ -53,10 +53,14 @@ module stage_if (
     assign if_packet[0].PC  = mispredict_PC;
     assign if_packet[0].NPC = mispredict_PC + 4; // pass PC+4 down pipeline w/instruction
     assign if_packet[0].valid = if_valid && !stop_fetch;
+    assign if_packet[0].predict_taken = 1'b0;
+    assign if_packet[0].predict_addr = mispredict_PC + 4;
 
     assign if_packet[1].inst = (if_valid && two_valid_insts) ? Imem_data.word_level[1] : `NOP;
     assign if_packet[1].PC  = mispredict_PC + 4;
     assign if_packet[1].NPC = mispredict_PC + 8; // pass PC+4 down pipeline w/instruction
     assign if_packet[1].valid = if_valid && two_valid_insts && !stop_fetch;
+    assign if_packet[1].predict_taken = 1'b0;
+    assign if_packet[1].predict_addr = mispredict_PC + 8;
 
 endmodule // stage_if

@@ -70,9 +70,17 @@ module cpu (
 
     // Outputs from Fetch buffer
     F_D_PACKET  f_d_pack[`N-1:0];
+    logic [1:0] can_fetch_num;
 
     // Outputs from Dispatch stage
     D_S_PACKET  dispatch_out_pack [`N-1:0];
+    logic           dispatch_valid [`N-1:0];
+    logic           branch_encountered [`N-1:0];
+    B_MASK          branch_index [`N-1:0];
+    logic [`MT_SIZE-1:0] maptable_snapshot_out [`N-1:0];
+    ADDR            pc_snapshot_out [`N-1:0];
+    logic [1:0]     dispatch_num;
+    PRF_IDX  [`N-1:0] t_new ;
 
     // Outputs from RS and D/S Pipeline Register
     D_S_PACKET  d_s_pack [`N:0];
@@ -91,6 +99,64 @@ module cpu (
 
     // Outputs from COM-Stage
     X_C_PACKET [`N-1:0] cdb;
+
+    // Outputs from Retire-Stage
+    logic [1:0] freelist_free_num;
+    logic       stall_fetch;
+
+
+    // ROB
+    ROB_CNT         rob_space_avail;
+    ROB_IDX         rob_index [`N-1:0];
+    RETIRE_PACKET   [`N-1:0] rob_commit_pack;
+
+    // Branch Stack
+    logic [`MT_SIZE-1:0]    mt_BS_out;
+    FLIST_IDX       tail_ptr_out;
+    ROB_IDX         rob_index_out;
+    logic [1:0]     branch_stack_space_avail;
+    ADDR            pc_BS_out;
+
+    // Freelist
+    FLIST_IDX   BS_tail [`N-1:0];
+    logic [1:0] avail_num;
+
+    // PRF
+    logic      [`N-1:0] write_enable;
+    PRF_IDX    [`N-1:0] write_index;
+    DATA       [`N-1:0] write_data;
+    DATA       [`N:0] rs1_value;
+    DATA       [`N:0] rs2_value;
+    PRF_IDX    [`N:0] read_idx_1;
+    PRF_IDX    [`N:0] read_idx_2;
+
+    always_comb begin
+        for(int i = 0; i < `N; i++) begin
+            read_idx_1 = d_s_pack_reg[i].t1;
+            read_idx_2 = d_s_pack_reg[i].t2;
+        end
+    end
+
+    // CDB_Arbiter
+    typedef enum logic [2:0] {
+        MULT_1 = 3'd0,
+        MULT_1_ALU_1 = 3'd1,
+        ALU_1 = 3'd2,
+        ALU_2 = 3'd3,
+        NONE  = 3'd4
+     } cdb_arbiter_state_t;
+
+    logic   cdb_req_mult, cdb_gnt_mult;
+    logic   cdb_req_alu [`N-1:0];
+    logic   cdb_gnt_alu [`N-1:0];
+    cdb_arbiter_state_t cdb_arbiter_state;
+    logic [`N-1:0] alu_ready_reg;
+    logic mult_ready_reg ;
+    logic [`N-1:0] alu_ready_reg_in;
+    logic mult_ready_reg_in;
+
+    // RS
+    logic [1:0] rs_empty_entries_num;
 
 
 
@@ -134,6 +200,9 @@ module cpu (
     //     proc2mem_data = Dmem_store_data;
     // end
 
+    assign proc2mem_command = 2'h1;
+    assign proc2mem_size    = DOUBLE;
+
     //////////////////////////////////////////////////
     //                                              //
     //                  Valid Bit                   //
@@ -155,7 +224,7 @@ module cpu (
 
     // valid bit will cycle through the pipeline and come back from the wb stage
     //make sure it goes low on mispredict
-    assign if_valid = start_valid_on_reset && ! global_mispredict;
+    assign if_valid = ! global_mispredict;
 
     //////////////////////////////////////////////////
     //                                              //
@@ -197,7 +266,6 @@ module cpu (
     //                Fetch buffer                  //
     //                                              //
     //////////////////////////////////////////////////
-    logic [1:0] can_fetch_num;
 
     fetch_buffer fetch_buffer_0 (
         // Input
@@ -217,13 +285,6 @@ module cpu (
     //                Dispatch-Stage                //
     //                                              //
     //////////////////////////////////////////////////
-    logic           dispatch_valid [`N-1:0];
-    logic           branch_encountered [`N-1:0];
-    B_MASK          branch_index [`N-1:0];
-    logic [`MT_SIZE-1:0] maptable_snapshot_out [`N-1:0];
-    ADDR            pc_snapshot_out [`N-1:0];
-    logic [1:0]     dispatch_num;
-    PRF_IDX  [`N-1:0] t_new ;
 
     stage_dispatch stage_dispatch_0 (
         // Input
@@ -355,18 +416,7 @@ module cpu (
     //                 cdb_arbiter                  //
     //                                              //
     //////////////////////////////////////////////////
-    typedef enum logic [2:0] {
-        MULT_1 = 3'd0,
-        MULT_1_ALU_1 = 3'd1,
-        ALU_1 = 3'd2,
-        ALU_2 = 3'd3,
-        NONE  = 3'd4
-     } cdb_arbiter_state_t;
-
-    logic   cdb_req_mult, cdb_gnt_mult;
-    logic   cdb_req_alu [`N-1:0];
-    logic   cdb_gnt_alu [`N-1:0];
-    cdb_arbiter_state_t cdb_arbiter_state;
+    
     //we will always grant mult, so cdb_req_mult just means if there's a mult inst in that stage.
     always_comb begin
         cdb_arbiter_state = NONE;  // default
@@ -404,8 +454,7 @@ module cpu (
         endcase
     end
 
-    logic [`N-1:0] alu_ready_reg;
-    logic mult_ready_reg ;
+
     always_ff @(posedge clock) begin
         if (reset) begin
             for (int i = 0; i < `N; i++) begin
@@ -420,8 +469,6 @@ module cpu (
         end
     end
 
-    logic [`N-1:0] alu_ready_reg_in;
-    logic mult_ready_reg_in;
     assign alu_ready_reg_in = alu_ready_reg;
     assign mult_ready_reg_in = mult_ready_reg;  
 
@@ -451,8 +498,6 @@ module cpu (
     //           Retire stage                       //
     //                                              //
     //////////////////////////////////////////////////
-    logic [1:0] freelist_free_num;
-    logic       stall_fetch;
 
     stage_retire stage_retire_0 (
         // Input
@@ -471,20 +516,6 @@ module cpu (
     //           Physical Register File             //
     //                                              //
     //////////////////////////////////////////////////
-    logic      [`N-1:0] write_enable;
-    PRF_IDX    [`N-1:0] write_index;
-    DATA       [`N-1:0] write_data;
-    DATA       [`N:0] rs1_value;
-    DATA       [`N:0] rs2_value;
-    PRF_IDX    [`N:0] read_idx_1;
-    PRF_IDX    [`N:0] read_idx_2;
-
-    always_comb begin
-        for(int i = 0; i < `N; i++) begin
-            read_idx_1 = d_s_pack_reg[i].t1;
-            read_idx_2 = d_s_pack_reg[i].t2;
-        end
-    end
 
 
     regfile regfile0 (
@@ -506,10 +537,7 @@ module cpu (
     //           Rob                                //
     //                                              //
     //////////////////////////////////////////////////
-
-    ROB_CNT         rob_space_avail;
-    ROB_IDX         rob_index [`N-1:0];
-    RETIRE_PACKET   [`N-1:0] rob_commit_pack;
+    
 
     rob rob_0 (
         // Input
@@ -532,14 +560,12 @@ module cpu (
     //           Freelist                           //
     //                                              //
     //////////////////////////////////////////////////
-    FLIST_IDX   BS_tail [`N-1:0];
-    FLIST_CNT   avail_num;
 
     freelist freelist_0 (
         // Input
         .clock(clock),
         .reset(reset),
-        .retire_num(retire_num),
+        .retire_num(freelist_free_num),
         .Branch_stack_H(tail_ptr_out),
         .dispatch_valid(dispatch_valid),
         .is_branch(branch_encountered),
@@ -556,12 +582,6 @@ module cpu (
     //           Branch Stack                       //
     //                                              //
     //////////////////////////////////////////////////
-
-    logic [`MT_SIZE-1:0]    mt_BS_out;
-    FLIST_IDX       tail_ptr_out;
-    ROB_IDX         rob_index_out;
-    logic [1:0]     branch_stack_space_avail;
-    ADDR            pc_BS_out;
 
 
     branch_stack branch_stack_0 (
@@ -592,7 +612,6 @@ module cpu (
     //           Reservation Station                //
     //                                              //
     //////////////////////////////////////////////////
-    logic [1:0] rs_empty_entries_num;
 
     rs rs_0 (
         // Input

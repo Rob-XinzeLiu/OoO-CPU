@@ -53,7 +53,7 @@ module testbench;
     MEM_TAG     mem2proc_data_tag;
     MEM_SIZE    proc2mem_size;
 
-    COMMIT_PACKET [`N-1:0] committed_insts;
+    RETIRE_PACKET [`N-1:0] committed_insts;
     EXCEPTION_CODE error_status = NO_ERROR;
 
     ADDR  if_NPC_dbg;
@@ -263,15 +263,15 @@ module testbench;
                 block = memory.unified_memory[pc[31:3]];
                 inst = block.word_level[pc[2]];
                 // print the committed instructions to the writeback output file
-                if (committed_insts[n].reg_idx == `ZERO_REG) begin
-                    $fdisplay(wb_fileno, "PC %4x:%-8s| ---", pc, decode_inst(inst));
-                end else begin
-                    $fdisplay(wb_fileno, "PC %4x:%-8s| r%02d=%-8x",
-                              pc,
-                              decode_inst(inst),
-                              committed_insts[n].reg_idx,
-                              committed_insts[n].data);
-                end
+                // if (committed_insts[n].reg_idx == `ZERO_REG) begin
+                //     $fdisplay(wb_fileno, "PC %4x:%-8s| ---", pc, decode_inst(inst));
+                // end else begin
+                //     $fdisplay(wb_fileno, "PC %4x:%-8s| r%02d=%-8x",
+                //               pc,
+                //               decode_inst(inst),
+                //               committed_insts[n].reg_idx,
+                //               committed_insts[n].data);
+                // end
 
                 // exit if we have an illegal instruction or a halt
                 if (committed_insts[n].illegal) begin
