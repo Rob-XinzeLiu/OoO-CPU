@@ -7,10 +7,9 @@
 //                                                                     //
 /////////////////////////////////////////////////////////////////////////
 `include "sys_defs.svh"
-
 module regfile #(
     parameter WIDTH      = 32,
-    parameter DEPTH      = 32,
+    parameter DEPTH      = `PHYS_REG_SZ_R10K,
     parameter BYPASS_EN  = 0 // ensure it is only ever 0 or 1
 )(
     input         clock, // system clock

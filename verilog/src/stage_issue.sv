@@ -18,9 +18,13 @@ module stage_issue(
 );
 
 ////////////make sure not to latch a valid on mispredict on the top level module (CPU) and the register file is BYPASS_EN = 1
+   
     always_comb begin 
         for (int i = 0; i < `N + 1; i++)begin
             next_s_x_pack[i].valid = issue_pack[i].valid;
+            next_s_x_pack[i].inst = issue_pack[i].inst;
+            next_s_x_pack[i].PC = issue_pack[i].PC;
+            next_s_x_pack[i].NPC = issue_pack[i].NPC;
             next_s_x_pack[i].opa_select = issue_pack[i].opa_select;
             next_s_x_pack[i].opb_select = issue_pack[i].opb_select;
             next_s_x_pack[i].has_dest = issue_pack[i].has_dest;
@@ -36,7 +40,7 @@ module stage_issue(
             next_s_x_pack[i].bmask_index = issue_pack[i].bmask_index;
             next_s_x_pack[i].bmask = issue_pack[i].bmask;
             next_s_x_pack[i].rob_index = issue_pack[i].rob_index;
-            next_s_x_pack[i].tag = issue_pack[i].T;
+            next_s_x_pack[i].T = issue_pack[i].T;
             next_s_x_pack[i].rs1_value = rs1_value[i];
             next_s_x_pack[i].rs2_value = rs2_value[i];
             next_s_x_pack[i].predict_taken = issue_pack[i].predict_taken;

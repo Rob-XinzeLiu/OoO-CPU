@@ -472,7 +472,7 @@ typedef struct packed{
     B_MASK          bmask_index;
     B_MASK          bmask;
     ROB_IDX         rob_index;
-    PRF_IDX         tag;
+    PRF_IDX         T;
     DATA            rs1_value;
     DATA            rs2_value;
     ADDR            predict_addr;     // predict address

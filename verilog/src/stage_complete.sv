@@ -18,7 +18,7 @@ module stage_complete(
     always_comb begin 
 
         for (int i = 0; i < `N; i++)begin
-            write_en[1] = x_c_packet[i].valid && x_c_packet[i].has_dest;
+            write_en[i] = x_c_packet[i].valid && x_c_packet[i].has_dest;
             if(x_c_packet[i].uncond_branch)begin
                 data_for_prf[i] = x_c_packet[i].NPC;
             end else begin

@@ -1,0 +1,115 @@
+Magic 271485
+Revision Verdi_V-2023.12-SP2-1
+
+; Window Layout <x> <y> <width> <height> <signalwidth> <valuewidth>
+viewPort 0 25 1440 620 377 65
+
+; File list:
+; openDirFile [-d delimiter] [-s time_offset] [-rf auto_bus_rule_file] path_name file_name
+openDirFile -d / "" "/tmp/cargarci470/inter.fsdb"
+
+; file time scale:
+; fileTimeScale ### s|ms|us|ns|ps
+
+; signal spacing:
+signalSpacing 5
+
+; windowTimeUnit is used for zoom, cursor & marker
+; waveform viewport range
+zoom 1521.448716 2970.129068
+cursor 2550.000000
+marker 0.000000
+
+; user define markers
+; userMarker time_pos marker_name color linestyle
+; visible top row signal index
+top 0
+; marker line index
+markerPos 61
+
+; event list
+; addEvent event_name event_expression
+; curEvent event_name
+
+
+
+COMPLEX_EVENT_BEGIN
+
+
+COMPLEX_EVENT_END
+
+
+
+; toolbar current search type
+; curSTATUS search_type
+curSTATUS ByChange
+
+
+addGroup "G1"
+activeDirFile "" "/tmp/cargarci470/inter.fsdb"
+addSignal -expanded -h 15 /testbench/verisimpleV/regfile0/memData[31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[31][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[30][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[29][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[28][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[27][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[26][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[25][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[24][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[23][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[22][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[21][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[20][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[19][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[18][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[17][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[16][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[15][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[14][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[13][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[12][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[11][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[10][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[9][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[8][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[7][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[6][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[5][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[4][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[3][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[2][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[1][31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/memData[0][31:0]
+addSignal -h 15 /testbench/verisimpleV/regfile0/clock
+addSignal -h 15 /testbench/verisimpleV/regfile0/reset
+addSignal -h 15 /testbench/verisimpleV/regfile0/read_idx_1[2:0]
+addSignal -h 15 /testbench/verisimpleV/regfile0/read_idx_2[2:0]
+addSignal -h 15 -UNSIGNED -UDEC /testbench/verisimpleV/regfile0/write_idx[1:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/write_en[1:0]
+addSignal -h 15 /testbench/verisimpleV/regfile0/write_data[1:0]
+addSignal -h 15 /testbench/verisimpleV/regfile0/read_out_1[2:0]
+addSignal -h 15 /testbench/verisimpleV/regfile0/read_out_2[2:0]
+addSignal -h 15 -UNSIGNED -UDEC /testbench/verisimpleV/regfile0/WIDTH[31:0]
+addSignal -h 15 -UNSIGNED -UDEC /testbench/verisimpleV/regfile0/DEPTH[31:0]
+addSignal -h 15 -UNSIGNED -UDEC /testbench/verisimpleV/regfile0/BYPASS_EN[31:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/re2[2:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/re1[2:0]
+addSignal -h 15 -UNSIGNED -HEX /testbench/verisimpleV/regfile0/we[1:0]
+addSignal -h 15 /testbench/verisimpleV/regfile0/memData[31:0]
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux10_0
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux10_1
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux20_0
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux20_1
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux11_0
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux11_1
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux21_0
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux21_1
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux12_0
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux12_1
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux22_0
+addSignal -h 15 /testbench/verisimpleV/regfile0/mux22_1
+addGroup "G2"
+
+; getSignalForm Scope Hierarchy Status
+; active file of getSignalForm
+

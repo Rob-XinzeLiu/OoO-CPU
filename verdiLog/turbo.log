@@ -1,0 +1,110 @@
+Command Line: /usr/caen/verdi-2023.12-SP2-1/platform/LINUXAMD64/bin/Novas -i -simflow -simBin ./build/cpu.simv -ultra -simDelim +MEMORY=programs/mem/simple.mem +OUTPUT=output/verdi_output
+uname(Linux caen-vnc-mi18.engin.umich.edu 5.14.0-611.16.1.el9_7.x86_64 #1 SMP PREEMPT_DYNAMIC Sun Dec 7 05:52:24 EST 2025 x86_64)
+type= DS_SIGNAL element= 18 field= 2
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG clock
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG reset
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG mispredicted
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG dispatch_num_req[1:0]
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG fetch_pack[1:0]
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG can_fetch_num[1:0]
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG dispatch_pack[1:0]
+-----
+second field= signal
+VERILOG _vcs_unit__1894373545
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG DEPTH
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG buffer[7:0]
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG buffer_n[7:0]
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG BUFFER_CNT
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG head[2:0]
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG head_n[2:0]
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG tail[2:0]
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG tail_n[2:0]
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG count[3:0]
+-----
+second field= signal
+VERILOG testbench
+VERILOG verisimpleV
+VERILOG fetch_buffer_0
+VERILOG count_n[3:0]
+-----
+second field= signal
+type= DS_STRING
+clock reset mispredicted dispatch_num_req[1:0] fetch_pack[1:0] can_fetch_num[1:0] dispatch_pack[1:0] _vcs_unit__1894373545 DEPTH buffer[7:0] buffer_n[7:0] BUFFER_CNT head[2:0] head_n[2:0] tail[2:0] tail_n[2:0] count[3:0] count_n[3:0]

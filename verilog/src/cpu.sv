@@ -88,7 +88,8 @@ module cpu (
     // Outputs from IF-Stage and IF/ID Pipeline Register
     F_D_PACKET  f_pack [`N-1:0];
     F_D_PACKET  f_pack_reg [`N-1:0];
-
+    logic [1:0] dispatch_num_reg ;
+ 
     // Outputs from Fetch buffer
     F_D_PACKET  f_d_pack[`N-1:0];
     logic [1:0] can_fetch_num;
@@ -307,9 +308,11 @@ module cpu (
 
     always_ff @(posedge clock) begin
         if(reset || global_mispredict) begin
-            f_pack_reg    <= '{default: '0};;
+            f_pack_reg    <= '{default: '0};
+            dispatch_num_reg <= '0;
         end else begin
             f_pack_reg    <= f_pack;
+            dispatch_num_reg <= dispatch_num;
         end
     end
 
@@ -324,7 +327,7 @@ module cpu (
         .clock(clock),
         .reset(reset),
         .mispredicted(global_mispredict),
-        .dispatch_num_req(dispatch_num),
+        .dispatch_num_req(dispatch_num_reg),
         .fetch_pack(f_pack_reg),
 
         // Output
@@ -386,7 +389,7 @@ module cpu (
     //               ISSUE-Stage                    //
     //                                              //
     //////////////////////////////////////////////////
-
+    
     stage_issue stage_issue_0 (
         // Input
         .clock(clock),

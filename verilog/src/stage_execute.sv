@@ -290,7 +290,7 @@ module stage_execute(
                 x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_index == mispredicted_bmask_index))? 1'b1: 
                                              (s_x_pack[0].valid && !(mispredicted && |(effective_bmask_alu0 & mispredicted_bmask_index)));
                 x_c_pack[0].complete_index = s_x_pack[0].rob_index;
-                x_c_pack[0].complete_tag   = s_x_pack[0].tag;
+                x_c_pack[0].complete_tag   = s_x_pack[0].T;
                 x_c_pack[0].bmask          = effective_bmask_alu0;
                 x_c_pack[0].result         = result1_alu;
                 x_c_pack[0].has_dest       = s_x_pack[0].has_dest;
@@ -298,16 +298,16 @@ module stage_execute(
                 x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_index == mispredicted_bmask_index))? 1'b1: 
                                              (s_x_pack[1].valid && !(mispredicted && |(effective_bmask_alu1 & mispredicted_bmask_index)));
                 x_c_pack[1].complete_index = s_x_pack[1].rob_index;
-                x_c_pack[1].complete_tag   = s_x_pack[1].tag;
+                x_c_pack[1].complete_tag   = s_x_pack[1].T;
                 x_c_pack[1].bmask          = effective_bmask_alu1;
                 x_c_pack[1].result         = result2_alu;
                 x_c_pack[1].has_dest       = s_x_pack[1].has_dest;
                 x_c_pack[1].uncond_branch  = s_x_pack[1].uncond_branch;
                 //etb
                 early_tag_bus[0].valid = s_x_pack[0].has_dest;
-                early_tag_bus[0].tag = s_x_pack[0].tag;
+                early_tag_bus[0].tag = s_x_pack[0].T;
                 early_tag_bus[1].valid = s_x_pack[1].has_dest;
-                early_tag_bus[1].tag = s_x_pack[1].tag;
+                early_tag_bus[1].tag = s_x_pack[1].T;
             end
             BROADCAST_1_MULT_1_ALU: begin
                 x_c_pack[0].valid          = mult_done && !(mispredicted && |(effective_bmask_mult & mispredicted_bmask_index));
@@ -319,7 +319,7 @@ module stage_execute(
                 x_c_pack[1].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_index == mispredicted_bmask_index))? 1'b1: 
                                              (s_x_pack[1].valid && !(mispredicted && |(effective_bmask_alu1 & mispredicted_bmask_index)));
                 x_c_pack[1].complete_index = s_x_pack[1].rob_index;
-                x_c_pack[1].complete_tag   = s_x_pack[1].tag;
+                x_c_pack[1].complete_tag   = s_x_pack[1].T;
                 x_c_pack[1].bmask          = effective_bmask_alu1;
                 x_c_pack[1].result         = result1_alu;
                 x_c_pack[1].has_dest       = s_x_pack[1].has_dest;
@@ -328,21 +328,21 @@ module stage_execute(
                 early_tag_bus[0].valid = 1;
                 early_tag_bus[0].tag = mult_out.complete_tag;
                 early_tag_bus[1].valid = s_x_pack[1].has_dest;
-                early_tag_bus[1].tag = s_x_pack[1].tag;
+                early_tag_bus[1].tag = s_x_pack[1].T;
             end
             BROADCAST_1_ALU: begin
-                x_c_pack[0].valid          = (s_x_pack[0].valid && (s_x_pack[0].bmask_index == mispredicted_bmask_index))? 1'b1: 
-                                             (s_x_pack[0].valid && !(mispredicted && |(effective_bmask_alu0 & mispredicted_bmask_index)));
-                x_c_pack[0].complete_index = s_x_pack[0].rob_index;
-                x_c_pack[0].complete_tag   = s_x_pack[0].tag;
-                x_c_pack[0].bmask          = effective_bmask_alu0;
+                x_c_pack[0].valid          = (s_x_pack[1].valid && (s_x_pack[1].bmask_index == mispredicted_bmask_index))? 1'b1: 
+                                             (s_x_pack[1].valid && !(mispredicted && |(effective_bmask_alu1 & mispredicted_bmask_index)));
+                x_c_pack[0].complete_index = s_x_pack[1].rob_index;
+                x_c_pack[0].complete_tag   = s_x_pack[1].T;
+                x_c_pack[0].bmask          = effective_bmask_alu1;
                 x_c_pack[0].result         = result1_alu;
-                x_c_pack[0].has_dest       = s_x_pack[0].has_dest;
-                x_c_pack[0].uncond_branch  = s_x_pack[0].uncond_branch;
+                x_c_pack[0].has_dest       = s_x_pack[1].has_dest;
+                x_c_pack[0].uncond_branch  = s_x_pack[1].uncond_branch;
                 x_c_pack[1].valid          = 1'b0;
                 //etb
-                early_tag_bus[0].valid = s_x_pack[0].has_dest;
-                early_tag_bus[0].tag = s_x_pack[0].tag;
+                early_tag_bus[0].valid = s_x_pack[1].has_dest;
+                early_tag_bus[0].tag = s_x_pack[1].T;
             end
             
             NONE:begin
@@ -391,7 +391,7 @@ module stage_execute(
         .rs2(rs2_mult),
         .func(func_mult),
 
-        .dest_tag_in(s_x_pack[0].tag),
+        .dest_tag_in(s_x_pack[0].T),
         .rob_idx_in(s_x_pack[0].rob_index),
         .bmask_in(s_x_pack[0].bmask),
         .mispredicted(mispredicted),

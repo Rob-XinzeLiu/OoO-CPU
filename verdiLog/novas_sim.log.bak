@@ -1,0 +1,65 @@
+Verdi>restart
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2-1_Full64; Runtime version V-2023.12-SP2-1_Full64;  Mar 12 18:08 2026
+*Verdi* Loading libsscore_vcs202312.so
+FSDB Dumper for VCS, Release Verdi_V-2023.12-SP2-1, Linux x86_64/64bit, 07/15/2024
+(C) 1996 - 2024 by Synopsys, Inc.
+*Verdi* FSDB WARNING: The FSDB file already exists. Overwriting the FSDB file may crash the programs that are using this file.
+*Verdi* : Create FSDB file '/tmp/cargarci470/inter_1.fsdb'
+*Verdi* : Enable RPC Server(2538006)
+*Verdi* : Flush all FSDB Files at 000 ps.
+Verdi>fsdbDumpvarsByFile {/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/verdiLog/.tbsimDump_var_file} +disable_partial_dump;fsdbDumpflush 
+*Verdi* : Create a sorted file '/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/verdiLog/.tbsimDump_var_file.sorted' from '/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/verdiLog/.tbsimDump_var_file'.
+*Verdi* : Begin dumping the scopes by file (/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/verdiLog/.tbsimDump_var_file.sorted).
+*Verdi* : End of dumping.
+*Verdi* : Flush all FSDB Files at 000 ps.
+*Verdi* : Flush all FSDB Files at 000 ps.
+Error: Message for 'CLE-10' has occurred (ERR-3)
+Verdi>config keepfuture on
+on
+Verdi>run
+---- Starting CPU Testbench (direct-fetch mode) ----
+
+Using memory file  : programs/mem/simple.mem
+Using output files : output/verdi_output.{out, cpi, wb}
+
+                 0 : Asserting Reset
+               450 : Loading Unified Memory
+              1060 : Deasserting Reset
+              1060 : Running Processor
+           3000920 :      10000 cycles
+           6000920 :      20000 cycles
+           9000920 :      30000 cycles
+          12000920 :      40000 cycles
+          15000920 :      50000 cycles
+          18000920 :      60000 cycles
+          21000920 :      70000 cycles
+          24000920 :      80000 cycles
+          27000920 :      90000 cycles
+          30000920 :     100000 cycles
+          33000920 :     110000 cycles
+          36000920 :     120000 cycles
+          39000920 :     130000 cycles
+          42000920 :     140000 cycles
+          45000920 :     150000 cycles
+          48000920 :     160000 cycles
+          51000920 :     170000 cycles
+          54000920 :     180000 cycles
+          57000920 :     190000 cycles
+          60000920 :     200000 cycles
+          63000920 :     210000 cycles
+          66000920 :     220000 cycles
+          69000920 :     230000 cycles
+          72000920 :     240000 cycles
+          75000920 :     250000 cycles
+          78000920 :     260000 cycles
+          81000920 :     270000 cycles
+          84000920 :     280000 cycles
+          87000920 :     290000 cycles
+cpu_test.sv, 68 :     assign tb_imem_data = unified_memory[tb_PC[31:3]];
+           V C S   S i m u l a t i o n   R e p o r t 
+Time: 8935185000 ps
+CPU Time:      6.900 seconds;       Data structure size:   0.3Mb
+Thu Mar 12 18:17:32 2026
+debExit

@@ -1,0 +1,121 @@
+Invoking simulator...
+
+./build/cpu.simv +MEMORY=programs/mem/simple.mem +OUTPUT=output/verdi_output +UVM_VERDI_TRACE=UVM_AWARE +fsdb+gate=off -ucli2Proc -ucli
+debImport "-i" "-simflow" "-dbdir" "./build/cpu.simv.daidir"
+*Verdi* Loading libsscore_vcs202312.so
+
+FSDB Dumper for VCS, Release Verdi_V-2023.12-SP2-1, Linux x86_64/64bit, 07/15/2024
+(C) 1996 - 2024 by Synopsys, Inc.
+*Verdi* : Create FSDB file '/tmp/cargarci470/inter.fsdb'
+*Verdi* : Flush all FSDB Files at 000 ps.
+
+*Verdi* : Enable RPC Server(2542606)
+
+srcTBInvokeSim
+Chronologic VCS simulator copyright 1991-2023
+Contains Synopsys proprietary information.
+Compiler version V-2023.12-SP2-1_Full64; Runtime version V-2023.12-SP2-1_Full64;  Mar 12 18:18 2026
+Error: Message for 'CLE-10' has occurred (ERR-3)
+Verdi>config keepfuture on
+on
+Verdi>fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.clock"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.reset"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.mispredicted"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.dispatch_num_req"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.fetch_pack"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.can_fetch_num"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.dispatch_pack"  +all +trace_process;fsdbDumpvars 1 "\$unit"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.DEPTH"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.buffer"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.buffer_n"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.BUFFER_CNT"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.head"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.head_n"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.tail"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.tail_n"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.count"  +all +trace_process;fsdbDumpvars 1 "testbench.verisimpleV.fetch_buffer_0.count_n"  +all +trace_process;fsdbDumpflush 
+
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.clock).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.reset).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.mispredicted).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.dispatch_num_req).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.fetch_pack).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.can_fetch_num).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.dispatch_pack).
+*Verdi* : Begin traversing the scope ($unit), layer (1).
+*Verdi* : Enable +trace_process and +all dumping.
+*Verdi* : End of traversing.
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.DEPTH).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.buffer).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.buffer_n).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.BUFFER_CNT).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.head).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.head_n).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.tail).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.tail_n).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.count).
+*Verdi* : Dumping the signal (testbench.verisimpleV.fetch_buffer_0.count_n).
+*Verdi* : Flush all FSDB Files at 000 ps.
+
+Verdi>run
+---- Starting CPU Testbench (direct-fetch mode) ----
+
+Using memory file  : programs/mem/simple.mem
+Using output files : output/verdi_output.{out, cpi, wb}
+
+                 0 : Asserting Reset
+               450 : Loading Unified Memory
+              1060 : Deasserting Reset
+              1060 : Running Processor
+           3000920 :      10000 cycles
+           6000920 :      20000 cycles
+           9000920 :      30000 cycles
+          12000920 :      40000 cycles
+          15000920 :      50000 cycles
+          18000920 :      60000 cycles
+          21000920 :      70000 cycles
+          24000920 :      80000 cycles
+          27000920 :      90000 cycles
+          30000920 :     100000 cycles
+          33000920 :     110000 cycles
+          36000920 :     120000 cycles
+          39000920 :     130000 cycles
+          42000920 :     140000 cycles
+          45000920 :     150000 cycles
+          48000920 :     160000 cycles
+          51000920 :     170000 cycles
+          54000920 :     180000 cycles
+          57000920 :     190000 cycles
+          60000920 :     200000 cycles
+          63000920 :     210000 cycles
+          66000920 :     220000 cycles
+          69000920 :     230000 cycles
+          72000920 :     240000 cycles
+          75000920 :     250000 cycles
+          78000920 :     260000 cycles
+          81000920 :     270000 cycles
+          84000920 :     280000 cycles
+          87000920 :     290000 cycles
+          90000920 :     300000 cycles
+          93000920 :     310000 cycles
+          96000920 :     320000 cycles
+          99000920 :     330000 cycles
+         102000920 :     340000 cycles
+         105000920 :     350000 cycles
+         108000920 :     360000 cycles
+         111000920 :     370000 cycles
+         114000920 :     380000 cycles
+         117000920 :     390000 cycles
+         120000920 :     400000 cycles
+         123000920 :     410000 cycles
+         126000920 :     420000 cycles
+         129000920 :     430000 cycles
+         132000920 :     440000 cycles
+         135000920 :     450000 cycles
+         138000920 :     460000 cycles
+         141000920 :     470000 cycles
+         144000920 :     480000 cycles
+         147000920 :     490000 cycles
+         150000920 :     500000 cycles
+         153000920 :     510000 cycles
+         156000920 :     520000 cycles
+         159000920 :     530000 cycles
+         162000920 :     540000 cycles
+         165000920 :     550000 cycles
+         168000920 :     560000 cycles
+         171000920 :     570000 cycles
+         174000920 :     580000 cycles
+         177000920 :     590000 cycles
+         180000920 :     600000 cycles
+         183000920 :     610000 cycles
+         186000920 :     620000 cycles
+         189000920 :     630000 cycles
+         192000920 :     640000 cycles
+         195000920 :     650000 cycles
+         198000920 :     660000 cycles
+cpu_test.sv, 240 :             output_reg_writeback_and_maybe_halt();

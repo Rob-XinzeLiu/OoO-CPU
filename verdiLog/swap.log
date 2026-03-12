@@ -1,0 +1,48 @@
+version: (200506)
+
+available memory: 64M bytes
+used memory: 253952 bytes [need 248K bytes if disable swap]
+
+used block: 10 [memory(10) file(0)]
+                 [ 8K(7) 64K(3) { total 248K bytes } ]
+overhead: (9523) bytes for (10) blocks [Average: (952) bytes/block]
+
+write  => 0(times) 0K(bytes) [0K bytes to file]
+read   => 3(times) 115K(bytes) [21K bytes compressed data from file]
+access => 85079(times) 688M(bytes)
+          [hit ratio: 99.9965%]
+
+time: write(0) read(0)  unit: second
+
+swap file directory: (/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/verdiLog)
+used swap file number: (5)
+
+
+
+swap file manager:
+arrSize: (256)
+idxCnt: (6)
+closeHead: (1)
+closeTail: (5)
+openCnt: (4)
+fid(5): fd(1073741826) fileName(/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/cpu.simv.daidir/kdb.elab++/work.lib++/fetch_buffer.sv.tdc)
+	size(3869) lastModTime(1773353863) curModTime(1773353863)
+	mode(rb)	hot(0) cool(4) pos(0)
+fid(4): fd(1073741825) fileName(/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/cpu.simv.daidir/kdb.elab++/work.lib++/cpu.sv.tdc)
+	size(23193) lastModTime(1773353863) curModTime(1773353863)
+	mode(rb)	hot(5) cool(2) pos(0)
+fid(3): fd(0) fileName(/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/cpu.simv.daidir/kdb.elab++/work.lib++/sys_defs.svh#inc___vcs_unit__1__1#.tdc)
+	size(18191) lastModTime(1773353863) curModTime(1773353863)
+	mode(rb)	hot(0) cool(0) pos(0)
+fid(2): fd(34) fileName(/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/verdiLog/_swap_0001#-1069617770#2542214)
+	size(0) lastModTime(0) curModTime(1773353881)
+	mode(w+b)	hot(4) cool(1) pos(0)
+fid(1): fd(1073741824) fileName(/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/cpu.simv.daidir/kdb.elab++/work.lib++/cpu_test.sv.tdc)
+	size(13475) lastModTime(1773353863) curModTime(1773353863)
+	mode(rb)	hot(2) cool(0) pos(0)
+fid(0): fd(0) fileName(NULL)
+	mode(NULL)	hot(0) cool(0) pos(0)
+==================================================
+mySelf(0x1da81900) pre(0x1e8fc170) next((nil))
+version(200506)
+date(Jul  8 2024 02:41:42)

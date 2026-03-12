@@ -32,7 +32,7 @@ module fetch_buffer #(
 
         //enqueue
         for(int i = 0; i < `N; i++) begin
-            if(fetch_pack[i].valid) begin
+            if(fetch_pack[i].valid && count_n < DEPTH ) begin
                 buffer_n[tail_n] = fetch_pack[i];
                 if(tail_n == DEPTH -1) begin
                     tail_n = '0;
@@ -50,7 +50,7 @@ module fetch_buffer #(
         //request 1 instruction, but no instruction is available
         //request 0 instruction
         for (int i = 0; i < `N; i++) begin
-            if (i < dispatch_num_req && count_n > i) begin
+            if (i < dispatch_num_req && count_n > 0) begin
                 dispatch_pack[i] = buffer_n[head_n];
                 if (head_n == DEPTH - 1)
                     head_n = '0;
