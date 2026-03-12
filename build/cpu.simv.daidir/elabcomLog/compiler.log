@@ -1,3 +1,0 @@
-*design* DebussyLib (btIdent Verdi_V-2023.12-SP2-1)
-Command arguments:  -lib  /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/cpu.simv.daidir/work  -saveLevel  -elab  /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/cpu.simv.daidir/kdb  -simflow  -simdir  /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/cpu.simv.daidir/kdb_libs  -topfile  /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/cpu.simv.daidir/.elabcomTopFile  -ssv  -ssy  -Lf  work  +disable_message+C00380+C00381  +disable_message+C00388+C00389  -SNPS_ELABCOM  -saveElab 
-Total	0 error(s),   0 warning(s)

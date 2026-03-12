@@ -1,6 +1,0 @@
-Register writeback output (hexadecimal)
-PC 0000:addi    | ---
-PC 0004:lui     | ---
-PC 0008:addi    | ---
-PC 000c:slli    | ---
-PC 0010:lui     | ---

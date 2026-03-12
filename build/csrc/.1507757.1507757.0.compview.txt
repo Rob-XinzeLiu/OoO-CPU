@@ -1,9 +1,0 @@
-{"vcs1":{"timestamp_begin":1773262363.550316785, "rt":4.14, "ut":1.62, "st":0.35}}
-{"vcselab":{"timestamp_begin":1773262367.773020113, "rt":1.29, "ut":0.23, "st":0.11}}
-{"link":{"timestamp_begin":1773262369.140718143, "rt":1.28, "ut":0.25, "st":0.17}}
-{"SNPS_VCS_INTERNAL_ROOT_START_TIME": 1773262362.381433016}
-{"VCS_COMP_START_TIME": 1773262362.381433016}
-{"VCS_COMP_END_TIME": 1773262370.999003267}
-{"VCS_USER_OPTIONS": "-sverilog -xprop=tmerge +vc -Mupdate -Mdir=build/csrc -line -full64 -kdb -lca -nc -debug_access+all+reverse +warn=noTFIPC +warn=noDEBUG_DEP +warn=noENUMASSIGN +warn=noLCA_FEATURES_ENABLED +define+CLOCK_PERIOD=30.0 +incdir+verilog/inc/ test/testbenches/given/cpu_test.sv verilog/src/branch_stack.sv verilog/src/cpu.sv verilog/src/fetch_buffer.sv verilog/src/freelist.sv verilog/src/icache.sv verilog/src/maptable.sv verilog/src/memDP.sv verilog/src/mult.sv verilog/src/regfile.sv verilog/src/rob.sv verilog/src/rs.sv verilog/src/stage_complete.sv verilog/src/stage_dispatch.sv verilog/src/stage_execute.sv verilog/src/stage_fetch.sv verilog/src/stage_issue.sv verilog/src/stage_retire.sv verilog/src/combinational/decoder.sv verilog/src/combinational/psel_gen.sv test/pipeline_print.c test/decode_inst.c test/mem.sv -o build/cpu.simv"}
-{"vcs1": {"peak_mem": 466216}}
-{"vcselab": {"peak_mem": 190848}}
