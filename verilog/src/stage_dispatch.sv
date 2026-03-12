@@ -4,11 +4,11 @@ module stage_dispatch (
     input logic                             reset                               , 
     input F_D_PACKET                        f_d_pack                    [`N-1:0], // from fetch buffer
     input logic [1:0]                       rs_empty_entries_num                , // from RS
-    input ROB_CNT                           rob_space_avail                     , // from ROB
-    input BSTACK_CNT                        branch_stack_space_avail            , //from branch stack
+    input logic [1:0]                       rob_space_avail                     , // from ROB
+    input logic [1:0]                       branch_stack_space_avail            , //from branch stack
     //from freelist
     input PRF_IDX           [`N-1:0]        t_new                               , // from freelist
-    input FLIST_CNT                         avail_num                           , // from freelist   
+    input logic [1:0]                       avail_num                           , // from freelist   
     output logic                            dispatch_valid              [`N-1:0], // to freelist
                        
     input X_C_PACKET                        [`N-1:0]  cdb                       , // updating map table ready bit

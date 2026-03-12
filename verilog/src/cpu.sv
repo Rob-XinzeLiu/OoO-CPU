@@ -16,35 +16,56 @@ module cpu (
     input clock, // System clock
     input reset, // System reset
 
-    input MEM_TAG   mem2proc_transaction_tag, // Memory tag for current transaction
-    input MEM_BLOCK mem2proc_data,            // Data coming back from memory
-    input MEM_TAG   mem2proc_data_tag,        // Tag for which transaction data is for
-
-    output MEM_COMMAND proc2mem_command, // Command sent to memory
-    output ADDR        proc2mem_addr,    // Address sent to memory
-    output MEM_BLOCK   proc2mem_data,    // Data sent to memory
-    output MEM_SIZE    proc2mem_size,    // Data size sent to memory
-
-    // Note: these are assigned at the very bottom of the module
+    // ----------------------------------------------------------------
+    //  Step 3/4: testbench drives PC and raw instruction data directly
+    // ----------------------------------------------------------------
+    input  ADDR         tb_PC,          // current fetch address from testbench
+    input  MEM_BLOCK    tb_imem_data,   // 64-bit memory line for that address
+ 
+    // ----------------------------------------------------------------
+    //  Step 5: tell the testbench how many instructions we accepted
+    // ----------------------------------------------------------------
+    output logic [1:0]  fetch_accepted,
+ 
+    // ----------------------------------------------------------------
+    //  Retire / writeback (step 7)
+    // ----------------------------------------------------------------
     output RETIRE_PACKET [`N-1:0] committed_insts,
+ 
+    // ----------------------------------------------------------------
+    //  Step 8: branch redirect back to testbench
+    // ----------------------------------------------------------------
+    output logic        branch_taken,
+    output ADDR         branch_target
+    // input MEM_TAG   mem2proc_transaction_tag, // Memory tag for current transaction
+    // input MEM_BLOCK mem2proc_data,            // Data coming back from memory
+    // input MEM_TAG   mem2proc_data_tag,        // Tag for which transaction data is for
 
-    // Debug outputs: these signals are solely used for debugging in testbenches
-    // You should definitely change these for the final project
-    output ADDR  if_NPC_dbg,
-    output DATA  if_inst_dbg,
-    output logic if_valid_dbg,
-    output ADDR  if_id_NPC_dbg,
-    output DATA  if_id_inst_dbg,
-    output logic if_id_valid_dbg,
-    output ADDR  id_ex_NPC_dbg,
-    output DATA  id_ex_inst_dbg,
-    output logic id_ex_valid_dbg,
-    output ADDR  ex_mem_NPC_dbg,
-    output DATA  ex_mem_inst_dbg,
-    output logic ex_mem_valid_dbg,
-    output ADDR  mem_wb_NPC_dbg,
-    output DATA  mem_wb_inst_dbg,
-    output logic mem_wb_valid_dbg
+    // output MEM_COMMAND proc2mem_command, // Command sent to memory
+    // output ADDR        proc2mem_addr,    // Address sent to memory
+    // output MEM_BLOCK   proc2mem_data,    // Data sent to memory
+    // output MEM_SIZE    proc2mem_size,    // Data size sent to memory
+
+    // // Note: these are assigned at the very bottom of the module
+    // output RETIRE_PACKET [`N-1:0] committed_insts,
+
+    // // Debug outputs: these signals are solely used for debugging in testbenches
+    // // You should definitely change these for the final project
+    // output ADDR  if_NPC_dbg,
+    // output DATA  if_inst_dbg,
+    // output logic if_valid_dbg,
+    // output ADDR  if_id_NPC_dbg,
+    // output DATA  if_id_inst_dbg,
+    // output logic if_id_valid_dbg,
+    // output ADDR  id_ex_NPC_dbg,
+    // output DATA  id_ex_inst_dbg,
+    // output logic id_ex_valid_dbg,
+    // output ADDR  ex_mem_NPC_dbg,
+    // output DATA  ex_mem_inst_dbg,
+    // output logic ex_mem_valid_dbg,
+    // output ADDR  mem_wb_NPC_dbg,
+    // output DATA  mem_wb_inst_dbg,
+    // output logic mem_wb_valid_dbg
 );
     logic   global_mispredict;
     logic   global_resolve;
@@ -106,7 +127,7 @@ module cpu (
 
 
     // ROB
-    ROB_CNT         rob_space_avail;
+    logic [1:0]         rob_space_avail;
     ROB_IDX         rob_index [`N-1:0];
     RETIRE_PACKET   [`N-1:0] rob_commit_pack;
 
@@ -226,26 +247,57 @@ module cpu (
     //make sure it goes low on mispredict
     assign if_valid = ! global_mispredict;
 
+
+    //for milestone
+    assign fetch_accepted = f_pack[0].valid + f_pack[1].valid;
+    //////////////////////////////////////////////////
+    //                                              //
+    //   Step 8: expose branch redirect signals     //
+    //                                              //
+    //////////////////////////////////////////////////
+ 
+    // mispredict_pack_reg is registered one cycle after the execute stage
+    // detects a misprediction.  It carries correct_next_pc.
+    assign branch_taken  = mispredict_pack_out.valid ? mispredict_pack_out.take_branch : 0;
+    assign branch_target = mispredict_pack_out.valid? mispredict_pack_out.correct_next_pc : 0;
+
     //////////////////////////////////////////////////
     //                                              //
     //                Fetch-stage                   //
     //                                              //
     //////////////////////////////////////////////////
-
+    // stage_if no longer manages its own PC.
+    // We pass tb_PC (from testbench) and tb_imem_data (direct memory line).
     stage_if stage_if_0 (
-        //Input
-        .clock(clock),
-        .reset(reset),
-        .if_valid(if_valid),
-        .Imem_data(mem2proc_data),
-        .mispredict_pack(mispredict_pack_reg),
-        .fetch_req(can_fetch_num),
-        .stop_fetch(stall_fetch),
-        
-        //Output
-        .if_packet(f_pack),
-        .Imem_addr(proc2mem_addr)
+        .clock          (clock),
+        .reset          (reset),
+        .if_valid       (if_valid),
+        // ---- direct-fetch inputs (replaces Imem_addr / Imem_data round-trip) ----
+        .tb_PC          (tb_PC),
+        .Imem_data      (tb_imem_data),
+        // ---- other control ----
+        .mispredict_pack (mispredict_pack_reg),
+        .fetch_req      (can_fetch_num),
+        .stop_fetch     (stall_fetch),
+        // ---- outputs ----
+        .if_packet      (f_pack)
+        // Imem_addr output removed — testbench owns the PC
     );
+
+    // stage_if stage_if_0 (
+    //     //Input
+    //     .clock(clock),
+    //     .reset(reset),
+    //     .if_valid(if_valid),
+    //     .Imem_data(mem2proc_data),
+    //     .mispredict_pack(mispredict_pack_reg),
+    //     .fetch_req(can_fetch_num),
+    //     .stop_fetch(stall_fetch),
+        
+    //     //Output
+    //     .if_packet(f_pack),
+    //     .Imem_addr(proc2mem_addr)
+    // );
 
     //////////////////////////////////////////////////
     //                                              //

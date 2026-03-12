@@ -1,7 +1,7 @@
 `include "sys_defs.svh"
 
 module fetch_buffer #(
-    parameter int DEPTH = 5 * `N
+    parameter int DEPTH = 8
 )(
     input logic                clock,
     input logic                reset,
@@ -50,7 +50,7 @@ module fetch_buffer #(
         //request 1 instruction, but no instruction is available
         //request 0 instruction
         for (int i = 0; i < `N; i++) begin
-            if (i < dispatch_num_req && count_n >= i) begin
+            if (i < dispatch_num_req && count_n > i) begin
                 dispatch_pack[i] = buffer_n[head_n];
                 if (head_n == DEPTH - 1)
                     head_n = '0;
