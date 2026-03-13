@@ -62,7 +62,7 @@ module stage_dispatch (
 
     PRF_IDX         [`N-1:0]    t1, t2, told;
     logic           [`N-1:0]    t1_ready, t2_ready;
-    logic           [`MT_SIZE-1:0] [`N-1:0] snapshot_out;
+    logic           [`N-1:0] [`MT_SIZE-1:0]  snapshot_out;
     int unsigned      branch_count, next_branch_count;
     int unsigned      branch_avail_slot;
     int unsigned      small1, small2, small3, small4;
