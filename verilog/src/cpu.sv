@@ -36,7 +36,8 @@ module cpu (
     //  Step 8: branch redirect back to testbench
     // ----------------------------------------------------------------
     output logic        branch_taken,
-    output ADDR         branch_target
+    output ADDR         branch_target,
+    output logic        mispredicted
     // input MEM_TAG   mem2proc_transaction_tag, // Memory tag for current transaction
     // input MEM_BLOCK mem2proc_data,            // Data coming back from memory
     // input MEM_TAG   mem2proc_data_tag,        // Tag for which transaction data is for
@@ -116,7 +117,7 @@ module cpu (
     X_C_PACKET x_c_pack [`N-1:0];
     X_C_PACKET x_c_pack_reg [`N-1:0];
     COND_BRANCH_PACKET cond_pack, cond_pack_reg;
-    MISPREDICT_PACKET mispredict_pack_out, mispredict_pack_reg;
+    MISPREDICT_PACKET mispredict_pack_out;
     ETB_TAG_PACKET  etb_bus [`N-1:0];
 
     // Outputs from COM-Stage
@@ -262,8 +263,9 @@ module cpu (
  
     // mispredict_pack_reg is registered one cycle after the execute stage
     // detects a misprediction.  It carries correct_next_pc.
-    assign branch_taken  = mispredict_pack_reg.valid ? mispredict_pack_reg.take_branch : 0;
-    assign branch_target = mispredict_pack_reg.valid? mispredict_pack_reg.correct_next_pc : 0;
+    assign branch_taken  = mispredict_pack_out.valid ? mispredict_pack_out.take_branch : 0;
+    assign branch_target = mispredict_pack_out.valid? mispredict_pack_out.correct_next_pc : 0;
+    assign mispredicted  = global_mispredict;
 
     //////////////////////////////////////////////////
     //                                              //
@@ -461,11 +463,11 @@ module cpu (
         if(reset) begin
             x_c_pack_reg    <= '{default: '0};;
             cond_pack_reg   <= '{default: '0};;
-            mispredict_pack_reg <= '{default: '0};;
+            //mispredict_pack_reg <= '{default: '0};;
         end else begin
             x_c_pack_reg    <= x_c_pack;
             cond_pack_reg   <= cond_pack;
-            mispredict_pack_reg <= mispredict_pack_out;
+            //mispredict_pack_reg <= mispredict_pack_out;
         end
     end
 

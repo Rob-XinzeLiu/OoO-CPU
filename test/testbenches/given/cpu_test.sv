@@ -62,10 +62,11 @@ module testbench;
     // From CPU → testbench: branch redirect signals (step 8)
     logic       branch_taken;
     ADDR        branch_target;
+    logic       mispredicted;
 
     // Drive the memory line that contains tb_PC into the CPU
     // The bottom 3 bits select the 8-byte-aligned line
-    assign tb_imem_data = unified_memory[tb_PC[31:3]];
+    assign tb_imem_data = !mispredicted? unified_memory[tb_PC[31:3]] : '0;
 
     // Step 3 & 6 & 8: advance PC each cycle
     always_ff @(posedge clock) begin
@@ -132,7 +133,8 @@ module testbench;
 
         // Step 8: branch redirect from CPU back to testbench PC
         .branch_taken     (branch_taken),
-        .branch_target    (branch_target)
+        .branch_target    (branch_target),
+        .mispredicted     (mispredicted)
 
         // // Debug
         // .if_NPC_dbg       (if_NPC_dbg),
