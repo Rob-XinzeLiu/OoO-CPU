@@ -26,7 +26,7 @@ module stage_dispatch (
     output B_MASK                           branch_index                [`N-1:0],  
     // maptable snapshot
     input  logic [`MT_SIZE-1:0]             maptable_snapshot_in                ,                         
-    output logic [`MT_SIZE-1:0]             maptable_snapshot_out       [`N-1:0],
+    output logic  [`N-1:0][`MT_SIZE-1:0]             maptable_snapshot_out       ,
 
     output ADDR                             pc_snapshot_out             [`N-1:0],
    
@@ -225,7 +225,7 @@ module stage_dispatch (
                     //debug
                     dispatch_pack[0].dest_reg_idx = rd[0];
                     //send to branch stack
-                    branch_encountered[0] = is_branch[0];
+                    branch_encountered[0] = 'd1;
                     branch_encountered[1] = is_branch[1];
                     branch_index[0] = bmask_idx_0;
                     //update branch count
@@ -447,7 +447,7 @@ module stage_dispatch (
                     dispatch_pack[1].dest_reg_idx = rd[1];
                     //send to branch stack
                     branch_encountered[1] = 1'b1;
-                    branch_index[0] = bmask_idx_1;
+                    branch_index[1] = bmask_idx_1;
                     //update branch count
                     next_branch_count = next_branch_count + 1;
                 end

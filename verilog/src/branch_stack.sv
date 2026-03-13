@@ -3,7 +3,7 @@
 module branch_stack (
     input logic                                         clock                            ,
     input logic                                         reset                            ,
-    input logic [`MT_SIZE-1:0]                          mt_snapshot_in           [`N-1:0],   //from maptable inside dispatch stage
+    input logic [`N-1:0][`MT_SIZE-1:0]                          mt_snapshot_in           ,   //from maptable inside dispatch stage
     input logic                                         resolved                         ,
     input B_MASK                                        resolved_bmask_index             ,
     input logic                                         mispredicted                     ,   //from execute stage

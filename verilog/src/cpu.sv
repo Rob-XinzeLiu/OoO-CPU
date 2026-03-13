@@ -99,7 +99,7 @@ module cpu (
     logic           dispatch_valid [`N-1:0];
     logic           branch_encountered [`N-1:0];
     B_MASK          branch_index [`N-1:0];
-    logic [`MT_SIZE-1:0] maptable_snapshot_out [`N-1:0];
+    logic [`N-1:0][`MT_SIZE-1:0] maptable_snapshot_out ;
     ADDR            pc_snapshot_out [`N-1:0];
     logic [1:0]     dispatch_num;
     PRF_IDX  [`N-1:0] t_new ;
