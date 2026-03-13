@@ -4,7 +4,8 @@ module stage_retire(
     input logic clock,
     input logic reset,
     //from rob
-    input  RETIRE_PACKET   [`N-1:0]     rob_commit_pack,       
+    input  RETIRE_PACKET   [`N-1:0]     rob_commit_pack,  
+    input  DATA [1:0] write_data_in,
 
     output logic [1:0]     freelist_free_num  ,//to freelist
     output RETIRE_PACKET  [`N-1:0] commit_pack,//to tb

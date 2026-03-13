@@ -270,17 +270,17 @@ module testbench;
                 block = unified_memory[pc[31:3]];   // read from TB memory, not a separate module
                 inst  = block.word_level[pc[2]];
 
-                // if (committed_insts[n].reg_idx == `ZERO_REG) begin
+                if (committed_insts[n].dest_reg_idx == `ZERO_REG) begin
                     $fdisplay(wb_fileno, "PC %4x:%-8s| ---",
                               pc, decode_inst(inst));
-                // end 
-                // else begin
-                //     $fdisplay(wb_fileno, "PC %4x:%-8s| r%02d=%-8x",
-                //               pc,
-                //               decode_inst(inst),
-                //               committed_insts[n].reg_idx,
-                //               committed_insts[n].data);
-                // end
+                end 
+                else begin
+                    $fdisplay(wb_fileno, "PC %4x:%-8s| r%02d=%-8x",
+                              pc,
+                              decode_inst(inst),
+                              committed_insts[n].dest_reg_idx,
+                              committed_insts[n].data);
+                end
 
                 if (committed_insts[n].illegal) begin
                     error_status = ILLEGAL_INST;

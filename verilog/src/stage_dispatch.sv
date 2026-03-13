@@ -180,9 +180,9 @@ module stage_dispatch (
                     dispatch_case = TWO_BRANCH;
                 else if (!is_branch[0] && !is_branch[1])
                     dispatch_case = TWO_NON_BRANCH;
-                else if (is_branch[0] && !is_branch[1])
+                else if (!is_branch[0] && is_branch[1])
                     dispatch_case = BRANCH_AFTER_NON_BRANCH;
-                else // !is_branch[0] && is_branch[1]
+                else
                     dispatch_case = NON_BRANCH_AFTER_BRANCH;
             end
                         

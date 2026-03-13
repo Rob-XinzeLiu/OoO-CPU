@@ -147,15 +147,16 @@ module cpu (
     logic      [`N-1:0] write_enable;
     PRF_IDX    [`N-1:0] write_index;
     DATA       [`N-1:0] write_data;
+    DATA   [`N-1:0] write_data_reg;
     DATA       [`N:0] rs1_value;
     DATA       [`N:0] rs2_value;
     PRF_IDX    [`N:0] read_idx_1;
     PRF_IDX    [`N:0] read_idx_2;
 
     always_comb begin
-        for(int i = 0; i < `N; i++) begin
-            read_idx_1 = d_s_pack_reg[i].t1;
-            read_idx_2 = d_s_pack_reg[i].t2;
+        for(int i = 0; i < `N + 1; i++) begin
+            read_idx_1[i] = d_s_pack_reg[i].t1;
+            read_idx_2[i] = d_s_pack_reg[i].t2;
         end
     end
 
@@ -172,8 +173,10 @@ module cpu (
     logic   cdb_req_alu [`N-1:0];
     logic   cdb_gnt_alu [`N-1:0];
     cdb_arbiter_state_t cdb_arbiter_state;
-    logic [`N-1:0] alu_ready_reg;
-    logic mult_ready_reg ;
+    logic [`N-1:0] alu_ready_reg1;
+    logic [`N-1:0] alu_ready_reg2;
+    logic mult_ready_reg1;
+    logic mult_ready_reg2;
     logic [`N-1:0] alu_ready_reg_in;
     logic mult_ready_reg_in;
 
@@ -513,19 +516,23 @@ module cpu (
     always_ff @(posedge clock) begin
         if (reset) begin
             for (int i = 0; i < `N; i++) begin
-                alu_ready_reg[i] <= 'd0;
+                alu_ready_reg1[i] <= 'd0;
+                alu_ready_reg2[i] <= 'd0;
             end
-            mult_ready_reg <= 1'b0;
+            mult_ready_reg1 <= 1'b0;
+            mult_ready_reg2 <= 1'b0;
         end else begin
             for (int i = 0; i < `N; i++) begin
-                alu_ready_reg[i] <= cdb_gnt_alu[i];
+                alu_ready_reg1[i] <= cdb_gnt_alu[i];
+                alu_ready_reg2[i] <= alu_ready_reg1[i];
             end
-            mult_ready_reg <= cdb_req_mult; // we always grant mult, so just check if there's a mult request
+            mult_ready_reg1 <= cdb_req_mult; // we always grant mult, so just check if there's a mult request
+            mult_ready_reg2 <= mult_ready_reg1;
         end
     end
 
-    assign alu_ready_reg_in = alu_ready_reg;
-    assign mult_ready_reg_in = mult_ready_reg;  
+    assign alu_ready_reg_in = alu_ready_reg2;
+    assign mult_ready_reg_in = mult_ready_reg2;  
 
     //////////////////////////////////////////////////
     //                                              //
@@ -548,6 +555,10 @@ module cpu (
         .data_for_prf(write_data)
     );
 
+    always_ff @(posedge clock) begin
+        if(reset) write_data_reg<='0;
+        else write_data_reg<= write_data;
+    end
     //////////////////////////////////////////////////
     //                                              //
     //           Retire stage                       //
@@ -630,7 +641,7 @@ module cpu (
         .BS_tail(BS_tail),
         .t(t_new),
         .avail_num(avail_num)
-    );
+    );   
 
     //////////////////////////////////////////////////
     //                                              //
@@ -698,6 +709,11 @@ module cpu (
     //////////////////////////////////////////////////
 
     // Output the committed instruction to the testbench for counting
-    assign committed_insts = commit_pack;
+    always_comb begin
+        committed_insts = commit_pack;
+        committed_insts[0].data = write_data_reg[0];
+        committed_insts[1].data = write_data_reg[1];
+    end
+
 
 endmodule // pipeline

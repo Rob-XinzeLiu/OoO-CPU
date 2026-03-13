@@ -515,6 +515,7 @@ typedef struct packed{
     ADDR            NPC;
     logic           has_dest;//for freelist recovery, whether this instruction has a destination register
     REG_IDX         dest_reg_idx;//for tb
+    DATA            data;//for tb
     PRF_IDX         t_old;//for tb
     logic           halt;
     logic           illegal;
