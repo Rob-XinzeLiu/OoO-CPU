@@ -262,8 +262,8 @@ module cpu (
  
     // mispredict_pack_reg is registered one cycle after the execute stage
     // detects a misprediction.  It carries correct_next_pc.
-    assign branch_taken  = mispredict_pack_out.valid ? mispredict_pack_out.take_branch : 0;
-    assign branch_target = mispredict_pack_out.valid? mispredict_pack_out.correct_next_pc : 0;
+    assign branch_taken  = mispredict_pack_reg.valid ? mispredict_pack_reg.take_branch : 0;
+    assign branch_target = mispredict_pack_reg.valid? mispredict_pack_reg.correct_next_pc : 0;
 
     //////////////////////////////////////////////////
     //                                              //

@@ -225,7 +225,8 @@ module stage_dispatch (
                     //debug
                     dispatch_pack[0].dest_reg_idx = rd[0];
                     //send to branch stack
-                    branch_encountered[0] = 1'b1;
+                    branch_encountered[0] = is_branch[0];
+                    branch_encountered[1] = is_branch[1];
                     branch_index[0] = bmask_idx_0;
                     //update branch count
                     next_branch_count = next_branch_count + 1;
@@ -445,7 +446,7 @@ module stage_dispatch (
                     //debug
                     dispatch_pack[1].dest_reg_idx = rd[1];
                     //send to branch stack
-                    branch_encountered[0] = 1'b1;
+                    branch_encountered[1] = 1'b1;
                     branch_index[0] = bmask_idx_1;
                     //update branch count
                     next_branch_count = next_branch_count + 1;

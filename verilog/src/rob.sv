@@ -39,9 +39,7 @@ module rob(
 
     //output current head ptr to execute stage
     assign          rob_head_ptr_out = head_ptr;
-    //combinational output to rs
-    assign          rob_index[0] = tail_ptr;
-    assign          rob_index[1] = tail_ptr + 1'b1;
+
     //dispatch
     logic           dispatch_1, dispatch_2;
     assign          dispatch_1 = (dispatch_pack[0].valid && !dispatch_pack[1].valid);
@@ -68,6 +66,7 @@ module rob(
         next_rob_count = rob_count;
         next_rob_array = rob_array;
         rob_commit = '0;
+        rob_index = '{default: '0};
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
 //////////////////////      Commit(Retire)     ////////////////////////
@@ -133,6 +132,9 @@ module rob(
             next_tail_ptr = mispredicted_index + 1;
             next_rob_count = ROB_CNT'(ROB_IDX'(mispredicted_index - next_head_ptr) + 1'b1) ;
         end
+
+        rob_index[0] = next_tail_ptr;
+        rob_index[1] = next_tail_ptr + 1'b1;
 
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
