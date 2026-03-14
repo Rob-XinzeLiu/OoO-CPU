@@ -73,12 +73,12 @@ module rob(
 //////////////////////      Commit(Retire)     ////////////////////////
 //////////////////////                         ////////////////////////
 ///////////////////////////////////////////////////////////////////////
-        retire_num = (rob_array[head_ptr].ready_retire && rob_array[head_ptr + 1 ].ready_retire)? 2 : 
-                     (rob_array[head_ptr].ready_retire && !rob_array[head_ptr + 1 ].ready_retire)? 1 : 0;
+        retire_num = (rob_array[head_ptr].ready_retire && rob_array[head_ptr + 1 ].ready_retire)? 2'b10 : 
+                     (rob_array[head_ptr].ready_retire && !rob_array[head_ptr + 1 ].ready_retire)? 2'b01 : 2'b00;
         
 
         if(retire_num == 2)begin
-            for(int i = 0; i < `N; ++i)begin
+            for(int i = 0; i < `N; i++)begin
                 next_rob_array[head_ptr+i].ready_retire = 1'b0;
                 rob_commit[i].valid = 1'b1;
                 rob_commit[i].halt = rob_array[head_ptr+i].halt;

@@ -278,8 +278,14 @@ module rs(
 
             // persist readiness into entry (important for ETB 1-cycle pulse)
             if (internal_rs_entry[j].busy) begin
-                if (t1_hit) internal_rs_entry[j].t1_ready = 1'b1;
-                if (t2_hit) internal_rs_entry[j].t2_ready = 1'b1;
+                if (t1_hit) begin
+                    internal_rs_entry[j].t1_ready = 1'b1;
+                    next_rs_entry[j].t1_ready = 1'b1;
+                end
+                if (t2_hit) begin
+                    internal_rs_entry[j].t2_ready = 1'b1;
+                    next_rs_entry[j].t2_ready = 1'b1;
+                end
             end
 
             // now compute masks from UPDATED readiness
