@@ -148,7 +148,6 @@ module cpu (
     logic      [`N-1:0] write_enable;
     PRF_IDX    [`N-1:0] write_index;
     DATA       [`N-1:0] write_data;
-    DATA   [`N-1:0] write_data_reg;
     DATA       [`N:0] rs1_value;
     DATA       [`N:0] rs2_value;
     PRF_IDX    [`N:0] read_idx_1;
@@ -173,6 +172,7 @@ module cpu (
     logic   cdb_req_mult, cdb_gnt_mult;
     logic   cdb_req_alu [`N-1:0];
     logic   cdb_gnt_alu [`N-1:0];
+    logic   alu_used [`N-1:0];
     cdb_arbiter_state_t cdb_arbiter_state;
     logic [`N-1:0] alu_ready_reg1;
     logic [`N-1:0] alu_ready_reg2;
@@ -525,7 +525,7 @@ module cpu (
             mult_ready_reg2 <= 1'b0;
         end else begin
             for (int i = 0; i < `N; i++) begin
-                alu_ready_reg1[i] <= cdb_gnt_alu[i];
+                alu_ready_reg1[i] <= alu_used[i];
                 alu_ready_reg2[i] <= alu_ready_reg1[i];
             end
             mult_ready_reg1 <= cdb_req_mult; // we always grant mult, so just check if there's a mult request
@@ -557,10 +557,7 @@ module cpu (
         .data_for_prf(write_data)
     );
 
-    always_ff @(posedge clock) begin
-        if(reset) write_data_reg<='0;
-        else write_data_reg<= write_data;
-    end
+
     //////////////////////////////////////////////////
     //                                              //
     //           Retire stage                       //
@@ -698,6 +695,7 @@ module cpu (
 
         // Output
         .cdb_req_alu(cdb_req_alu),
+        .alu_used(alu_used),
         .issue_pack(d_s_pack),
         .rs_empty_entries_num(rs_empty_entries_num),
         .dbg_issue_count()
@@ -711,11 +709,9 @@ module cpu (
     //////////////////////////////////////////////////
 
     // Output the committed instruction to the testbench for counting
-    always_comb begin
-        committed_insts = commit_pack;
-        committed_insts[0].data = write_data_reg[0];
-        committed_insts[1].data = write_data_reg[1];
-    end
+
+    assign committed_insts = commit_pack;
+
 
 
 endmodule // pipeline

@@ -366,13 +366,15 @@ module stage_execute(
    // DATA branch_target;
    // assign branch_target = s_x_pack[2].valid? (s_x_pack[2].PC + `RV32_signext_Bimm(s_x_pack[2].inst)) : 'b0;
     always_comb begin
-        conditional_branch_out = '{default:'0};
-        if (s_x_pack[2].valid && !|(s_x_pack[2].bmask & mispredicted_bmask_index) ||
-            (s_x_pack[2].bmask_index == mispredicted_bmask_index ) || !mispredicted) begin
-            conditional_branch_out.valid = 1'b1;
-            //conditional_branch_out.take_branch = take;
-            conditional_branch_out.br_rob_idx = s_x_pack[2].rob_index;
-           // conditional_branch_out.correct_next_pc = take ? branch_target : s_x_pack[2].NPC;
+        conditional_branch_out = '0;
+        if(s_x_pack[2].valid) begin
+            if (!|(s_x_pack[2].bmask & mispredicted_bmask_index) ||
+                (s_x_pack[2].bmask_index == mispredicted_bmask_index ) || !mispredicted) begin
+                conditional_branch_out.valid = 1'b1;
+                //conditional_branch_out.take_branch = take;
+                conditional_branch_out.br_rob_idx = s_x_pack[2].rob_index;
+            // conditional_branch_out.correct_next_pc = take ? branch_target : s_x_pack[2].NPC;
+            end
         end
     end
 

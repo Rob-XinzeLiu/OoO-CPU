@@ -6,7 +6,7 @@ module rob(
     input logic                 mispredicted                    ,//from execute
     input ROB_IDX               mispredicted_index              ,//from branch stack
     input X_C_PACKET            [`N-1:0]   cdb                  ,//set complete bit
-    input COND_BRANCH_PACKET    cond_branch_in                  ,//from execute
+    input COND_BRANCH_PACKET    cond_branch_in                  ,//from execute          
 
     output RETIRE_PACKET        [`N-1:0] rob_commit             ,//to retire stage
     
@@ -25,6 +25,7 @@ module rob(
         ADDR            NPC;//for debug
         logic           has_dest;//for debug
         REG_IDX         dest_reg_idx;//for debug
+        DATA            data;
 
         //logic is_load;
         //logic is_store;
@@ -80,13 +81,14 @@ module rob(
             for(int i = 0; i < `N; ++i)begin
                 next_rob_array[head_ptr+i].ready_retire = 1'b0;
                 rob_commit[i].valid = 1'b1;
-                rob_commit[i].halt = next_rob_array[head_ptr+i].halt;
-                rob_commit[i].illegal = next_rob_array[head_ptr+i].illegal;
-                rob_commit[i].PC = next_rob_array[head_ptr+i].PC;
-                rob_commit[i].NPC = next_rob_array[head_ptr+i].NPC;
-                rob_commit[i].has_dest = next_rob_array[head_ptr+i].has_dest;
-                rob_commit[i].dest_reg_idx = next_rob_array[head_ptr+i].dest_reg_idx;
-                rob_commit[i].t_old = next_rob_array[head_ptr+i].told;
+                rob_commit[i].halt = rob_array[head_ptr+i].halt;
+                rob_commit[i].illegal = rob_array[head_ptr+i].illegal;
+                rob_commit[i].PC = rob_array[head_ptr+i].PC;
+                rob_commit[i].NPC = rob_array[head_ptr+i].NPC;
+                rob_commit[i].has_dest = rob_array[head_ptr+i].has_dest;
+                rob_commit[i].dest_reg_idx = rob_array[head_ptr+i].dest_reg_idx;
+                rob_commit[i].t_old = rob_array[head_ptr+i].told;
+                rob_commit[i].data = rob_array[head_ptr+i].data;
 
             end
             next_head_ptr = head_ptr + 2;
@@ -94,13 +96,14 @@ module rob(
 
         end else if(retire_num == 1)begin
             rob_commit[0].valid = 1'b1;
-            rob_commit[0].halt = next_rob_array[head_ptr].halt;
-            rob_commit[0].illegal = next_rob_array[head_ptr].illegal;
-            rob_commit[0].PC = next_rob_array[head_ptr].PC;
-            rob_commit[0].NPC = next_rob_array[head_ptr].NPC;
-            rob_commit[0].has_dest = next_rob_array[head_ptr].has_dest;
-            rob_commit[0].dest_reg_idx = next_rob_array[head_ptr].dest_reg_idx;
-            rob_commit[0].t_old = next_rob_array[head_ptr].told;
+            rob_commit[0].halt = rob_array[head_ptr].halt;
+            rob_commit[0].illegal = rob_array[head_ptr].illegal;
+            rob_commit[0].PC = rob_array[head_ptr].PC;
+            rob_commit[0].NPC = rob_array[head_ptr].NPC;
+            rob_commit[0].has_dest = rob_array[head_ptr].has_dest;
+            rob_commit[0].dest_reg_idx = rob_array[head_ptr].dest_reg_idx;
+            rob_commit[0].t_old = rob_array[head_ptr].told;
+            rob_commit[0].data = rob_array[head_ptr].data;
             next_head_ptr = head_ptr + 1;
             next_rob_count = rob_count - 1;
             next_rob_array[head_ptr].ready_retire = 1'b0;
@@ -116,6 +119,7 @@ module rob(
         for(int i = 0; i < `N; i++) begin
             if(cdb[i].valid) begin
                 next_rob_array[cdb[i].complete_index].ready_retire = 1'b1;
+                next_rob_array[cdb[i].complete_index].data = cdb[i].result;
             end
         end
 

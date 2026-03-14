@@ -19,6 +19,7 @@ module rs(
     //arbitrate for CDB one cycle earlier
     input logic                             cdb_gnt_alu                 [`N-1:0],
     output logic                            cdb_req_alu                 [`N-1:0],
+    output logic                            alu_used                    [`N-1:0],
     //to issue stage
     output D_S_PACKET                       issue_pack                    [`N:0], //conditional branch goes to issue_pack[2]
     output logic [1:0]                      rs_empty_entries_num                ,
@@ -55,6 +56,7 @@ module rs(
 
     RS_ENTRY rs_entry       [`RS_SZ-1:0];
     RS_ENTRY next_rs_entry  [`RS_SZ-1:0];
+    RS_ENTRY internal_rs_entry  [`RS_SZ-1:0];
 
     logic [`RS_SZ-1:0]      ready_entry_mask;
     logic [`RS_SZ-1:0]      issue_mask;
@@ -121,21 +123,23 @@ module rs(
     always_comb begin
         //default
         next_rs_entry = rs_entry;
-        next_empty_entry_mask = '1;
+        internal_rs_entry = rs_entry;
+        empty_entry_mask = '0;
         ready_entry_mask = '0;
         issue_pack = '{default:'0};
         mult_mask = '0;
         cdb_req_alu = '{default:'0};
+        alu_used = '{default:'0};
         dbg_issue_count = 'd0;
         cond_branch_mask =  '0;
+        rs_empty_entries_num  = '0;
 
         for (int i = 0; i< `RS_SZ; i++)begin
-            next_empty_entry_mask[i] = !rs_entry[i].busy;
+            empty_entry_mask[i] = !rs_entry[i].busy;
         end
-        empty_entry_mask = next_empty_entry_mask;
 
         //enqueue logic
-        if(dispatch_1)begin
+        if(dispatch_1 && !mispredicted )begin
             for (int i=0; i<`RS_SZ; i++) begin
                 if(dispatch_bus[0][i] ) begin
                     //from dispatch pack 0
@@ -162,15 +166,14 @@ module rs(
                     next_rs_entry[i].t1_ready = dispatch_pack[0].t1_ready;
                     next_rs_entry[i].t2_ready = dispatch_pack[0].t2_ready;
                     next_rs_entry[i].busy = 1;
-                    //mark as not empty
-                    next_empty_entry_mask[i] = 0;
+
                     //from rob
                     next_rs_entry[i].rob_index = rob_index[0];
                 end
             end
         end
 
-        if(dispatch_2)begin
+        if(dispatch_2 && !mispredicted )begin
             for (int i=0; i<`RS_SZ; i++) begin
                 if(dispatch_bus[0][i] ) begin
                     //from dispatch pack 0
@@ -197,8 +200,7 @@ module rs(
                     next_rs_entry[i].t1_ready = dispatch_pack[0].t1_ready;
                     next_rs_entry[i].t2_ready = dispatch_pack[0].t2_ready;
                     next_rs_entry[i].busy = 1;
-                    //mark as not empty
-                    next_empty_entry_mask[i] = 0;
+
                     //from rob
                     next_rs_entry[i].rob_index = rob_index[0];
                 end
@@ -238,7 +240,10 @@ module rs(
         //resolve logic
         if (resolved) begin
             for (int j = 0; j < `RS_SZ; j++) begin
-                if (next_rs_entry[j].busy) begin
+                if (rs_entry[j].busy) begin
+                    internal_rs_entry[j].bmask = rs_entry[j].bmask & ~(resolved_bmask_index);
+                end
+                if(next_rs_entry[j].busy) begin
                     next_rs_entry[j].bmask = next_rs_entry[j].bmask & ~(resolved_bmask_index);
                 end
             end
@@ -247,6 +252,9 @@ module rs(
         //mispredict logic
         if(mispredicted) begin
             for (int i = 0; i < `RS_SZ; i++)begin
+                if(rs_entry[i].busy && (mispredicted_bmask_index & rs_entry[i].bmask)) begin
+                    internal_rs_entry[i] = '0;
+                end
                 if(next_rs_entry[i].busy && (mispredicted_bmask_index & next_rs_entry[i].bmask)) begin
                     next_rs_entry[i] = '0;
                 end
@@ -257,42 +265,42 @@ module rs(
         for (int j = 0; j < `RS_SZ; j++) begin
             // match against next_rs_entry so same-cycle dispatch is visible
             t1_hit =
-                (early_tag_bus[0].valid && (next_rs_entry[j].t1 == early_tag_bus[0].tag)) ||
-                (early_tag_bus[1].valid && (next_rs_entry[j].t1 == early_tag_bus[1].tag)) ||
-                (cdb[0].valid          && (next_rs_entry[j].t1 == cdb[0].complete_tag))   ||
-                (cdb[1].valid          && (next_rs_entry[j].t1 == cdb[1].complete_tag));
+                (early_tag_bus[0].valid && (internal_rs_entry[j].t1 == early_tag_bus[0].tag)) ||
+                (early_tag_bus[1].valid && (internal_rs_entry[j].t1 == early_tag_bus[1].tag)) ||
+                (cdb[0].valid          && (internal_rs_entry[j].t1 == cdb[0].complete_tag))   ||
+                (cdb[1].valid          && (internal_rs_entry[j].t1 == cdb[1].complete_tag));
 
             t2_hit =
-                (early_tag_bus[0].valid && (next_rs_entry[j].t2 == early_tag_bus[0].tag)) ||
-                (early_tag_bus[1].valid && (next_rs_entry[j].t2 == early_tag_bus[1].tag)) ||
-                (cdb[0].valid          && (next_rs_entry[j].t2 == cdb[0].complete_tag))   ||
-                (cdb[1].valid          && (next_rs_entry[j].t2 == cdb[1].complete_tag));
+                (early_tag_bus[0].valid && (internal_rs_entry[j].t2 == early_tag_bus[0].tag)) ||
+                (early_tag_bus[1].valid && (internal_rs_entry[j].t2 == early_tag_bus[1].tag)) ||
+                (cdb[0].valid          && (internal_rs_entry[j].t2 == cdb[0].complete_tag))   ||
+                (cdb[1].valid          && (internal_rs_entry[j].t2 == cdb[1].complete_tag));
 
             // persist readiness into entry (important for ETB 1-cycle pulse)
-            if (next_rs_entry[j].busy) begin
-                if (t1_hit) next_rs_entry[j].t1_ready = 1'b1;
-                if (t2_hit) next_rs_entry[j].t2_ready = 1'b1;
+            if (internal_rs_entry[j].busy) begin
+                if (t1_hit) internal_rs_entry[j].t1_ready = 1'b1;
+                if (t2_hit) internal_rs_entry[j].t2_ready = 1'b1;
             end
 
             // now compute masks from UPDATED readiness
             mult_mask[j] =
-                next_rs_entry[j].busy &&
-                next_rs_entry[j].t1_ready &&
-                next_rs_entry[j].t2_ready &&
-                next_rs_entry[j].mult;
+                internal_rs_entry[j].busy &&
+                internal_rs_entry[j].t1_ready &&
+                internal_rs_entry[j].t2_ready &&
+                internal_rs_entry[j].mult;
 
             ready_entry_mask[j] =
-                next_rs_entry[j].busy &&
-                next_rs_entry[j].t1_ready &&
-                next_rs_entry[j].t2_ready &&
-                !next_rs_entry[j].mult &&
-                !next_rs_entry[j].cond_branch;
+                internal_rs_entry[j].busy &&
+                internal_rs_entry[j].t1_ready &&
+                internal_rs_entry[j].t2_ready &&
+                !internal_rs_entry[j].mult &&
+                !internal_rs_entry[j].cond_branch;
 
             cond_branch_mask[j] =
-                next_rs_entry[j].busy &&
-                next_rs_entry[j].t1_ready &&
-                next_rs_entry[j].t2_ready &&
-                next_rs_entry[j].cond_branch;
+                internal_rs_entry[j].busy &&
+                internal_rs_entry[j].t1_ready &&
+                internal_rs_entry[j].t2_ready &&
+                internal_rs_entry[j].cond_branch;
         end
 
 
@@ -325,27 +333,27 @@ module rs(
                     if(mult_issue_mask[i]) begin
                         //to issue pack 0
                         issue_pack[0].valid= 'b1;
-                        issue_pack[0].inst= next_rs_entry[i].inst;
-                        issue_pack[0].PC= next_rs_entry[i].PC;
-                        issue_pack[0].NPC= next_rs_entry[i].NPC;
-                        issue_pack[0].opa_select= next_rs_entry[i].opa_select;
-                        issue_pack[0].opb_select= next_rs_entry[i].opb_select;
-                        issue_pack[0].has_dest= next_rs_entry[i].has_dest;
-                        issue_pack[0].alu_func= next_rs_entry[i].alu_func;
-                        issue_pack[0].mult= next_rs_entry[i].mult;
-                        issue_pack[0].rd_mem= next_rs_entry[i].rd_mem;
-                        issue_pack[0].wr_mem= next_rs_entry[i].wr_mem;
-                        issue_pack[0].cond_branch= next_rs_entry[i].cond_branch;
-                        issue_pack[0].uncond_branch= next_rs_entry[i].uncond_branch;
-                        issue_pack[0].csr_op= next_rs_entry[i].csr_op;
-                        issue_pack[0].halt= next_rs_entry[i].halt;
-                        issue_pack[0].illegal= next_rs_entry[i].illegal;
-                        issue_pack[0].bmask_index= next_rs_entry[i].bmask_index;
-                        issue_pack[0].bmask= next_rs_entry[i].bmask;
-                        issue_pack[0].T= next_rs_entry[i].T;
-                        issue_pack[0].t1= next_rs_entry[i].t1;
-                        issue_pack[0].t2= next_rs_entry[i].t2;
-                        issue_pack[0].rob_index = next_rs_entry[i].rob_index;
+                        issue_pack[0].inst= internal_rs_entry[i].inst;
+                        issue_pack[0].PC= internal_rs_entry[i].PC;
+                        issue_pack[0].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[0].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[0].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[0].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[0].alu_func= internal_rs_entry[i].alu_func;
+                        issue_pack[0].mult= internal_rs_entry[i].mult;
+                        issue_pack[0].rd_mem= internal_rs_entry[i].rd_mem;
+                        issue_pack[0].wr_mem= internal_rs_entry[i].wr_mem;
+                        issue_pack[0].cond_branch= internal_rs_entry[i].cond_branch;
+                        issue_pack[0].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[0].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[0].halt= internal_rs_entry[i].halt;
+                        issue_pack[0].illegal= internal_rs_entry[i].illegal;
+                        issue_pack[0].bmask_index= internal_rs_entry[i].bmask_index;
+                        issue_pack[0].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[0].T= internal_rs_entry[i].T;
+                        issue_pack[0].t1= internal_rs_entry[i].t1;
+                        issue_pack[0].t2= internal_rs_entry[i].t2;
+                        issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
 
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -355,28 +363,28 @@ module rs(
                     if(issue_bus[0][i] && cdb_gnt_alu[0] ) begin
                         //to issue pack 1
                         issue_pack[1].valid= 'b1;
-                        issue_pack[1].inst= next_rs_entry[i].inst;
-                        issue_pack[1].PC= next_rs_entry[i].PC;
-                        issue_pack[1].NPC= next_rs_entry[i].NPC;
-                        issue_pack[1].opa_select= next_rs_entry[i].opa_select;
-                        issue_pack[1].opb_select= next_rs_entry[i].opb_select;
-                        issue_pack[1].has_dest= next_rs_entry[i].has_dest;
-                        issue_pack[1].alu_func= next_rs_entry[i].alu_func;
-                        issue_pack[1].mult= next_rs_entry[i].mult;
-                        issue_pack[1].rd_mem= next_rs_entry[i].rd_mem;
-                        issue_pack[1].wr_mem= next_rs_entry[i].wr_mem;
-                        issue_pack[1].cond_branch= next_rs_entry[i].cond_branch;
-                        issue_pack[1].uncond_branch= next_rs_entry[i].uncond_branch;
-                        issue_pack[1].csr_op= next_rs_entry[i].csr_op;
-                        issue_pack[1].halt= next_rs_entry[i].halt;
-                        issue_pack[1].illegal= next_rs_entry[i].illegal;
-                        issue_pack[1].bmask_index= next_rs_entry[i].bmask_index;
-                        issue_pack[1].bmask= next_rs_entry[i].bmask;
-                        issue_pack[1].T= next_rs_entry[i].T;
-                        issue_pack[1].t1= next_rs_entry[i].t1;
-                        issue_pack[1].t2= next_rs_entry[i].t2;
-                        issue_pack[1].rob_index = next_rs_entry[i].rob_index;
-                        
+                        issue_pack[1].inst= internal_rs_entry[i].inst;
+                        issue_pack[1].PC= internal_rs_entry[i].PC;
+                        issue_pack[1].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[1].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[1].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[1].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[1].alu_func= internal_rs_entry[i].alu_func;
+                        issue_pack[1].mult= internal_rs_entry[i].mult;
+                        issue_pack[1].rd_mem= internal_rs_entry[i].rd_mem;
+                        issue_pack[1].wr_mem= internal_rs_entry[i].wr_mem;
+                        issue_pack[1].cond_branch= internal_rs_entry[i].cond_branch;
+                        issue_pack[1].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[1].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[1].halt= internal_rs_entry[i].halt;
+                        issue_pack[1].illegal= internal_rs_entry[i].illegal;
+                        issue_pack[1].bmask_index= internal_rs_entry[i].bmask_index;
+                        issue_pack[1].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[1].T= internal_rs_entry[i].T;
+                        issue_pack[1].t1= internal_rs_entry[i].t1;
+                        issue_pack[1].t2= internal_rs_entry[i].t2;
+                        issue_pack[1].rob_index = internal_rs_entry[i].rob_index;
+                        alu_used[0]='1;
                         //mark as not busy
                         next_rs_entry[i] = '0;
 
@@ -391,28 +399,27 @@ module rs(
                     if(mult_issue_mask[i]) begin
                         //to issue pack 0
                         issue_pack[0].valid = 'b1;
-                        issue_pack[0].inst= next_rs_entry[i].inst;
-                        issue_pack[0].PC= next_rs_entry[i].PC;
-                        issue_pack[0].NPC= next_rs_entry[i].NPC;
-                        issue_pack[0].opa_select= next_rs_entry[i].opa_select;
-                        issue_pack[0].opb_select= next_rs_entry[i].opb_select;
-                        issue_pack[0].has_dest= next_rs_entry[i].has_dest;
-                        issue_pack[0].alu_func= next_rs_entry[i].alu_func;
-                        issue_pack[0].mult= next_rs_entry[i].mult;
-                        issue_pack[0].rd_mem= next_rs_entry[i].rd_mem;
-                        issue_pack[0].wr_mem= next_rs_entry[i].wr_mem;
-                        issue_pack[0].cond_branch= next_rs_entry[i].cond_branch;
-                        issue_pack[0].uncond_branch= next_rs_entry[i].uncond_branch;
-                        issue_pack[0].csr_op= next_rs_entry[i].csr_op;
-                        issue_pack[0].halt= next_rs_entry[i].halt;
-                        issue_pack[0].illegal= next_rs_entry[i].illegal;
-                        issue_pack[0].bmask_index= next_rs_entry[i].bmask_index;
-                        issue_pack[0].bmask= next_rs_entry[i].bmask;
-                        issue_pack[0].T= next_rs_entry[i].T;
-                        issue_pack[0].t1= next_rs_entry[i].t1;
-                        issue_pack[0].t2= next_rs_entry[i].t2;
-                        issue_pack[0].rob_index = next_rs_entry[i].rob_index;
-
+                        issue_pack[0].inst= internal_rs_entry[i].inst;
+                        issue_pack[0].PC= internal_rs_entry[i].PC;
+                        issue_pack[0].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[0].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[0].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[0].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[0].alu_func= internal_rs_entry[i].alu_func;
+                        issue_pack[0].mult= internal_rs_entry[i].mult;
+                        issue_pack[0].rd_mem= internal_rs_entry[i].rd_mem;
+                        issue_pack[0].wr_mem= internal_rs_entry[i].wr_mem;
+                        issue_pack[0].cond_branch= internal_rs_entry[i].cond_branch;
+                        issue_pack[0].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[0].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[0].halt= internal_rs_entry[i].halt;
+                        issue_pack[0].illegal= internal_rs_entry[i].illegal;
+                        issue_pack[0].bmask_index= internal_rs_entry[i].bmask_index;
+                        issue_pack[0].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[0].T= internal_rs_entry[i].T;
+                        issue_pack[0].t1= internal_rs_entry[i].t1;
+                        issue_pack[0].t2= internal_rs_entry[i].t2;
+                        issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
                         issue_pack[1].valid = 'b0;
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -428,28 +435,29 @@ module rs(
                     if(issue_bus[0][i] && cdb_gnt_alu[0]) begin
                         //to issue pack 0
                         issue_pack[0].valid = 'b1;
-                        issue_pack[0].inst= next_rs_entry[i].inst;
-                        issue_pack[0].PC= next_rs_entry[i].PC;
-                        issue_pack[0].NPC= next_rs_entry[i].NPC;
-                        issue_pack[0].opa_select= next_rs_entry[i].opa_select;
-                        issue_pack[0].opb_select= next_rs_entry[i].opb_select;
-                        issue_pack[0].has_dest= next_rs_entry[i].has_dest;
-                        issue_pack[0].alu_func= next_rs_entry[i].alu_func;
-                        issue_pack[0].mult= next_rs_entry[i].mult;
-                        issue_pack[0].rd_mem= next_rs_entry[i].rd_mem;
-                        issue_pack[0].wr_mem= next_rs_entry[i].wr_mem;
-                        issue_pack[0].cond_branch= next_rs_entry[i].cond_branch;
-                        issue_pack[0].uncond_branch= next_rs_entry[i].uncond_branch;
-                        issue_pack[0].csr_op= next_rs_entry[i].csr_op;
-                        issue_pack[0].halt= next_rs_entry[i].halt;
-                        issue_pack[0].illegal= next_rs_entry[i].illegal;
-                        issue_pack[0].bmask_index= next_rs_entry[i].bmask_index;
-                        issue_pack[0].bmask= next_rs_entry[i].bmask;
-                        issue_pack[0].T= next_rs_entry[i].T;
-                        issue_pack[0].t1= next_rs_entry[i].t1;
-                        issue_pack[0].t2= next_rs_entry[i].t2;
-                        issue_pack[0].rob_index = next_rs_entry[i].rob_index;
-                        
+                        issue_pack[0].inst= internal_rs_entry[i].inst;
+                        issue_pack[0].PC= internal_rs_entry[i].PC;
+                        issue_pack[0].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[0].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[0].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[0].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[0].alu_func= internal_rs_entry[i].alu_func;
+                        issue_pack[0].mult= internal_rs_entry[i].mult;
+                        issue_pack[0].rd_mem= internal_rs_entry[i].rd_mem;
+                        issue_pack[0].wr_mem= internal_rs_entry[i].wr_mem;
+                        issue_pack[0].cond_branch= internal_rs_entry[i].cond_branch;
+                        issue_pack[0].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[0].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[0].halt= internal_rs_entry[i].halt;
+                        issue_pack[0].illegal= internal_rs_entry[i].illegal;
+                        issue_pack[0].bmask_index= internal_rs_entry[i].bmask_index;
+                        issue_pack[0].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[0].T= internal_rs_entry[i].T;
+                        issue_pack[0].t1= internal_rs_entry[i].t1;
+                        issue_pack[0].t2= internal_rs_entry[i].t2;
+                        issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
+                        alu_used[0]=1;
+
                         //mark as not busy
                         next_rs_entry[i] = '0;
 
@@ -458,27 +466,28 @@ module rs(
                     if(issue_bus[1][i] && cdb_gnt_alu[1]) begin
                         //to issue pack 1
                         issue_pack[1].valid = 'b1;
-                        issue_pack[1].inst= next_rs_entry[i].inst;
-                        issue_pack[1].PC= next_rs_entry[i].PC;
-                        issue_pack[1].NPC= next_rs_entry[i].NPC;
-                        issue_pack[1].opa_select= next_rs_entry[i].opa_select;
-                        issue_pack[1].opb_select= next_rs_entry[i].opb_select;
-                        issue_pack[1].has_dest= next_rs_entry[i].has_dest;
-                        issue_pack[1].alu_func= next_rs_entry[i].alu_func;
-                        issue_pack[1].mult= next_rs_entry[i].mult;
-                        issue_pack[1].rd_mem= next_rs_entry[i].rd_mem;
-                        issue_pack[1].wr_mem= next_rs_entry[i].wr_mem;
-                        issue_pack[1].cond_branch= next_rs_entry[i].cond_branch;
-                        issue_pack[1].uncond_branch= next_rs_entry[i].uncond_branch;
-                        issue_pack[1].csr_op= next_rs_entry[i].csr_op;
-                        issue_pack[1].halt= next_rs_entry[i].halt;
-                        issue_pack[1].illegal= next_rs_entry[i].illegal;
-                        issue_pack[1].bmask_index= next_rs_entry[i].bmask_index;
-                        issue_pack[1].bmask= next_rs_entry[i].bmask;
-                        issue_pack[1].T= next_rs_entry[i].T;
-                        issue_pack[1].t1= next_rs_entry[i].t1;
-                        issue_pack[1].t2= next_rs_entry[i].t2;
-                        issue_pack[1].rob_index = next_rs_entry[i].rob_index;
+                        issue_pack[1].inst= internal_rs_entry[i].inst;
+                        issue_pack[1].PC= internal_rs_entry[i].PC;
+                        issue_pack[1].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[1].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[1].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[1].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[1].alu_func= internal_rs_entry[i].alu_func;
+                        issue_pack[1].mult= internal_rs_entry[i].mult;
+                        issue_pack[1].rd_mem= internal_rs_entry[i].rd_mem;
+                        issue_pack[1].wr_mem= internal_rs_entry[i].wr_mem;
+                        issue_pack[1].cond_branch= internal_rs_entry[i].cond_branch;
+                        issue_pack[1].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[1].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[1].halt= internal_rs_entry[i].halt;
+                        issue_pack[1].illegal= internal_rs_entry[i].illegal;
+                        issue_pack[1].bmask_index= internal_rs_entry[i].bmask_index;
+                        issue_pack[1].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[1].T= internal_rs_entry[i].T;
+                        issue_pack[1].t1= internal_rs_entry[i].t1;
+                        issue_pack[1].t2= internal_rs_entry[i].t2;
+                        issue_pack[1].rob_index = internal_rs_entry[i].rob_index;
+                        alu_used[1]=1;
                     
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -493,28 +502,28 @@ module rs(
                     if(issue_bus[0][i] && cdb_gnt_alu[0]) begin
                         //to issue pack 0
                         issue_pack[1].valid= 'b1;
-                        issue_pack[1].inst= next_rs_entry[i].inst;
-                        issue_pack[1].PC= next_rs_entry[i].PC;
-                        issue_pack[1].NPC= next_rs_entry[i].NPC;
-                        issue_pack[1].opa_select= next_rs_entry[i].opa_select;
-                        issue_pack[1].opb_select= next_rs_entry[i].opb_select;
-                        issue_pack[1].has_dest= next_rs_entry[i].has_dest;
-                        issue_pack[1].alu_func= next_rs_entry[i].alu_func;
-                        issue_pack[1].mult= next_rs_entry[i].mult;
-                        issue_pack[1].rd_mem= next_rs_entry[i].rd_mem;
-                        issue_pack[1].wr_mem= next_rs_entry[i].wr_mem;
-                        issue_pack[1].cond_branch= next_rs_entry[i].cond_branch;
-                        issue_pack[1].uncond_branch= next_rs_entry[i].uncond_branch;
-                        issue_pack[1].csr_op= next_rs_entry[i].csr_op;
-                        issue_pack[1].halt= next_rs_entry[i].halt;
-                        issue_pack[1].illegal= next_rs_entry[i].illegal;
-                        issue_pack[1].bmask_index= next_rs_entry[i].bmask_index;
-                        issue_pack[1].bmask= next_rs_entry[i].bmask;
-                        issue_pack[1].T= next_rs_entry[i].T;
-                        issue_pack[1].t1= next_rs_entry[i].t1;
-                        issue_pack[1].t2= next_rs_entry[i].t2;
-                        issue_pack[1].rob_index = next_rs_entry[i].rob_index;
-
+                        issue_pack[1].inst= internal_rs_entry[i].inst;
+                        issue_pack[1].PC= internal_rs_entry[i].PC;
+                        issue_pack[1].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[1].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[1].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[1].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[1].alu_func= internal_rs_entry[i].alu_func;
+                        issue_pack[1].mult= internal_rs_entry[i].mult;
+                        issue_pack[1].rd_mem= internal_rs_entry[i].rd_mem;
+                        issue_pack[1].wr_mem= internal_rs_entry[i].wr_mem;
+                        issue_pack[1].cond_branch= internal_rs_entry[i].cond_branch;
+                        issue_pack[1].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[1].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[1].halt= internal_rs_entry[i].halt;
+                        issue_pack[1].illegal= internal_rs_entry[i].illegal;
+                        issue_pack[1].bmask_index= internal_rs_entry[i].bmask_index;
+                        issue_pack[1].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[1].T= internal_rs_entry[i].T;
+                        issue_pack[1].t1= internal_rs_entry[i].t1;
+                        issue_pack[1].t2= internal_rs_entry[i].t2;
+                        issue_pack[1].rob_index = internal_rs_entry[i].rob_index;
+                        alu_used [0] = 1;
                         issue_pack[0].valid = 'b0;
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -538,27 +547,27 @@ module rs(
             for (int i = 0; i<`RS_SZ; i++)begin
                 if(cond_branch_issue_mask[i]) begin
                     issue_pack[2].valid= 'b1;
-                    issue_pack[2].inst= next_rs_entry[i].inst;
-                    issue_pack[2].PC= next_rs_entry[i].PC;
-                    issue_pack[2].NPC= next_rs_entry[i].NPC;
-                    issue_pack[2].opa_select= next_rs_entry[i].opa_select;
-                    issue_pack[2].opb_select= next_rs_entry[i].opb_select;
-                    issue_pack[2].has_dest= next_rs_entry[i].has_dest;
-                    issue_pack[2].alu_func= next_rs_entry[i].alu_func;
-                    issue_pack[2].mult= next_rs_entry[i].mult;
-                    issue_pack[2].rd_mem= next_rs_entry[i].rd_mem;
-                    issue_pack[2].wr_mem= next_rs_entry[i].wr_mem;
-                    issue_pack[2].cond_branch= next_rs_entry[i].cond_branch;
+                    issue_pack[2].inst= internal_rs_entry[i].inst;
+                    issue_pack[2].PC= internal_rs_entry[i].PC;
+                    issue_pack[2].NPC= internal_rs_entry[i].NPC;
+                    issue_pack[2].opa_select= internal_rs_entry[i].opa_select;
+                    issue_pack[2].opb_select= internal_rs_entry[i].opb_select;
+                    issue_pack[2].has_dest= internal_rs_entry[i].has_dest;
+                    issue_pack[2].alu_func= internal_rs_entry[i].alu_func;
+                    issue_pack[2].mult= internal_rs_entry[i].mult;
+                    issue_pack[2].rd_mem= internal_rs_entry[i].rd_mem;
+                    issue_pack[2].wr_mem= internal_rs_entry[i].wr_mem;
+                    issue_pack[2].cond_branch= internal_rs_entry[i].cond_branch;
                     issue_pack[2].uncond_branch= 'b0;
-                    issue_pack[2].csr_op= next_rs_entry[i].csr_op;
-                    issue_pack[2].halt= next_rs_entry[i].halt;
-                    issue_pack[2].illegal= next_rs_entry[i].illegal;
-                    issue_pack[2].bmask_index= next_rs_entry[i].bmask_index;
-                    issue_pack[2].bmask= next_rs_entry[i].bmask;
-                    issue_pack[2].T= next_rs_entry[i].T;
-                    issue_pack[2].t1= next_rs_entry[i].t1;
-                    issue_pack[2].t2= next_rs_entry[i].t2;
-                    issue_pack[2].rob_index = next_rs_entry[i].rob_index;
+                    issue_pack[2].csr_op= internal_rs_entry[i].csr_op;
+                    issue_pack[2].halt= internal_rs_entry[i].halt;
+                    issue_pack[2].illegal= internal_rs_entry[i].illegal;
+                    issue_pack[2].bmask_index= internal_rs_entry[i].bmask_index;
+                    issue_pack[2].bmask= internal_rs_entry[i].bmask;
+                    issue_pack[2].T= internal_rs_entry[i].T;
+                    issue_pack[2].t1= internal_rs_entry[i].t1;
+                    issue_pack[2].t2= internal_rs_entry[i].t2;
+                    issue_pack[2].rob_index = internal_rs_entry[i].rob_index;
                     //mark as not busy
                     next_rs_entry[i] = '0;
                 end
@@ -566,8 +575,14 @@ module rs(
         end
 
 
-        rs_empty_entries_num = $countones(next_empty_entry_mask) >= 2? 2'b10 : 
-                                $countones(next_empty_entry_mask) >= 1? 2'b01 : 2'b00;
+        for(int i = 0; i< `RS_SZ; i++)begin
+            if(!next_rs_entry[i].busy) begin
+                rs_empty_entries_num  = rs_empty_entries_num  + 1;
+                if(rs_empty_entries_num == 2) begin
+                    break;
+                end
+            end
+        end
 
     end
 
