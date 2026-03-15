@@ -24,7 +24,7 @@ module branch_stack (
     typedef struct packed {
         B_MASK                         branch_idx;
         logic [`MT_SIZE-1:0]           maptable;
-        logic [`FLIST_SZ-1:0]        freelist_tail_idx;
+        FLIST_IDX              freelist_tail_idx;
         logic                          resolved;
         ADDR                           pc;
         ROB_IDX                        rob_index;
@@ -50,6 +50,10 @@ module branch_stack (
         stack_ptr_temp1 = stack_ptr;
         stack_ptr_temp2 = stack_ptr;
         stack_next = stack; 
+        mt_snapshot_out = '0;
+        tail_ptr_out     = '0;
+        rob_index_out = '0;
+        pc_snapshot_out = '0;
         
         //step 1 : mark as resolved
         if(resolved) begin

@@ -8,6 +8,8 @@ module fetch_buffer #(
     input logic                mispredicted,
     input logic [1:0]          dispatch_num_req,//from dispatch stage
     input F_D_PACKET           fetch_pack [`N-1:0],          //from fetch stage
+    input logic [1:0]          inflight_num,
+
 
     output logic  [1:0]         can_fetch_num,                   //to fetch stage
     output F_D_PACKET           dispatch_pack [`N-1:0]        //to dispatch stage
@@ -21,6 +23,8 @@ module fetch_buffer #(
     logic [BUFFER_CNT-1:0] head, head_n;
     logic [BUFFER_CNT-1:0] tail, tail_n;
     logic [BUFFER_CNT:0]   count, count_n;
+    logic [BUFFER_CNT:0]   effective_count;
+    assign effective_count = count_n + inflight_num;
     
     always_comb begin
         //default
@@ -30,18 +34,39 @@ module fetch_buffer #(
         buffer_n = buffer;
         dispatch_pack = '{default:'0};
 
+
         //enqueue
-        for(int i = 0; i < `N; i++) begin
-            if(fetch_pack[i].valid && count_n < DEPTH ) begin
-                buffer_n[tail_n] = fetch_pack[i];
-                if(tail_n == DEPTH -1) begin
-                    tail_n = '0;
-                end else begin
-                    tail_n = tail_n + 1;
-                end
-                count_n = count_n + 1'b1;
+         if(fetch_pack[0].valid && count_n < DEPTH ) begin
+            buffer_n[tail_n] = fetch_pack[0];
+            if(tail_n == DEPTH -1) begin
+                tail_n = '0;
+            end else begin
+                tail_n = tail_n + 1;
             end
+            count_n = count_n + 1'b1;
         end
+
+        if(fetch_pack[1].valid && count_n < DEPTH) begin
+            buffer_n[tail_n] = fetch_pack[1];
+            if(tail_n == DEPTH -1) begin
+                tail_n = '0;
+            end else begin
+                tail_n = tail_n + 1;
+            end
+            count_n = count_n + 1'b1;
+        end
+
+        // for(int i = 0; i < `N; i++) begin
+        //     if(fetch_pack[i].valid && count_n < DEPTH ) begin
+        //         buffer_n[tail_n] = fetch_pack[i];
+        //         if(tail_n == DEPTH -1) begin
+        //             tail_n = '0;
+        //         end else begin
+        //             tail_n = tail_n + 1;
+        //         end
+        //         count_n = count_n + 1'b1;
+        //     end
+        // end
 
         //dequeue
         //request 2 instructions, but only 1 instruction is available
@@ -74,8 +99,8 @@ module fetch_buffer #(
             tail   <= tail_n;
             count  <= count_n;
             buffer <= buffer_n;
-            can_fetch_num <= (DEPTH - count_n >= 2) ? 2'd2 :
-                             (DEPTH - count_n >= 1) ? 2'd1 : 2'd0;
+            can_fetch_num <= (DEPTH - effective_count >= 2) ? 2'd2 :
+                             (DEPTH - effective_count >= 1) ? 2'd1 : 2'd0;
         end
     end
 

@@ -123,7 +123,7 @@ module stage_dispatch (
 
     always_comb begin
         for(int i = 0; i < `N; i++) begin
-            dispatch_valid[i] = f_d_pack[i].valid && decode_pack[i].has_dest; // only request from freelist when we have a destination register to allocate
+            dispatch_valid[i] = f_d_pack[i].valid && decode_pack[i].has_dest && (rd[i] != '0); // only request from freelist when we have a destination register to allocate
         end
     end
 

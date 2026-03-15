@@ -90,6 +90,8 @@ module cpu (
     F_D_PACKET  f_pack [`N-1:0];
     F_D_PACKET  f_pack_reg [`N-1:0];
     logic [1:0] dispatch_num_reg ;
+    logic [1:0] inflight_num;
+    assign inflight_num = f_pack[0].valid + f_pack[1].valid;
  
     // Outputs from Fetch buffer
     F_D_PACKET  f_d_pack[`N-1:0];
@@ -124,8 +126,9 @@ module cpu (
     X_C_PACKET [`N-1:0] cdb;
 
     // Outputs from Retire-Stage
-    logic [1:0] freelist_free_num;
+    FL_RETIRE_PACKET [`N-1:0] freelist_pack;
     logic       stall_fetch;
+    RETIRE_PACKET [`N-1:0] commit_pack;
 
 
     // ROB
@@ -192,8 +195,7 @@ module cpu (
     MEM_COMMAND Dmem_command;
     MEM_SIZE    Dmem_size;
 
-    // Outputs from Retire stage
-    RETIRE_PACKET [`N-1:0] commit_pack;
+
 
     // Logic for stalling memory stage
     logic       load_stall;
@@ -334,6 +336,7 @@ module cpu (
         .mispredicted(global_mispredict),
         .dispatch_num_req(dispatch_num_reg),
         .fetch_pack(f_pack_reg),
+        .inflight_num(inflight_num),
 
         // Output
         .can_fetch_num(can_fetch_num),
@@ -382,10 +385,17 @@ module cpu (
     //////////////////////////////////////////////////
 
     always_ff @(posedge clock) begin
-        if(reset || global_mispredict) begin
-            d_s_pack_reg    <= '{default: '0};
+        if(reset) begin
+            d_s_pack_reg <= '{default: '0};
         end else begin
-            d_s_pack_reg    <= d_s_pack;
+            for(int i = 0; i < `N+1; i++) begin
+                if(global_mispredict && 
+                (d_s_pack[i].bmask & global_mispredict_index)) begin
+                    d_s_pack_reg[i] <= '{default: '0};
+                end else begin
+                    d_s_pack_reg[i] <= d_s_pack[i];
+                end
+            end
         end
     end
 
@@ -418,10 +428,17 @@ module cpu (
     //////////////////////////////////////////////////
 
     always_ff @(posedge clock) begin
-        if(reset || global_mispredict) begin
-            s_x_pack_reg    <= '{default: '0};;
+        if(reset) begin
+            s_x_pack_reg <= '{default: '0};
         end else begin
-            s_x_pack_reg    <= s_x_pack;
+            for(int i = 0; i < `N+1; i++) begin
+                if(global_mispredict && 
+                (s_x_pack[i].bmask & global_mispredict_index)) begin
+                    s_x_pack_reg[i] <= '{default: '0};
+                end else begin
+                    s_x_pack_reg[i] <= s_x_pack[i];
+                end
+            end
         end
     end
 
@@ -571,7 +588,7 @@ module cpu (
         .rob_commit_pack(rob_commit_pack),
 
         // Output
-        .freelist_free_num(freelist_free_num),
+        .freelist_pack(freelist_pack),
         .commit_pack(commit_pack),
         .stall_fetch(stall_fetch)
     );
@@ -630,8 +647,8 @@ module cpu (
         // Input
         .clock(clock),
         .reset(reset),
-        .retire_num(freelist_free_num),
-        .Branch_stack_H(tail_ptr_out),
+        .freelist_pack(freelist_pack),
+        .Branch_stack_T(tail_ptr_out),
         .dispatch_valid(dispatch_valid),
         .is_branch(branch_encountered),
         .mispredicted(global_mispredict),

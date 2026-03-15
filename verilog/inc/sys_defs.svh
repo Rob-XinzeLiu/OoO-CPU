@@ -521,5 +521,10 @@ typedef struct packed{
     logic           illegal;
 } RETIRE_PACKET;
 
+typedef struct packed{
+    logic           valid;
+    PRF_IDX         t_old;
+} FL_RETIRE_PACKET;
+
 
 `endif // __SYS_DEFS_SVH__
