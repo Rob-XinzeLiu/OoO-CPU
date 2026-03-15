@@ -72,7 +72,7 @@ module testbench;
     always_ff @(posedge clock) begin
         if (reset) begin
             tb_PC <= 32'b0;
-        end else if (branch_taken) begin
+        end else if (mispredicted) begin
             // step 8: branch overrides the increment
             tb_PC <= branch_target;
         end else begin

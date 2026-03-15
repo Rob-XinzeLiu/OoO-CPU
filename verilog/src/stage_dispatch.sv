@@ -210,7 +210,7 @@ module stage_dispatch (
                     dispatch_pack[0].NPC = f_d_pack[0].NPC;
                     dispatch_pack[0].opa_select = decode_pack[0].opa_select;
                     dispatch_pack[0].opb_select = decode_pack[0].opb_select;
-                    dispatch_pack[0].has_dest = decode_pack[0].has_dest;
+                    dispatch_pack[0].has_dest = decode_pack[0].has_dest && (rd[0] != '0);
                     dispatch_pack[0].alu_func = decode_pack[0].alu_func;
                     dispatch_pack[0].mult = decode_pack[0].mult;
                     dispatch_pack[0].rd_mem = decode_pack[0].rd_mem;
@@ -247,7 +247,7 @@ module stage_dispatch (
                     dispatch_pack[0].NPC = f_d_pack[0].NPC;
                     dispatch_pack[0].opa_select = decode_pack[0].opa_select;
                     dispatch_pack[0].opb_select = decode_pack[0].opb_select;
-                    dispatch_pack[0].has_dest = decode_pack[0].has_dest;
+                    dispatch_pack[0].has_dest = decode_pack[0].has_dest && (rd[0] != '0);
                     dispatch_pack[0].alu_func = decode_pack[0].alu_func;
                     dispatch_pack[0].mult = decode_pack[0].mult;
                     dispatch_pack[0].rd_mem = decode_pack[0].rd_mem;
@@ -286,7 +286,7 @@ module stage_dispatch (
                     dispatch_pack[0].NPC = f_d_pack[0].NPC;
                     dispatch_pack[0].opa_select = decode_pack[0].opa_select;
                     dispatch_pack[0].opb_select = decode_pack[0].opb_select;
-                    dispatch_pack[0].has_dest = decode_pack[0].has_dest;
+                    dispatch_pack[0].has_dest = decode_pack[0].has_dest && (rd[0] != '0) ;
                     dispatch_pack[0].alu_func = decode_pack[0].alu_func;
                     dispatch_pack[0].mult = decode_pack[0].mult;
                     dispatch_pack[0].rd_mem = decode_pack[0].rd_mem;
@@ -325,7 +325,7 @@ module stage_dispatch (
                     dispatch_pack[1].NPC = f_d_pack[1].NPC;
                     dispatch_pack[1].opa_select = decode_pack[1].opa_select;
                     dispatch_pack[1].opb_select = decode_pack[1].opb_select;
-                    dispatch_pack[1].has_dest = decode_pack[1].has_dest;
+                    dispatch_pack[1].has_dest = decode_pack[1].has_dest && (rd[1] != '0) ;
                     dispatch_pack[1].alu_func = decode_pack[1].alu_func;
                     dispatch_pack[1].mult = decode_pack[1].mult;
                     dispatch_pack[1].rd_mem = decode_pack[1].rd_mem;
@@ -362,7 +362,7 @@ module stage_dispatch (
                         dispatch_pack[i].NPC = f_d_pack[i].NPC;
                         dispatch_pack[i].opa_select = decode_pack[i].opa_select;
                         dispatch_pack[i].opb_select = decode_pack[i].opb_select;
-                        dispatch_pack[i].has_dest = decode_pack[i].has_dest;
+                        dispatch_pack[i].has_dest = decode_pack[i].has_dest && (rd[i] != '0);
                         dispatch_pack[i].alu_func = decode_pack[i].alu_func;
                         dispatch_pack[i].mult = decode_pack[i].mult;
                         dispatch_pack[i].rd_mem = decode_pack[i].rd_mem;
@@ -395,7 +395,7 @@ module stage_dispatch (
                     dispatch_pack[0].NPC = f_d_pack[0].NPC;
                     dispatch_pack[0].opa_select = decode_pack[0].opa_select;
                     dispatch_pack[0].opb_select = decode_pack[0].opb_select;
-                    dispatch_pack[0].has_dest = decode_pack[0].has_dest;
+                    dispatch_pack[0].has_dest = decode_pack[0].has_dest && (rd[0] != '0);
                     dispatch_pack[0].alu_func = decode_pack[0].alu_func;
                     dispatch_pack[0].mult = decode_pack[0].mult;
                     dispatch_pack[0].rd_mem = decode_pack[0].rd_mem;
@@ -431,7 +431,7 @@ module stage_dispatch (
                     dispatch_pack[1].NPC = f_d_pack[1].NPC;
                     dispatch_pack[1].opa_select = decode_pack[1].opa_select;
                     dispatch_pack[1].opb_select = decode_pack[1].opb_select;
-                    dispatch_pack[1].has_dest = decode_pack[1].has_dest;
+                    dispatch_pack[1].has_dest = decode_pack[1].has_dest && (rd[1] != '0);
                     dispatch_pack[1].alu_func = decode_pack[1].alu_func;
                     dispatch_pack[1].mult = decode_pack[1].mult;
                     dispatch_pack[1].rd_mem = decode_pack[1].rd_mem;
@@ -475,7 +475,7 @@ module stage_dispatch (
                     dispatch_pack[0].NPC = f_d_pack[0].NPC;
                     dispatch_pack[0].opa_select = decode_pack[0].opa_select;
                     dispatch_pack[0].opb_select = decode_pack[0].opb_select;
-                    dispatch_pack[0].has_dest = decode_pack[0].has_dest;
+                    dispatch_pack[0].has_dest = decode_pack[0].has_dest && (rd[0] != '0);
                     dispatch_pack[0].alu_func = decode_pack[0].alu_func;
                     dispatch_pack[0].mult = decode_pack[0].mult;
                     dispatch_pack[0].rd_mem = decode_pack[0].rd_mem;
@@ -508,7 +508,7 @@ module stage_dispatch (
                     dispatch_pack[1].NPC = f_d_pack[1].NPC;
                     dispatch_pack[1].opa_select = decode_pack[1].opa_select;
                     dispatch_pack[1].opb_select = decode_pack[1].opb_select;
-                    dispatch_pack[1].has_dest = decode_pack[1].has_dest;
+                    dispatch_pack[1].has_dest = decode_pack[1].has_dest && (rd[0] != '0);
                     dispatch_pack[1].alu_func = decode_pack[1].alu_func;
                     dispatch_pack[1].mult = decode_pack[1].mult;
                     dispatch_pack[1].rd_mem = decode_pack[1].rd_mem;

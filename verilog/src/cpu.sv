@@ -172,17 +172,10 @@ module cpu (
         NONE  = 3'd4
      } cdb_arbiter_state_t;
 
-    logic   cdb_req_mult, cdb_gnt_mult;
+    logic   cdb_req_mult;
     logic   cdb_req_alu [`N-1:0];
     logic   cdb_gnt_alu [`N-1:0];
-    logic   alu_used [`N-1:0];
     cdb_arbiter_state_t cdb_arbiter_state;
-    logic [`N-1:0] alu_ready_reg1;
-    logic [`N-1:0] alu_ready_reg2;
-    logic mult_ready_reg1;
-    logic mult_ready_reg2;
-    logic [`N-1:0] alu_ready_reg_in;
-    logic mult_ready_reg_in;
 
     // RS
     logic [1:0] rs_empty_entries_num;
@@ -454,8 +447,6 @@ module cpu (
         .clock (clock),
         .reset (reset),
         .s_x_pack(s_x_pack_reg),
-        .mult_ready(mult_ready_reg_in),
-        .alu_ready(alu_ready_reg_in),
         
         // Output
         .x_c_pack(x_c_pack),
@@ -529,29 +520,7 @@ module cpu (
                 cdb_gnt_alu[1] = 0;
             end
         endcase
-    end
-
-
-    always_ff @(posedge clock) begin
-        if (reset) begin
-            for (int i = 0; i < `N; i++) begin
-                alu_ready_reg1[i] <= 'd0;
-                alu_ready_reg2[i] <= 'd0;
-            end
-            mult_ready_reg1 <= 1'b0;
-            mult_ready_reg2 <= 1'b0;
-        end else begin
-            for (int i = 0; i < `N; i++) begin
-                alu_ready_reg1[i] <= alu_used[i];
-                alu_ready_reg2[i] <= alu_ready_reg1[i];
-            end
-            mult_ready_reg1 <= cdb_req_mult; // we always grant mult, so just check if there's a mult request
-            mult_ready_reg2 <= mult_ready_reg1;
-        end
-    end
-
-    assign alu_ready_reg_in = alu_ready_reg2;
-    assign mult_ready_reg_in = mult_ready_reg2;  
+    end 
 
     //////////////////////////////////////////////////
     //                                              //
@@ -712,7 +681,6 @@ module cpu (
 
         // Output
         .cdb_req_alu(cdb_req_alu),
-        .alu_used(alu_used),
         .issue_pack(d_s_pack),
         .rs_empty_entries_num(rs_empty_entries_num),
         .dbg_issue_count()

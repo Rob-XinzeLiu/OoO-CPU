@@ -19,7 +19,6 @@ module rs(
     //arbitrate for CDB one cycle earlier
     input logic                             cdb_gnt_alu                 [`N-1:0],
     output logic                            cdb_req_alu                 [`N-1:0],
-    output logic                            alu_used                    [`N-1:0],
     //to issue stage
     output D_S_PACKET                       issue_pack                    [`N:0], //conditional branch goes to issue_pack[2]
     output logic [1:0]                      rs_empty_entries_num                ,
@@ -129,7 +128,6 @@ module rs(
         issue_pack = '{default:'0};
         mult_mask = '0;
         cdb_req_alu = '{default:'0};
-        alu_used = '{default:'0};
         dbg_issue_count = 'd0;
         cond_branch_mask =  '0;
         rs_empty_entries_num  = '0;
@@ -390,7 +388,6 @@ module rs(
                         issue_pack[1].t1= internal_rs_entry[i].t1;
                         issue_pack[1].t2= internal_rs_entry[i].t2;
                         issue_pack[1].rob_index = internal_rs_entry[i].rob_index;
-                        alu_used[0]='1;
                         //mark as not busy
                         next_rs_entry[i] = '0;
 
@@ -462,7 +459,6 @@ module rs(
                         issue_pack[0].t1= internal_rs_entry[i].t1;
                         issue_pack[0].t2= internal_rs_entry[i].t2;
                         issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
-                        alu_used[0]=1;
 
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -493,7 +489,6 @@ module rs(
                         issue_pack[1].t1= internal_rs_entry[i].t1;
                         issue_pack[1].t2= internal_rs_entry[i].t2;
                         issue_pack[1].rob_index = internal_rs_entry[i].rob_index;
-                        alu_used[1]=1;
                     
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -529,7 +524,6 @@ module rs(
                         issue_pack[1].t1= internal_rs_entry[i].t1;
                         issue_pack[1].t2= internal_rs_entry[i].t2;
                         issue_pack[1].rob_index = internal_rs_entry[i].rob_index;
-                        alu_used [0] = 1;
                         issue_pack[0].valid = 'b0;
                         //mark as not busy
                         next_rs_entry[i] = '0;
