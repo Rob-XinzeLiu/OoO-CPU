@@ -74,8 +74,8 @@ module rob(
 //////////////////////      Commit(Retire)     ////////////////////////
 //////////////////////                         ////////////////////////
 ///////////////////////////////////////////////////////////////////////
-        a = rob_array[(head_ptr) % `ROB_SZ].ready_retire;
-        b = rob_array[(head_ptr + 1) % `ROB_SZ].ready_retire;
+        a = (rob_count > 0) && rob_array[(head_ptr) % `ROB_SZ].ready_retire;
+        b = (rob_count > 1) && rob_array[(head_ptr + 1) % `ROB_SZ].ready_retire;
         retire_num = (a && b)? 2'b10 : 
                      (a && !b)? 2'b01 : 2'b00;
         

@@ -1,72 +1,44 @@
 `include "sys_defs.svh"
 
-module fetch_buffer #(
-    parameter int DEPTH = 8
-)(
+module fetch_buffer(
     input logic                clock,
     input logic                reset,
     input logic                mispredicted,
     input logic [1:0]          dispatch_num_req,//from dispatch stage
     input F_D_PACKET           fetch_pack [`N-1:0],          //from fetch stage
-    input logic [1:0]          inflight_num,
 
 
     output logic  [1:0]         can_fetch_num,                   //to fetch stage
     output F_D_PACKET           dispatch_pack [`N-1:0]        //to dispatch stage
 );
 
-    F_D_PACKET         buffer         [DEPTH-1:0];
-    F_D_PACKET         buffer_n       [DEPTH-1:0];
+    F_D_PACKET         buffer         [`FB_SZ-1:0];
+    F_D_PACKET         buffer_n       [`FB_SZ-1:0];
 
-    localparam int BUFFER_CNT = $clog2(DEPTH);
+    FB_IDX head, head_n;
+    FB_IDX tail, tail_n;
+    logic full, full_n;
+    FB_CNT   free_slots;
+    FB_CNT   valid_entries, valid_entries_n;
 
-    logic [BUFFER_CNT-1:0] head, head_n;
-    logic [BUFFER_CNT-1:0] tail, tail_n;
-    logic [BUFFER_CNT:0]   count, count_n;
-    logic [BUFFER_CNT:0]   effective_count;
-    assign effective_count = count_n + inflight_num;
     
     always_comb begin
         //default
         head_n   = head;
         tail_n   = tail;
-        count_n  = count;
+        full_n   = full;
         buffer_n = buffer;
+        valid_entries_n = valid_entries;
         dispatch_pack = '{default:'0};
 
 
         //enqueue
-         if(fetch_pack[0].valid && count_n < DEPTH ) begin
-            buffer_n[tail_n] = fetch_pack[0];
-            if(tail_n == DEPTH -1) begin
-                tail_n = '0;
-            end else begin
+        for(int i = 0; i < `N; i++) begin
+            if(fetch_pack[i].valid) begin
+                buffer_n[FB_IDX'(tail + i)] = fetch_pack[i];
                 tail_n = tail_n + 1;
             end
-            count_n = count_n + 1'b1;
         end
-
-        if(fetch_pack[1].valid && count_n < DEPTH) begin
-            buffer_n[tail_n] = fetch_pack[1];
-            if(tail_n == DEPTH -1) begin
-                tail_n = '0;
-            end else begin
-                tail_n = tail_n + 1;
-            end
-            count_n = count_n + 1'b1;
-        end
-
-        // for(int i = 0; i < `N; i++) begin
-        //     if(fetch_pack[i].valid && count_n < DEPTH ) begin
-        //         buffer_n[tail_n] = fetch_pack[i];
-        //         if(tail_n == DEPTH -1) begin
-        //             tail_n = '0;
-        //         end else begin
-        //             tail_n = tail_n + 1;
-        //         end
-        //         count_n = count_n + 1'b1;
-        //     end
-        // end
 
         //dequeue
         //request 2 instructions, but only 1 instruction is available
@@ -75,15 +47,25 @@ module fetch_buffer #(
         //request 1 instruction, but no instruction is available
         //request 0 instruction
         for (int i = 0; i < `N; i++) begin
-            if (i < dispatch_num_req && count_n > 0) begin
-                dispatch_pack[i] = buffer_n[head_n];
-                if (head_n == DEPTH - 1)
-                    head_n = '0;
-                else
-                    head_n = head_n + 1;
-                count_n = count_n - 1'b1;
+            if (i < dispatch_num_req && valid_entries > i) begin
+                dispatch_pack[i] = buffer[FB_IDX'(head + i)];
+                head_n = head_n + 1;
             end
         end
+
+        //calculate available slots
+        free_slots = (head_n >= tail_n) ? FB_IDX'(head_n - tail_n) :
+                                          FB_IDX'(`FB_SZ - (tail_n - head_n));
+        
+       full_n = full ? (head_n == tail_n) :  // 继承：满了之后只有dequeue才能变不满//inherit: if already full, only dequeue can make it not full
+                ((tail_n == head_n) && (tail_n != tail)); // 新满：这周期tail追上了head//new full: tail caught up with head this cycle
+        
+        valid_entries_n = `FB_SZ - free_slots;
+
+        can_fetch_num = full_n             ? 0 :
+                        (head_n == tail_n) ? 2 : // empty
+                        (free_slots >= 2)  ? 2 :
+                        (free_slots == 1)  ? 1 : 0;
 
     end
 
@@ -91,16 +73,15 @@ module fetch_buffer #(
         if (reset || mispredicted) begin
             head  <= '0;
             tail  <= '0;
-            count <= '0;
+            full <= '0;
             buffer <= '{default:'0};
-            can_fetch_num <= 2'd2; // can fetch 2 instructions when reset or mispredicted
+            valid_entries <= '0;
         end else begin
             head   <= head_n;
             tail   <= tail_n;
-            count  <= count_n;
+            full   <= full_n;
             buffer <= buffer_n;
-            can_fetch_num <= (DEPTH - effective_count >= 2) ? 2'd2 :
-                             (DEPTH - effective_count >= 1) ? 2'd1 : 2'd0;
+            valid_entries <= valid_entries_n;
         end
     end
 

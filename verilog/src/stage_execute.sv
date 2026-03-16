@@ -278,13 +278,16 @@ module stage_execute(
             end
         end
         
+        //need to know whether pack 0 is mult
         if (!mult_done) begin
-            if(s_x_pack[0].valid && s_x_pack[1].valid) begin
+            if(s_x_pack[0].valid && !s_x_pack[0].mult && s_x_pack[1].valid) begin
                 execute_output_type = BROADCAST_2_ALU;
-            end else if (s_x_pack[0].valid && !s_x_pack[1].valid) begin
+            end else if (s_x_pack[0].valid && !s_x_pack[0].mult && !s_x_pack[1].valid) begin
                 execute_output_type = BROADCAST_ALU_1;
             end else if (!s_x_pack[0].valid && s_x_pack[1].valid) begin
                 execute_output_type = BROADCAST_ALU_2;
+            end else if (s_x_pack[0].valid && s_x_pack[0].mult && s_x_pack[1].valid) begin
+                execute_output_type = BROADCAST_ALU_2; 
             end
         end
 

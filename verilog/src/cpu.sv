@@ -88,14 +88,13 @@ module cpu (
 
     // Outputs from IF-Stage and IF/ID Pipeline Register
     F_D_PACKET  f_pack [`N-1:0];
-    F_D_PACKET  f_pack_reg [`N-1:0];
     logic [1:0] dispatch_num_reg ;
-    logic [1:0] inflight_num;
-    assign inflight_num = f_pack[0].valid + f_pack[1].valid;
+
  
     // Outputs from Fetch buffer
     F_D_PACKET  f_d_pack[`N-1:0];
     logic [1:0] can_fetch_num;
+    logic [1:0] can_fetch_num_reg;
 
     // Outputs from Dispatch stage
     D_S_PACKET  dispatch_out_pack [`N-1:0];
@@ -267,6 +266,14 @@ module cpu (
     //                Fetch-stage                   //
     //                                              //
     //////////////////////////////////////////////////
+    always_ff @(posedge clock) begin
+        if(reset || global_mispredict) begin
+            can_fetch_num_reg <= 2;
+        end else begin
+            can_fetch_num_reg <= can_fetch_num;
+        end
+    end
+
     // stage_if no longer manages its own PC.
     // We pass tb_PC (from testbench) and tb_imem_data (direct memory line).
     stage_if stage_if_0 (
@@ -278,7 +285,7 @@ module cpu (
         .Imem_data      (tb_imem_data),
         // ---- other control ----
         .mispredict_pack (mispredict_pack_reg),
-        .fetch_req      (can_fetch_num),
+        .fetch_req      (can_fetch_num_reg),
         .stop_fetch     (stall_fetch),
         // ---- outputs ----
         .if_packet      (f_pack)
@@ -308,10 +315,8 @@ module cpu (
 
     always_ff @(posedge clock) begin
         if(reset || global_mispredict) begin
-            f_pack_reg    <= '{default: '0};
             dispatch_num_reg <= '0;
         end else begin
-            f_pack_reg    <= f_pack;
             dispatch_num_reg <= dispatch_num;
         end
     end
@@ -328,8 +333,7 @@ module cpu (
         .reset(reset),
         .mispredicted(global_mispredict),
         .dispatch_num_req(dispatch_num_reg),
-        .fetch_pack(f_pack_reg),
-        .inflight_num(inflight_num),
+        .fetch_pack(f_pack),
 
         // Output
         .can_fetch_num(can_fetch_num),

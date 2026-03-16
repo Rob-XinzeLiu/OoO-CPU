@@ -27,6 +27,7 @@
 // sizes
 `define ROB_SZ 8
 `define FLIST_SZ `ROB_SZ
+`define FB_SZ 8
 `define RS_SZ 8
 `define ARCH_REG_SZ 32
 `define PHYS_REG_SZ_P6 32
@@ -46,8 +47,10 @@
 
 typedef logic [$clog2(`ROB_SZ)-1:0] ROB_IDX;
 typedef logic [$clog2(`FLIST_SZ)-1:0] FLIST_IDX;
+typedef logic [$clog2(`FB_SZ)-1:0] FB_IDX;
 typedef logic [$clog2(`ROB_SZ+1)-1:0] ROB_CNT;
 typedef logic [$clog2(`FLIST_SZ+1)-1:0] FLIST_CNT;
+typedef logic [$clog2(`FB_SZ+1)-1:0] FB_CNT;
 typedef logic [$clog2(`RS_SZ + 1)-1:0] RS_CNT;
 typedef logic [$clog2(`BRANCH_STACK_DEPTH)-1:0]  BSTACK_IDX;
 typedef logic [$clog2(`BRANCH_STACK_DEPTH+1)-1:0]  BSTACK_CNT;
