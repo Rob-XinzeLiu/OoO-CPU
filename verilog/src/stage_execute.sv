@@ -402,7 +402,7 @@ module stage_execute(
     always_comb begin
         conditional_branch_out = '0;
         if(s_x_pack[2].valid) begin
-            if (!|(s_x_pack[2].bmask & mispredicted_bmask_index) ||
+            if (~|(s_x_pack[2].bmask & mispredicted_bmask_index) ||
                 (s_x_pack[2].bmask_index == mispredicted_bmask_index ) || !mispredicted) begin
                 conditional_branch_out.valid = 1'b1;
                 //conditional_branch_out.take_branch = take;

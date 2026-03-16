@@ -78,8 +78,10 @@ module branch_stack (
             end
 
             //clear all the younger entries
-            for (int i = stack_ptr_temp1 + 1; i < stack_ptr; i++) begin
-                stack_next[i].resolved = '0; 
+            for (int i = 0; i < stack_ptr; i++) begin
+                if(i >= stack_ptr_temp1 + 1) begin
+                    stack_next[i].resolved = '0; 
+                end
             end
             stack_ptr_next = stack_ptr_temp1; //point to the next free entry
             //TODO: LSQ
@@ -95,9 +97,11 @@ module branch_stack (
         
         if(first_not_resolved != 0) begin
             stack_ptr_next = stack_ptr_next - first_not_resolved; //pop all the resolved entries
-            for(int i = first_not_resolved; i<`BRANCH_STACK_DEPTH; i++)begin
-                stack_next[i-first_not_resolved] = stack_next[i];
-                stack_next[i] = '0;
+            for(int i = 0; i<`BRANCH_STACK_DEPTH; i++)begin
+                if(i >= first_not_resolved) begin
+                    stack_next[i-first_not_resolved] = stack_next[i];
+                    stack_next[i] = '0;
+                end
             end
         end 
     

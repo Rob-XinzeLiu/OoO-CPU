@@ -284,7 +284,7 @@ module cpu (
         .tb_PC          (tb_PC),
         .Imem_data      (tb_imem_data),
         // ---- other control ----
-        .mispredict_pack (mispredict_pack_reg),
+        .mispredict_pack (mispredict_pack_out),
         .fetch_req      (can_fetch_num_reg),
         .stop_fetch     (stall_fetch),
         // ---- outputs ----
