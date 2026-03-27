@@ -2,25 +2,23 @@
 module stage_issue(
     input logic                             clock                               , 
     input logic                             reset                               , 
-    input D_S_PACKET                        issue_pack                    [`N:0],
+    //from rs
+    input D_S_PACKET                        issue_pack                    [5:0],
     //from prf
-    input DATA          [`N:0]                    rs1_value                     ,
-    input DATA          [`N:0]                    rs2_value                     ,
+    input DATA          [5:0]                    rs1_value                     ,
+    input DATA          [5:0]                    rs2_value                     ,
     //For branch resolve
     input logic                             resolved                            ,
     input B_MASK                            resolved_bmask_index                , 
-    //For branch mispredict
-    input logic                             mispredicted                        ,
-    input B_MASK                            mispredicted_bmask_index            ,
     
 
-    output S_X_PACKET                       next_s_x_pack               [`N:0]
+    output S_X_PACKET                       next_s_x_pack               [5:0]
 );
 
 ////////////make sure not to latch a valid on mispredict on the top level module (CPU) and the register file is BYPASS_EN = 1
    
     always_comb begin 
-        for (int i = 0; i < `N + 1; i++)begin
+        for (int i = 0; i < 'd6; i++)begin
             next_s_x_pack[i].valid = issue_pack[i].valid;
             next_s_x_pack[i].inst = issue_pack[i].inst;
             next_s_x_pack[i].PC = issue_pack[i].PC;
@@ -41,13 +39,15 @@ module stage_issue(
             next_s_x_pack[i].bmask = issue_pack[i].bmask;
             next_s_x_pack[i].rob_index = issue_pack[i].rob_index;
             next_s_x_pack[i].T = issue_pack[i].T;
+            next_s_x_pack[i].t1 = issue_pack[i].t1;
+            next_s_x_pack[i].t2 = issue_pack[i].t2;
             next_s_x_pack[i].rs1_value = rs1_value[i];
             next_s_x_pack[i].rs2_value = rs2_value[i];
             next_s_x_pack[i].predict_taken = issue_pack[i].predict_taken;
             next_s_x_pack[i].predict_addr = issue_pack[i].predict_addr;     
         end
 
-        if (resolved && !mispredicted) begin
+        if (resolved) begin
                 for (int i = 0; i < `N + 1; i++) begin
                     if (next_s_x_pack[i].valid) begin
                         next_s_x_pack[i].bmask = next_s_x_pack[i].bmask & ~(resolved_bmask_index);

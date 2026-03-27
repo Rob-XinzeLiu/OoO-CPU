@@ -37,7 +37,8 @@
 `define BRANCH_STACK_DEPTH (2*`N)
 // worry about these later
 `define BRANCH_PRED_SZ xx
-`define LSQ_SZ xx
+`define LQ_SZ 4
+`define SQ_SZ 4
 
 // functional units (you should decide if you want more or fewer types of FUs)
 `define NUM_FU_ALU xx
@@ -46,9 +47,13 @@
 `define NUM_FU_STORE xx
 
 typedef logic [$clog2(`ROB_SZ)-1:0] ROB_IDX;
+typedef logic [$clog2(`LQ_SZ)-1:0] LQ_IDX;
+typedef logic [$clog2(`SQ_SZ)-1:0] SQ_IDX;
 typedef logic [$clog2(`FLIST_SZ)-1:0] FLIST_IDX;
 typedef logic [$clog2(`FB_SZ)-1:0] FB_IDX;
 typedef logic [$clog2(`ROB_SZ+1)-1:0] ROB_CNT;
+typedef logic [$clog2(`LQ_SZ+1)-1:0] LQ_CNT;
+typedef logic [$clog2(`SQ_SZ+1)-1:0] SQ_CNT;
 typedef logic [$clog2(`FLIST_SZ+1)-1:0] FLIST_CNT;
 typedef logic [$clog2(`FB_SZ+1)-1:0] FB_CNT;
 typedef logic [$clog2(`RS_SZ + 1)-1:0] RS_CNT;
@@ -72,6 +77,7 @@ typedef logic [31:0] ADDR;
 typedef logic [31:0] DATA;
 typedef logic [4:0] REG_IDX;
 typedef logic [2*`N-1:0] B_MASK;
+typedef logic [$clog2(`B_MASK+1)-1:0] BMASK_CNT;
 
 // the zero register
 // In RISC-V, any read of this register returns zero and any writes are thrown away
@@ -321,97 +327,97 @@ typedef enum logic [2:0] {
 /**
  * IF_ID Packet:ADDR
  * Data exchanged from the IF to the ID stage
- */
-typedef struct packed {
-    INST  inst;
-    ADDR  PC;
-    ADDR  NPC; // PC + 4
-    logic valid;
-} IF_ID_PACKET;
+//  */
+// typedef struct packed {
+//     INST  inst;
+//     ADDR  PC;
+//     ADDR  NPC; // PC + 4
+//     logic valid;
+// } IF_ID_PACKET;
 
-/**
- * ID_EX Packet:
- * Data exchanged from the ID to the EX stage
- */
-typedef struct packed {
-    INST inst;
-    ADDR PC;
-    ADDR NPC; // PC + 4
+// /**
+//  * ID_EX Packet:
+//  * Data exchanged from the ID to the EX stage
+//  */
+// typedef struct packed {
+//     INST inst;
+//     ADDR PC;
+//     ADDR NPC; // PC + 4
 
-    DATA rs1_value; // reg A value
-    DATA rs2_value; // reg B value
+//     DATA rs1_value; // reg A value
+//     DATA rs2_value; // reg B value
 
-    ALU_OPA_SELECT opa_select; // ALU opa mux select (ALU_OPA_xxx *)
-    ALU_OPB_SELECT opb_select; // ALU opb mux select (ALU_OPB_xxx *)
+//     ALU_OPA_SELECT opa_select; // ALU opa mux select (ALU_OPA_xxx *)
+//     ALU_OPB_SELECT opb_select; // ALU opb mux select (ALU_OPB_xxx *)
 
-    REG_IDX  dest_reg_idx;  // destination (writeback) register index
-    ALU_FUNC alu_func;      // ALU function select (ALU_xxx *)
-    logic    mult;          // Is inst a multiply instruction?
-    logic    rd_mem;        // Does inst read memory?
-    logic    wr_mem;        // Does inst write memory?
-    logic    cond_branch;   // Is inst a conditional branch?
-    logic    uncond_branch; // Is inst an unconditional branch?
-    logic    halt;          // Is this a halt?
-    logic    illegal;       // Is this instruction illegal?
-    logic    csr_op;        // Is this a CSR operation? (we only used this as a cheap way to get return code)
+//     REG_IDX  dest_reg_idx;  // destination (writeback) register index
+//     ALU_FUNC alu_func;      // ALU function select (ALU_xxx *)
+//     logic    mult;          // Is inst a multiply instruction?
+//     logic    rd_mem;        // Does inst read memory?
+//     logic    wr_mem;        // Does inst write memory?
+//     logic    cond_branch;   // Is inst a conditional branch?
+//     logic    uncond_branch; // Is inst an unconditional branch?
+//     logic    halt;          // Is this a halt?
+//     logic    illegal;       // Is this instruction illegal?
+//     logic    csr_op;        // Is this a CSR operation? (we only used this as a cheap way to get return code)
 
-    logic    valid;
-} ID_EX_PACKET;
+//     logic    valid;
+// } ID_EX_PACKET;
 
-/**
- * EX_MEM Packet:
- * Data exchanged from the EX to the MEM stage
- */
-typedef struct packed {
-    DATA alu_result;
-    ADDR NPC;
+// /**
+//  * EX_MEM Packet:
+//  * Data exchanged from the EX to the MEM stage
+//  */
+// typedef struct packed {
+//     DATA alu_result;
+//     ADDR NPC;
 
-    logic    take_branch; // Is this a taken branch?
-    // Pass-through from decode stage
-    DATA     rs2_value;
-    logic    rd_mem;
-    logic    wr_mem;
-    REG_IDX  dest_reg_idx;
-    logic    halt;
-    logic    illegal;
-    logic    csr_op;
-    logic    rd_unsigned; // Whether proc2Dmem_data is signed or unsigned
-    MEM_SIZE mem_size;
-    logic    valid;
-} EX_MEM_PACKET;
+//     logic    take_branch; // Is this a taken branch?
+//     // Pass-through from decode stage
+//     DATA     rs2_value;
+//     logic    rd_mem;
+//     logic    wr_mem;
+//     REG_IDX  dest_reg_idx;
+//     logic    halt;
+//     logic    illegal;
+//     logic    csr_op;
+//     logic    rd_unsigned; // Whether proc2Dmem_data is signed or unsigned
+//     MEM_SIZE mem_size;
+//     logic    valid;
+// } EX_MEM_PACKET;
 
-/**
- * MEM_WB Packet:
- * Data exchanged from the MEM to the WB stage
- *
- * Does not include data sent from the MEM stage to memory
- */
-typedef struct packed {
-    DATA    result;
-    ADDR    NPC;
-    REG_IDX dest_reg_idx; // writeback destination (ZERO_REG if no writeback)
-    logic   take_branch;
-    logic   halt;    // not used by wb stage
-    logic   illegal; // not used by wb stage
-    logic   valid;
-} MEM_WB_PACKET;
+// /**
+//  * MEM_WB Packet:
+//  * Data exchanged from the MEM to the WB stage
+//  *
+//  * Does not include data sent from the MEM stage to memory
+//  */
+// typedef struct packed {
+//     DATA    result;
+//     ADDR    NPC;
+//     REG_IDX dest_reg_idx; // writeback destination (ZERO_REG if no writeback)
+//     logic   take_branch;
+//     logic   halt;    // not used by wb stage
+//     logic   illegal; // not used by wb stage
+//     logic   valid;
+// } MEM_WB_PACKET;
 
-/**
- * Commit Packet:
- * This is an output of the processor and used in the testbench for counting
- * committed instructions
- *
- * It also acts as a "WB_PACKET", and can be reused in the final project with
- * some slight changes
- */
-typedef struct packed {
-    ADDR    NPC;
-    DATA    data;
-    REG_IDX reg_idx;
-    logic   halt;
-    logic   illegal;
-    logic   valid;
-} COMMIT_PACKET;
+// /**
+//  * Commit Packet:
+//  * This is an output of the processor and used in the testbench for counting
+//  * committed instructions
+//  *
+//  * It also acts as a "WB_PACKET", and can be reused in the final project with
+//  * some slight changes
+//  */
+// typedef struct packed {
+//     ADDR    NPC;
+//     DATA    data;
+//     REG_IDX reg_idx;
+//     logic   halt;
+//     logic   illegal;
+//     logic   valid;
+// } COMMIT_PACKET;
 
 typedef struct packed {
     ADDR    PC;
@@ -451,6 +457,9 @@ typedef struct packed{
     ROB_IDX         rob_index;
     ADDR            predict_addr;     // predict address
     logic           predict_taken;    // predict taken
+    LQ_IDX          lq_index;
+    SQ_IDX          sq_index;
+    logic [`SQ_SZ-1:0]   sq_valid_mask;//record when dispatch
 
     REG_IDX         dest_reg_idx;//for debug
 } D_S_PACKET;
@@ -476,6 +485,8 @@ typedef struct packed{
     B_MASK          bmask;
     ROB_IDX         rob_index;
     PRF_IDX         T;
+    PRF_IDX         t1;
+    PRF_IDX         t2;
     DATA            rs1_value;
     DATA            rs2_value;
     ADDR            predict_addr;     // predict address
@@ -504,12 +515,11 @@ typedef struct packed{
     logic           valid;
     ROB_IDX         complete_index;//rob
     PRF_IDX         complete_tag;
-    B_MASK          bmask_index;
-    B_MASK          bmask;
-    logic           has_dest;
-    logic           uncond_branch;//for unconditional branches, write NPC into PRF 
+    //B_MASK          bmask_index;
+   // B_MASK          bmask;
+    //logic           uncond_branch;//for unconditional branches, write NPC into PRF 
     DATA            result;//write to PRF
-    ADDR            NPC;//for unconditional branches, write NPC into PRF
+    //ADDR            NPC;//for unconditional branches, write NPC into PRF
 } X_C_PACKET;
 
 typedef struct packed{
@@ -522,6 +532,8 @@ typedef struct packed{
     PRF_IDX         t_old;//for tb
     logic           halt;
     logic           illegal;
+    logic           is_store;
+    SQ_IDX          sq_index;
 } RETIRE_PACKET;
 
 typedef struct packed{
@@ -529,5 +541,22 @@ typedef struct packed{
     PRF_IDX         t_old;
 } FL_RETIRE_PACKET;
 
+typedef struct packed{
+    logic           valid;
+    ADDR            addr;
+    DATA            data;
+    logic [2:0]     funct3;  
+    SQ_IDX          sq_index;
+    ROB_IDX         rob_index;
+} SQ_PACKET;
+
+typedef struct packed{
+    logic           valid;
+    ADDR            addr;
+    DATA            data;
+    logic [2:0]     funct3;  
+    SQ_IDX          lq_index;
+    ROB_IDX         rob_index;
+} LQ_PACKET;
 
 `endif // __SYS_DEFS_SVH__

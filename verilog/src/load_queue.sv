@@ -1,0 +1,322 @@
+`include "sys_defs.svh"
+
+module load_queue(
+
+    input  logic                  clock,
+    input  logic                  reset,
+ 
+    //from dispatch stage
+    input  INST       [`N-1:0]           inst_in                ,
+    input  logic           [`N-1:0]        is_load              ,
+    input  logic             [`N-1:0]      is_branch            ,
+    input  PRF_IDX           [`N-1:0]     dest_tag_in           ,
+    //from rob
+    input  ROB_IDX               rob_index              [`N-1:0],
+    //mispredict recovery
+    input  logic                 mispredicted                   ,
+    input  LQ_IDX                BS_lq_tail_in                  ,
+    //store to load forwarding
+    input ADDR                   sq_addr_in         [`SQ_SZ-1:0],
+    input logic                  sq_addr_ready_in   [`SQ_SZ-1:0],
+    input DATA                   sq_data_in         [`SQ_SZ-1:0],
+    input logic                  sq_data_ready_in   [`SQ_SZ-1:0],
+    input logic [`SQ_SZ-1:0]     sq_valid_in                    ,
+    input logic [`SQ_SZ-1:0]     sq_valid_in_mask       [`N-1:0],
+    input SQ_IDX                 sq_tail_in             [`N-1:0],
+    input logic  [2:0]           sq_funct_in         [`SQ_SZ-1:0],//full word forwarding
+    //the address calculated from execute stage
+    input LQ_PACKET              load_execute_pack              ,
+    //data from dcache
+    input LQ_PACKET              dcache_load_packet             ,
+ 
+
+    //to dispatch stage, then go to rs & rob
+    output LQ_IDX                lq_index               [`N-1:0],
+    //output snapshot to branch stack
+    output LQ_IDX                BS_lq_tail_out         [`N-1:0],
+    //dispatch stage
+    output logic [1:0]           lq_space_available             ,
+    //to dcache
+    output LQ_PACKET             load_packet                    ,
+    //broadcast request
+    output logic                 cdb_req_load                   ,
+    //output to execute stage for braodcast
+    output LQ_PACKET             lq_out
+
+);
+
+    typedef struct packed {
+        logic         valid ;     
+        ADDR          addr ;  
+        logic         addr_ready ; 
+        DATA          data;  
+        logic         data_ready ;   
+        PRF_IDX       dest_tag;      
+        logic  [2:0]   funct3;
+        logic [`SQ_SZ-1:0] old_sq_valid_mask; 
+        SQ_IDX         sq_tail_position; 
+        logic          issued; // already request to dcache，waiting for data return    
+        ROB_IDX         rob_index;    
+    } LQ_ENTRY;
+
+    LQ_ENTRY    lq          [`LQ_SZ-1:0];
+    LQ_ENTRY    lq_n        [`LQ_SZ-1:0];
+    LQ_IDX      head, head_next;
+    LQ_IDX      tail, tail_next;
+    LQ_CNT      entry_cnt;
+
+    // forwarding 
+    logic [`SQ_SZ-1:0]      addr_match_mask[`LQ_SZ-1:0];
+    logic                   conflict_arr   [`LQ_SZ-1:0]; // the youngest older store doesn't have ready data
+    logic [`SQ_SZ-1:0]       fwd_mask_arr  [`LQ_SZ-1:0];
+    logic [2*`SQ_SZ-1:0]     doubled       [`LQ_SZ-1:0];
+    logic [2*`SQ_SZ-1:0]     shifted       [`LQ_SZ-1:0];
+    logic [`SQ_SZ-1:0] shifted_trunc       [`LQ_SZ-1:0];
+    logic [`SQ_SZ-1:0] prefix_or           [`LQ_SZ-1:0];
+    logic [`SQ_SZ-1:0] highest_mask        [`LQ_SZ-1:0];
+    logic [2*`SQ_SZ-1:0]     lowest_double [`LQ_SZ-1:0];
+    logic [`SQ_SZ-1:0]       youngest_mask [`LQ_SZ-1:0];
+    logic                    fwd_hit_arr   [`LQ_SZ-1:0];
+    DATA                     fwd_data_arr  [`LQ_SZ-1:0];
+    SQ_IDX highest_idx                     [`LQ_SZ-1:0];
+    SQ_IDX selected_idx;
+    logic load_is_lw;
+    logic store_is_sw;
+
+    LQ_IDX   dcache_req_idx;
+    LQ_PACKET lq_out_r, lq_out_next;
+    assign lq_out = lq_out_r;
+
+
+
+    always_comb begin
+        //default
+        head_next = head;
+        tail_next = tail;
+        lq_n = lq;
+        entry_cnt = '0;
+        load_packet = '0;
+        lq_out = '0;
+        cdb_req_load = '0;
+        lq_index = '{default: '0};
+
+
+
+        //request broadcast and broadcast it 1 cycle later
+        //we can execute out of order
+        for(int i = 0; i < `LQ_SZ; i++)begin
+            if(lq[LQ_IDX'(head+i)].valid && lq[LQ_IDX'(head+i)].data_ready) begin
+                cdb_req_load = '1;
+                lq_out_next.valid = '1;
+                lq_out_next.dest_tag = lq[LQ_IDX'(head+i)].dest_tag;
+                lq_out_next.data = lq[LQ_IDX'(head+i)].data;
+                lq_out_next.rob_index = lq[LQ_IDX'(head+i)].rob_index;
+                lq_n[LQ_IDX'(head+i)].valid = '0;
+                break;
+            end
+        end
+
+        // head move
+        for(int i = 0; i < `LQ_SZ; i++) begin
+            if(!lq_n[LQ_IDX'(head + i)].valid) begin
+                head_next = LQ_IDX'(head + i + 1);
+            end else begin
+                break;
+            end
+        end
+
+
+        //forward and dcache request
+
+        //----------------------------------------------------
+        // step1: generate forward mask for each lq entry
+        // fwd_mask = stores that are older than load 老and still in SQ
+        //----------------------------------------------------
+        for(int i = 0; i < `LQ_SZ; i++) begin
+            if(lq[i].valid && lq[i].addr_ready && !lq[i].data_ready) begin
+                fwd_mask_arr[i] = lq[i].old_sq_valid_mask & sq_valid_in;
+            end
+        end
+
+        //----------------------------------------------------
+        // step2: generate addr match mask for each lq entry
+        //----------------------------------------------------
+        addr_match_mask[i] = '0;
+        for(int i = 0; i < `LQ_SZ; i++) begin
+            if(lq[i].valid && lq[i].addr_ready && !lq[i].data_ready) begin
+                for(int j = 0; j < `SQ_SZ; j++) begin
+                    addr_match_mask[i][j] = fwd_mask_arr[i][j]
+                                    && sq_addr_ready_in[j]
+                                    && (sq_addr_in[j] == lq[i].addr);
+                end
+            end
+        end
+
+        //----------------------------------------------------
+        // step3: if match mask is not empty
+        //        find the youngest store that is older than current load
+        //----------------------------------------------------
+
+        for (int i = 0; i < `LQ_SZ; i++) begin
+            doubled[i]       = '0;
+            shifted[i]       = '0;
+            fwd_hit_arr[i]   = '0;
+            fwd_data_arr[i]  = '0;
+            conflict_arr[i]  = '0;
+
+            if (lq[i].valid && lq[i].addr_ready && !lq[i].data_ready && |addr_match_mask[i]) begin
+                // doubled match mask
+                doubled[i] = {addr_match_mask[i], addr_match_mask[i]};
+
+                // right shift "tail_idx" bit，so tail entry bacome the lowest bit
+                shifted[i] = doubled[i] >> lq[i].sq_tail_position;
+
+                //trunc from lowest bit
+                shifted_trunc[i] = shifted[i][`SQ_SZ-1:0];
+
+                //the highest 1 will be the youngest older store
+                prefix_or[i] = shifted_trunc[i];
+                for (int j = `SQ_SZ-2; j >= 0; j--) begin
+                    prefix_or[i][j] = prefix_or[i][j+1] | shifted_trunc[i][j];
+                end
+
+                // shifted_trunc = 00010010
+                // prefix_or =00011111
+                // prefix_or >> 1 = 00001111
+                //~prefix_or = 11110000
+                // prefix_or & ~prefix_or = 00010000
+                highest_mask[i] = prefix_or[i] & ~(prefix_or[i] >> 1);
+
+                highest_idx[i] = '0;
+                for (int j = 0; j < `SQ_SZ; j++) begin
+                    if (highest_mask[i][j])
+                        highest_idx[i] |= SQ_IDX'(j);
+                end
+
+
+                selected_idx = SQ_IDX'(highest_idx[i] + lq[i].sq_tail_position);
+                load_is_lw   = (lq[i].funct3 == 3'b010);
+                store_is_sw  = (sq_funct3_in[selected_idx] == 3'b010);
+
+                //check if the youngest older store's data is ready
+                if (sq_data_ready_in[selected_idx]) begin
+                    if (load_is_lw && store_is_sw) begin
+                        fwd_hit_arr[i]  = 1'b1;
+                        fwd_data_arr[i] = sq_data_in[selected_idx];
+                    end else begin
+                        conflict_arr[i] = 1'b1; // mixed-width or partial-width case: stall
+                    end
+                end else begin
+                    conflict_arr[i] = 1'b1; // matching older store not ready
+                end
+
+            end
+        end
+
+
+        //----------------------------------------------------
+        // step4: update lq_n based on forwarding result
+        // forwarding hit  → fill in data
+        // forwarding miss → request load from dcache（每拍只发一个）
+        //----------------------------------------------------
+        for(int i = 0; i < `LQ_SZ; i++) begin
+            if(fwd_hit_arr[i]) begin
+                lq_n[i].data       = fwd_data_arr[i];
+                lq_n[i].data_ready = 1'b1;
+            end
+        end
+
+        // dcache return write back
+        if(dcache_load_packet.valid &&  lq_n[dcache_load_packet.lq_index].valid ) begin
+            lq_n[dcache_load_packet.lq_index].data       = dcache_load_packet.data;
+            lq_n[dcache_load_packet.lq_index].data_ready  = 1'b1;
+            lq_n[dcache_load_packet.lq_index].issued      = 1'b0;
+        end
+
+        // dcache request, start from head
+        for(int i = 0; i < `LQ_SZ; i++) begin
+            dcache_req_idx = LQ_IDX'(head + i);
+            if(lq[dcache_req_idx].valid 
+                && lq[dcache_req_idx].addr_ready 
+                && !lq[dcache_req_idx].data_ready 
+                && !lq[dcache_req_idx].issued 
+                && !fwd_hit_arr[dcache_req_idx]
+                && !conflict_arr[dcache_req_idx]) begin //only request when no conflict
+                    load_packet.valid    = 1'b1;
+                    load_packet.addr     = lq[dcache_req_idx].addr;
+                    load_packet.lq_index = dcache_req_idx;
+                    load_packet.funct3 = lq[dcache_req_idx].funct3;
+                    lq_n[dcache_req_idx].issued     = 1'b1;
+                    break;
+            end
+        end
+
+
+        //fill in address from execute stage
+        if(load_execute_pack.valid) begin
+            lq_n[load_execute_pack.lq_index].addr       = load_execute_pack.addr;
+            lq_n[load_execute_pack.lq_index].addr_ready = 1;
+        end
+
+
+        //dispatch
+        if(mispredicted)begin
+            tail_next = BS_lq_tail_in;
+            //flush entry
+            for(int i = 0; i < `LQ_SZ; i++) begin
+                if(tail >= BS_lq_tail_in) begin
+                    // no wrap around
+                    if(i > BS_lq_tail_in && i < tail)
+                        lq_n[i] = '{default:'0};
+                end else begin
+                    // wrap around
+                    if(i > BS_lq_tail_in || i < tail)
+                        lq_n[i] = '{default:'0};
+                end
+            end
+        end else begin
+            //dispatch logic
+            for(int i = 0; i < `N; i++) begin
+                if(is_load[i])begin
+                    lq_n[tail_next].valid = '1;
+                    lq_n[tail_next].dest_tag = dest_tag_in[i];
+                    lq_n[tail_next].funct3 = inst_in[i].i.funct3;
+                    lq_n[tail_next].old_sq_valid_mask = sq_valid_in_mask[i];
+                    lq_n[tail_next].sq_tail_position = sq_tail_in[i];
+                    lq_n[tail_next].rob_index = rob_index[i];
+                    tail_next = tail_next + 1;
+                end
+                if(is_branch[i])begin
+                    BS_lq_tail_out[i] = tail_next;
+                end
+            end
+        end
+
+         //calculate available space
+        entry_cnt = LQ_CNT'(tail_next - head_next);
+        lq_space_available = (`LQ_SZ -  entry_cnt) >= 2 ? 2 :
+                                (`LQ_SZ -  entry_cnt) == 1 ? 1 : 0 ;
+
+    
+
+    end
+
+    always_ff @(posedge clock)begin
+        if(reset)begin
+            head <= '0;
+            tail <= '0;
+            lq <= '{default:'0};
+            lq_out_r <= '0;
+        end else begin
+            head <= head_next;
+            tail <= tail_next;
+            lq <= lq_n;
+            lq_out_r <= lq_out_next;
+        end
+    end
+
+
+
+
+
+endmodule

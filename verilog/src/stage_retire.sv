@@ -4,11 +4,12 @@ module stage_retire(
     input logic clock,
     input logic reset,
     //from rob
-    input  RETIRE_PACKET   [`N-1:0]     rob_commit_pack,  
+    input  RETIRE_PACKET    [`N-1:0]            rob_commit_pack,  
 
-    output FL_RETIRE_PACKET [`N-1:0] freelist_pack  ,//to freelist
-    output RETIRE_PACKET  [`N-1:0] commit_pack,//to tb
-    output logic           stall_fetch  //to fetch stage 
+    output FL_RETIRE_PACKET [`N-1:0]            freelist_pack  ,//to freelist
+    output SQ_PACKET                            store_retire_pack       [`N-1:0],//to store queue
+    output RETIRE_PACKET    [`N-1:0]            commit_pack,//to tb
+    output logic                                stall_fetch  //to fetch stage 
 );
 
     logic retiring_halt;
@@ -17,6 +18,7 @@ module stage_retire(
         commit_pack    = '0;
         retiring_halt  = 1'b0;
         freelist_pack = '0;
+        store_retire_pack = '{default:'0};
 
         if(rob_commit_pack[0].valid) begin
             if(rob_commit_pack[0].halt) begin
@@ -30,12 +32,16 @@ module stage_retire(
                 commit_pack[1] = rob_commit_pack[1];
                 freelist_pack[0].valid = rob_commit_pack[0].has_dest;
                 freelist_pack[0].t_old = rob_commit_pack[0].t_old;
+                store_retire_pack[0].valid = rob_commit_pack[0].is_store;
+                store_retire_pack[0].sq_index = rob_commit_pack[0].sq_index;
                 
                 if(rob_commit_pack[1].halt) begin
                     retiring_halt = 1'b1;
                 end else begin
                     freelist_pack[1].valid = rob_commit_pack[1].has_dest;
                     freelist_pack[1].t_old = rob_commit_pack[1].t_old;
+                    store_retire_pack[1].valid = rob_commit_pack[1].is_store;
+                    store_retire_pack[1].sq_index = rob_commit_pack[1].sq_index;
                 end
 
             end else begin
@@ -43,6 +49,8 @@ module stage_retire(
                 commit_pack[0] = rob_commit_pack[0];
                 freelist_pack[0].valid = rob_commit_pack[0].has_dest;
                 freelist_pack[0].t_old = rob_commit_pack[0].t_old;
+                store_retire_pack[0].valid = rob_commit_pack[0].is_store;
+                store_retire_pack[0].sq_index = rob_commit_pack[0].sq_index;
 
             end
         end

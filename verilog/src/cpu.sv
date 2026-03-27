@@ -107,8 +107,7 @@ module cpu (
     PRF_IDX  [`N-1:0] t_new ;
 
     // Outputs from RS and D/S Pipeline Register
-    D_S_PACKET  d_s_pack [`N:0];
-    D_S_PACKET  d_s_pack_reg [`N:0];
+    D_S_PACKET  d_s_pack [5:0];
 
     // Outputs from ISSUE stage and ISSUE/EX Pipeline Register
     S_X_PACKET s_x_pack [`N:0];
@@ -157,18 +156,21 @@ module cpu (
 
     always_comb begin
         for(int i = 0; i < `N + 1; i++) begin
-            read_idx_1[i] = d_s_pack_reg[i].t1;
-            read_idx_2[i] = d_s_pack_reg[i].t2;
+            read_idx_1[i] = d_s_pack[i].t1;
+            read_idx_2[i] = d_s_pack[i].t2;
         end
     end
 
     // CDB_Arbiter
-    typedef enum logic [2:0] {
-        MULT_1 = 3'd0,
-        MULT_1_ALU_1 = 3'd1,
-        ALU_1 = 3'd2,
-        ALU_2 = 3'd3,
-        NONE  = 3'd4
+    typedef enum logic [3:0] {
+        MULT_1,
+        LOAD_1,
+        MULT_1_LOAD_1,
+        MULT_1_ALU_1,
+        LOAD_1_ALU_1,
+        ALU_1 ,
+        ALU_2 ,
+        NONE  
      } cdb_arbiter_state_t;
 
     logic   cdb_req_mult;
@@ -375,26 +377,26 @@ module cpu (
     );
     
 
-    //////////////////////////////////////////////////
-    //                                              //
-    //         Dispatch/ISSUE Pipeline Register     //
-    //                                              //
-    //////////////////////////////////////////////////
+    // //////////////////////////////////////////////////
+    // //                                              //
+    // //         Dispatch/ISSUE Pipeline Register     //
+    // //                                              //
+    // //////////////////////////////////////////////////
 
-    always_ff @(posedge clock) begin
-        if(reset) begin
-            d_s_pack_reg <= '{default: '0};
-        end else begin
-            for(int i = 0; i < `N+1; i++) begin
-                if(global_mispredict && 
-                (d_s_pack[i].bmask & global_mispredict_index)) begin
-                    d_s_pack_reg[i] <= '{default: '0};
-                end else begin
-                    d_s_pack_reg[i] <= d_s_pack[i];
-                end
-            end
-        end
-    end
+    // always_ff @(posedge clock) begin
+    //     if(reset) begin
+    //         d_s_pack_reg <= '{default: '0};
+    //     end else begin
+    //         for(int i = 0; i < `N+1; i++) begin
+    //             if(global_mispredict && 
+    //             (d_s_pack[i].bmask & global_mispredict_index)) begin
+    //                 d_s_pack_reg[i] <= '{default: '0};
+    //             end else begin
+    //                 d_s_pack_reg[i] <= d_s_pack[i];
+    //             end
+    //         end
+    //     end
+    // end
 
     //////////////////////////////////////////////////
     //                                              //
@@ -404,15 +406,11 @@ module cpu (
     
     stage_issue stage_issue_0 (
         // Input
-        .clock(clock),
-        .reset(reset),
-        .issue_pack(d_s_pack_reg),
+        .issue_pack(d_s_pack),
         .rs1_value(rs1_value),
         .rs2_value(rs2_value),
         .resolved(global_resolve),
         .resolved_bmask_index(global_resolve_index),
-        .mispredicted(global_mispredict),
-        .mispredicted_bmask_index(global_mispredict_index),
 
         // Output
         .next_s_x_pack(s_x_pack)
@@ -428,7 +426,7 @@ module cpu (
         if(reset) begin
             s_x_pack_reg <= '{default: '0};
         end else begin
-            for(int i = 0; i < `N+1; i++) begin
+            for(int i = 0; i < 'd6; i++) begin
                 if(global_mispredict && 
                 (s_x_pack[i].bmask & global_mispredict_index)) begin
                     s_x_pack_reg[i] <= '{default: '0};

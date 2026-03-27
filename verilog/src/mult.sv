@@ -42,7 +42,7 @@ module mult (
     logic [63:0] mcand, mplier, product;
     logic [63:0] mcand_out, mplier_out; // unused, just for wiring
 
-    assign cdb_req_mult = internal_dones[`MULT_STAGES-3];
+    assign cdb_req_mult = internal_dones[`MULT_STAGES-2];
 
     // instantiate an array of mult_stage modules
     // this uses concatenation syntax for internal wiring, see lab 2 slides

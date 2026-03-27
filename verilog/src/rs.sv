@@ -11,7 +11,10 @@ module rs(
     //from rob
     input ROB_IDX                           rob_index                   [`N-1:0],
     //from dispatch stage
-    input D_S_PACKET                        dispatch_pack               [`N-1:0],//from dispatcher
+    input D_S_PACKET                        dispatch_pack               [`N-1:0],
+    //from sq
+    input logic [`SQ_SZ-1:0]                sq_valid_in                         ,
+    input logic [`SQ_SZ-1:0]                sq_addr_ready_mask                  ,
     //from cdb
     input X_C_PACKET       [`N-1:0]         cdb                                 ,    
     //etb tag input
@@ -20,9 +23,8 @@ module rs(
     input logic                             cdb_gnt_alu                 [`N-1:0],
     output logic                            cdb_req_alu                 [`N-1:0],
     //to issue stage
-    output D_S_PACKET                       issue_pack                    [`N:0], //conditional branch goes to issue_pack[2]
-    output logic [1:0]                      rs_empty_entries_num                ,
-    output logic [1:0]                      dbg_issue_count
+    output D_S_PACKET                       issue_pack                     [5:0], //mult,load,alu,alu,cond_branch,store
+    output logic [1:0]                      rs_empty_entries_num                
 );
 
     typedef struct packed{
@@ -50,6 +52,11 @@ module rs(
         logic               t1_ready;
         logic               t2_ready;
         ROB_IDX             rob_index;
+        logic               predict_taken;
+        ADDR                predict_addr;
+        LQ_IDX              lq_index;
+        SQ_IDX              sq_index;
+        logic [`SQ_SZ-1:0]  sq_valid_mask;
         
     } RS_ENTRY;
 
@@ -63,13 +70,16 @@ module rs(
     logic [`RS_SZ-1:0]      empty_entry_mask, next_empty_entry_mask;//
     logic [`RS_SZ-1:0]      dispatch_mask;
 
+    logic [`RS_SZ-1:0]      load_mask, load_issue_mask;
+    logic [`RS_SZ-1:0]      store_mask, store_issue_mask;
+
     logic [`RS_SZ-1:0]      mult_mask;//, next_mult_mask;
     logic [`RS_SZ-1:0]      cond_branch_mask;
     logic [`RS_SZ-1:0]      cond_branch_issue_mask;
 
     logic [`N-1:0] [`RS_SZ-1:0]      dispatch_bus;
     logic [`N-1:0] [`RS_SZ-1:0]      issue_bus;
-    logic                   empty_dispatch, empty_issue, empty_mult_issue, no_gnt, empty_cond_branch_issue;
+    logic                   empty_dispatch, empty_issue, empty_mult_issue, no_gnt, empty_cond_branch_issue, empty_load_issue, empty_store_issue;
 
     psel_gen #(.WIDTH(`RS_SZ), .REQS(`N)) priorty_selector_dispatch(
         .req(empty_entry_mask),
@@ -99,9 +109,26 @@ module rs(
         .empty(empty_cond_branch_issue)
     );
 
-    typedef enum logic [2:0] {
+    psel_gen #(.WIDTH(`RS_SZ), .REQS('d1)) priorty_selector_load(
+        .req(load_mask),
+        .gnt(load_issue_mask),
+        .gnt_bus(),
+        .empty(empty_load_issue)
+    );
+
+    psel_gen #(.WIDTH(`RS_SZ), .REQS('d1)) priorty_selector_store(
+        .req(store_mask),
+        .gnt(store_issue_mask),
+        .gnt_bus(),
+        .empty(empty_store_issue)
+    );
+
+    typedef enum logic [3:0] {
         ISSUE_1_MULT_1_ALU,
+        ISSUE_1_MULT_1_LOAD,
         ISSUE_1_MULT,
+        ISSUE_1_LOAD,
+        ISSUE_1_LOAD_1_ALU,
         ISSUE_2_ALU,
         ISSUE_1_ALU,
         ISSUE_NOTHING
@@ -110,7 +137,7 @@ module rs(
     case_t issue_case;
 
     // candidate existence (do NOT depend on gnt)
-    logic has_ready_mult;
+    logic has_ready_mult, has_ready_load;
     logic cand_alu0, cand_alu1;   // selected candidates by psel_gen
     logic any_gnt, two_gnt;
     logic t1_hit, t2_hit;
@@ -163,6 +190,11 @@ module rs(
                     next_rs_entry[i].t2= dispatch_pack[0].t2;
                     next_rs_entry[i].t1_ready = dispatch_pack[0].t1_ready;
                     next_rs_entry[i].t2_ready = dispatch_pack[0].t2_ready;
+                    next_rs_entry[i].predict_addr = dispatch_pack[0].predict_addr;
+                    next_rs_entry[i].predict_taken = dispatch_pack[0].predict_taken;
+                    next_rs_entry[i].lq_index = dispatch_pack[0].lq_index;
+                    next_rs_entry[i].sq_index = dispatch_pack[0].sq_index;
+                    next_rs_entry[i].sq_valid_mask = dispatch_pack[0].sq_valid_mask;
                     next_rs_entry[i].busy = 1;
 
                     //from rob
@@ -197,6 +229,11 @@ module rs(
                     next_rs_entry[i].t2= dispatch_pack[0].t2;
                     next_rs_entry[i].t1_ready = dispatch_pack[0].t1_ready;
                     next_rs_entry[i].t2_ready = dispatch_pack[0].t2_ready;
+                    next_rs_entry[i].predict_addr = dispatch_pack[0].predict_addr;
+                    next_rs_entry[i].predict_taken = dispatch_pack[0].predict_taken;
+                    next_rs_entry[i].lq_index = dispatch_pack[0].lq_index;
+                    next_rs_entry[i].sq_index = dispatch_pack[0].sq_index;
+                    next_rs_entry[i].sq_valid_mask = dispatch_pack[0].sq_valid_mask;
                     next_rs_entry[i].busy = 1;
 
                     //from rob
@@ -228,6 +265,11 @@ module rs(
                     next_rs_entry[i].t2= dispatch_pack[1].t2;
                     next_rs_entry[i].t1_ready = dispatch_pack[1].t1_ready;
                     next_rs_entry[i].t2_ready = dispatch_pack[1].t2_ready;
+                    next_rs_entry[i].predict_addr = dispatch_pack[1].predict_addr;
+                    next_rs_entry[i].predict_taken = dispatch_pack[1].predict_taken;
+                    next_rs_entry[i].lq_index = dispatch_pack[1].lq_index;
+                    next_rs_entry[i].sq_index = dispatch_pack[1].sq_index;
+                    next_rs_entry[i].sq_valid_mask = dispatch_pack[1].sq_valid_mask;
                     next_rs_entry[i].busy = 1;
                     //from rob
                     next_rs_entry[i].rob_index = rob_index[1];
@@ -298,6 +340,8 @@ module rs(
                 internal_rs_entry[j].t1_ready &&
                 internal_rs_entry[j].t2_ready &&
                 !internal_rs_entry[j].mult &&
+                !internal_rs_entry[j].rd_mem &&
+                !internal_rs_entry[j].wr_mem &&
                 !internal_rs_entry[j].cond_branch;
 
             cond_branch_mask[j] =
@@ -305,11 +349,26 @@ module rs(
                 internal_rs_entry[j].t1_ready &&
                 internal_rs_entry[j].t2_ready &&
                 internal_rs_entry[j].cond_branch;
+
+            store_mask[j] =
+                internal_rs_entry[j].busy &&
+                internal_rs_entry[j].t1_ready &&
+                internal_rs_entry[j].t2_ready &&
+                internal_rs_entry[j].wr_mem;
+
+            load_mask[j] =
+                internal_rs_entry[j].busy &&
+                internal_rs_entry[j].t1_ready &&
+                internal_rs_entry[j].t2_ready &&
+                internal_rs_entry[j].rd_mem &&
+                !(|(internal_rs_entry[j].sq_valid_mask & sq_valid_in & ~sq_addr_ready_mask));//all the older store's address is known
+                //need to consider retired sq entry, so we also input current sq valid
         end
 
 
 
         has_ready_mult = |mult_mask;
+        has_ready_load = |load_mask;
 
         // these come from the priority selector outputs
         cand_alu0 = |issue_bus[0];    // first ALU candidate exists
@@ -324,15 +383,18 @@ module rs(
 
         // issue_case: mult prioritized, but ALU participation depends on gnt
         issue_case =
-            (has_ready_mult && cdb_gnt_alu[0])  ? ISSUE_1_MULT_1_ALU :
-            (has_ready_mult && no_gnt)          ? ISSUE_1_MULT :
-            (two_gnt)                           ? ISSUE_2_ALU :
-            (cdb_gnt_alu[0])                    ? ISSUE_1_ALU :ISSUE_NOTHING;
+            (has_ready_mult && has_ready_load)  ? ISSUE_1_MULT_1_LOAD  :
+            (has_ready_mult && cdb_gnt_alu[0])  ? ISSUE_1_MULT_1_ALU   :
+            (has_ready_mult)                    ? ISSUE_1_MULT         :
+            (has_ready_load && cdb_gnt_alu[0])  ? ISSUE_1_LOAD_1_ALU   :
+            (has_ready_load)                    ? ISSUE_1_LOAD         :
+            (two_gnt)                           ? ISSUE_2_ALU          :
+            (cdb_gnt_alu[0])                    ? ISSUE_1_ALU          : ISSUE_NOTHING;
 
         // Case 1: Both mult and non-mult instructions are ready
-        // Issue mult to pack[0], non-mult to pack[1]
+        // Issue mult to pack[0], load to pack[1]
         case(issue_case)
-            ISSUE_1_MULT_1_ALU: begin
+            ISSUE_1_MULT_1_LOAD: begin
                 for (int i = 0; i<`RS_SZ; i++)begin
                     if(mult_issue_mask[i]) begin
                         //to issue pack 0
@@ -345,27 +407,25 @@ module rs(
                         issue_pack[0].has_dest= internal_rs_entry[i].has_dest;
                         issue_pack[0].alu_func= internal_rs_entry[i].alu_func;
                         issue_pack[0].mult= internal_rs_entry[i].mult;
-                        issue_pack[0].rd_mem= internal_rs_entry[i].rd_mem;
-                        issue_pack[0].wr_mem= internal_rs_entry[i].wr_mem;
                         issue_pack[0].cond_branch= internal_rs_entry[i].cond_branch;
                         issue_pack[0].uncond_branch= internal_rs_entry[i].uncond_branch;
                         issue_pack[0].csr_op= internal_rs_entry[i].csr_op;
-                        issue_pack[0].halt= internal_rs_entry[i].halt;
-                        issue_pack[0].illegal= internal_rs_entry[i].illegal;
                         issue_pack[0].bmask_index= internal_rs_entry[i].bmask_index;
                         issue_pack[0].bmask= internal_rs_entry[i].bmask;
                         issue_pack[0].T= internal_rs_entry[i].T;
                         issue_pack[0].t1= internal_rs_entry[i].t1;
                         issue_pack[0].t2= internal_rs_entry[i].t2;
                         issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
+                        issue_pack[0].predict_taken = internal_rs_entry[i].predict_taken;
+                        issue_pack[0].predict_addr = internal_rs_entry[i].predict_addr;
+                        issue_pack[0].lq_index = internal_rs_entry[i].lq_index;
+                        issue_pack[0].sq_index = internal_rs_entry[i].sq_index;
 
                         //mark as not busy
                         next_rs_entry[i] = '0;
-
-                        dbg_issue_count = dbg_issue_count + 'd1;
                     end
-                    if(issue_bus[0][i] && cdb_gnt_alu[0] ) begin
-                        //to issue pack 1
+
+                    if(load_issue_mask[i])begin
                         issue_pack[1].valid= 'b1;
                         issue_pack[1].inst= internal_rs_entry[i].inst;
                         issue_pack[1].PC= internal_rs_entry[i].PC;
@@ -388,15 +448,62 @@ module rs(
                         issue_pack[1].t1= internal_rs_entry[i].t1;
                         issue_pack[1].t2= internal_rs_entry[i].t2;
                         issue_pack[1].rob_index = internal_rs_entry[i].rob_index;
+                        issue_pack[1].lq_index = internal_rs_entry[i].lq_index;
+
+                    end
+
+                end
+            end
+
+            //Issue mult to pack[0], non-mult to pack[1]
+            ISSUE_1_MULT_1_ALU: begin
+                for (int i = 0; i<`RS_SZ; i++)begin
+                    if(mult_issue_mask[i]) begin
+                        //to issue pack 0
+                        issue_pack[0].valid= 'b1;
+                        issue_pack[0].inst= internal_rs_entry[i].inst;
+                        issue_pack[0].PC= internal_rs_entry[i].PC;
+                        issue_pack[0].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[0].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[0].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[0].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[0].mult= internal_rs_entry[i].mult;
+                        issue_pack[0].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[0].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[0].T= internal_rs_entry[i].T;
+                        issue_pack[0].t1= internal_rs_entry[i].t1;
+                        issue_pack[0].t2= internal_rs_entry[i].t2;
+                        issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
+
                         //mark as not busy
                         next_rs_entry[i] = '0;
-
-                        dbg_issue_count = dbg_issue_count + 'd1;
+                    end
+                    if(issue_bus[0][i] && cdb_gnt_alu[0] ) begin
+                        //to issue pack 1
+                        issue_pack[2].valid= 'b1;
+                        issue_pack[2].inst= internal_rs_entry[i].inst;
+                        issue_pack[2].PC= internal_rs_entry[i].PC;
+                        issue_pack[2].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[2].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[2].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[2].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[2].alu_func= internal_rs_entry[i].alu_func;
+                        issue_pack[2].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[2].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[2].halt= internal_rs_entry[i].halt;
+                        issue_pack[2].illegal= internal_rs_entry[i].illegal;
+                        issue_pack[2].bmask_index= internal_rs_entry[i].bmask_index;
+                        issue_pack[2].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[2].T= internal_rs_entry[i].T;
+                        issue_pack[2].t1= internal_rs_entry[i].t1;
+                        issue_pack[2].t2= internal_rs_entry[i].t2;
+                        issue_pack[2].rob_index = internal_rs_entry[i].rob_index;
+                        //mark as not busy
+                        next_rs_entry[i] = '0;
                     end 
                 end
             end
-            // Case 2: Only mult instruction is ready
-            // Issue mult to pack[0]
+
             ISSUE_1_MULT: begin
                 for (int i = 0; i<`RS_SZ; i++)begin
                     if(mult_issue_mask[i]) begin
@@ -408,92 +515,147 @@ module rs(
                         issue_pack[0].opa_select= internal_rs_entry[i].opa_select;
                         issue_pack[0].opb_select= internal_rs_entry[i].opb_select;
                         issue_pack[0].has_dest= internal_rs_entry[i].has_dest;
-                        issue_pack[0].alu_func= internal_rs_entry[i].alu_func;
                         issue_pack[0].mult= internal_rs_entry[i].mult;
-                        issue_pack[0].rd_mem= internal_rs_entry[i].rd_mem;
-                        issue_pack[0].wr_mem= internal_rs_entry[i].wr_mem;
-                        issue_pack[0].cond_branch= internal_rs_entry[i].cond_branch;
-                        issue_pack[0].uncond_branch= internal_rs_entry[i].uncond_branch;
                         issue_pack[0].csr_op= internal_rs_entry[i].csr_op;
-                        issue_pack[0].halt= internal_rs_entry[i].halt;
-                        issue_pack[0].illegal= internal_rs_entry[i].illegal;
-                        issue_pack[0].bmask_index= internal_rs_entry[i].bmask_index;
                         issue_pack[0].bmask= internal_rs_entry[i].bmask;
                         issue_pack[0].T= internal_rs_entry[i].T;
                         issue_pack[0].t1= internal_rs_entry[i].t1;
                         issue_pack[0].t2= internal_rs_entry[i].t2;
                         issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
-                        issue_pack[1].valid = 'b0;
                         //mark as not busy
                         next_rs_entry[i] = '0;
-
-                        dbg_issue_count = dbg_issue_count + 'd1;
                     end
                 end
             end
-            // Case 3: Only non-mult instructions are ready (no mult or mult not ready)
-            // Issue 2 non-mult instructions
-            ISSUE_2_ALU: begin
+
+            ISSUE_1_LOAD_1_ALU: begin
                 for (int i = 0; i<`RS_SZ; i++)begin
-                    if(issue_bus[0][i] && cdb_gnt_alu[0]) begin
-                        //to issue pack 0
-                        issue_pack[0].valid = 'b1;
-                        issue_pack[0].inst= internal_rs_entry[i].inst;
-                        issue_pack[0].PC= internal_rs_entry[i].PC;
-                        issue_pack[0].NPC= internal_rs_entry[i].NPC;
-                        issue_pack[0].opa_select= internal_rs_entry[i].opa_select;
-                        issue_pack[0].opb_select= internal_rs_entry[i].opb_select;
-                        issue_pack[0].has_dest= internal_rs_entry[i].has_dest;
-                        issue_pack[0].alu_func= internal_rs_entry[i].alu_func;
-                        issue_pack[0].mult= internal_rs_entry[i].mult;
-                        issue_pack[0].rd_mem= internal_rs_entry[i].rd_mem;
-                        issue_pack[0].wr_mem= internal_rs_entry[i].wr_mem;
-                        issue_pack[0].cond_branch= internal_rs_entry[i].cond_branch;
-                        issue_pack[0].uncond_branch= internal_rs_entry[i].uncond_branch;
-                        issue_pack[0].csr_op= internal_rs_entry[i].csr_op;
-                        issue_pack[0].halt= internal_rs_entry[i].halt;
-                        issue_pack[0].illegal= internal_rs_entry[i].illegal;
-                        issue_pack[0].bmask_index= internal_rs_entry[i].bmask_index;
-                        issue_pack[0].bmask= internal_rs_entry[i].bmask;
-                        issue_pack[0].T= internal_rs_entry[i].T;
-                        issue_pack[0].t1= internal_rs_entry[i].t1;
-                        issue_pack[0].t2= internal_rs_entry[i].t2;
-                        issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
-
-                        //mark as not busy
-                        next_rs_entry[i] = '0;
-
-                        dbg_issue_count = dbg_issue_count + 'd1;
-                    end
-                    if(issue_bus[1][i] && cdb_gnt_alu[1]) begin
+                    if(load_issue_mask[i]) begin
                         //to issue pack 1
-                        issue_pack[1].valid = 'b1;
+                        issue_pack[1].valid= 'b1;
                         issue_pack[1].inst= internal_rs_entry[i].inst;
                         issue_pack[1].PC= internal_rs_entry[i].PC;
                         issue_pack[1].NPC= internal_rs_entry[i].NPC;
                         issue_pack[1].opa_select= internal_rs_entry[i].opa_select;
                         issue_pack[1].opb_select= internal_rs_entry[i].opb_select;
                         issue_pack[1].has_dest= internal_rs_entry[i].has_dest;
-                        issue_pack[1].alu_func= internal_rs_entry[i].alu_func;
-                        issue_pack[1].mult= internal_rs_entry[i].mult;
                         issue_pack[1].rd_mem= internal_rs_entry[i].rd_mem;
-                        issue_pack[1].wr_mem= internal_rs_entry[i].wr_mem;
-                        issue_pack[1].cond_branch= internal_rs_entry[i].cond_branch;
-                        issue_pack[1].uncond_branch= internal_rs_entry[i].uncond_branch;
                         issue_pack[1].csr_op= internal_rs_entry[i].csr_op;
-                        issue_pack[1].halt= internal_rs_entry[i].halt;
-                        issue_pack[1].illegal= internal_rs_entry[i].illegal;
-                        issue_pack[1].bmask_index= internal_rs_entry[i].bmask_index;
                         issue_pack[1].bmask= internal_rs_entry[i].bmask;
                         issue_pack[1].T= internal_rs_entry[i].T;
                         issue_pack[1].t1= internal_rs_entry[i].t1;
                         issue_pack[1].t2= internal_rs_entry[i].t2;
                         issue_pack[1].rob_index = internal_rs_entry[i].rob_index;
+                        issue_pack[1].lq_index = internal_rs_entry[i].lq_index;
+
+                        //mark as not busy
+                        next_rs_entry[i] = '0;
+                    end
+                    if(issue_bus[0][i] && cdb_gnt_alu[0] ) begin
+                        //to issue pack 1
+                        issue_pack[2].valid= 'b1;
+                        issue_pack[2].inst= internal_rs_entry[i].inst;
+                        issue_pack[2].PC= internal_rs_entry[i].PC;
+                        issue_pack[2].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[2].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[2].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[2].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[2].alu_func= internal_rs_entry[i].alu_func;
+                        issue_pack[2].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[2].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[2].halt= internal_rs_entry[i].halt;
+                        issue_pack[2].illegal= internal_rs_entry[i].illegal;
+                        issue_pack[2].bmask_index= internal_rs_entry[i].bmask_index;
+                        issue_pack[2].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[2].T= internal_rs_entry[i].T;
+                        issue_pack[2].t1= internal_rs_entry[i].t1;
+                        issue_pack[2].t2= internal_rs_entry[i].t2;
+                        issue_pack[2].rob_index = internal_rs_entry[i].rob_index;
+                        //mark as not busy
+                        next_rs_entry[i] = '0;
+                    end 
+                end
+            end
+
+            ISSUE_1_LOAD: begin
+                for (int i = 0; i<`RS_SZ; i++)begin
+                    if(load_issue_mask[i]) begin
+                        //to issue pack 1
+                        issue_pack[1].valid= 'b1;
+                        issue_pack[1].inst= internal_rs_entry[i].inst;
+                        issue_pack[1].PC= internal_rs_entry[i].PC;
+                        issue_pack[1].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[1].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[1].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[1].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[1].rd_mem= internal_rs_entry[i].rd_mem;
+                        issue_pack[1].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[1].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[1].T= internal_rs_entry[i].T;
+                        issue_pack[1].t1= internal_rs_entry[i].t1;
+                        issue_pack[1].t2= internal_rs_entry[i].t2;
+                        issue_pack[1].rob_index = internal_rs_entry[i].rob_index;
+                        issue_pack[1].lq_index = internal_rs_entry[i].lq_index;
+
+                        //mark as not busy
+                        next_rs_entry[i] = '0;
+                    end
+                end
+            end
+
+
+            // Case 3: Only non-mult instructions are ready (no mult or mult not ready)
+            // Issue 2 non-mult instructions
+            ISSUE_2_ALU: begin
+                for (int i = 0; i<`RS_SZ; i++)begin
+                    if(issue_bus[0][i] && cdb_gnt_alu[0]) begin
+                        //to issue pack 0
+                        issue_pack[2].valid = 'b1;
+                        issue_pack[2].inst= internal_rs_entry[i].inst;
+                        issue_pack[2].PC= internal_rs_entry[i].PC;
+                        issue_pack[2].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[2].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[2].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[2].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[2].alu_func= internal_rs_entry[i].alu_func;
+                        issue_pack[2].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[2].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[2].halt= internal_rs_entry[i].halt;
+                        issue_pack[2].illegal= internal_rs_entry[i].illegal;
+                        issue_pack[2].bmask_index= internal_rs_entry[i].bmask_index;
+                        issue_pack[2].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[2].T= internal_rs_entry[i].T;
+                        issue_pack[2].t1= internal_rs_entry[i].t1;
+                        issue_pack[2].t2= internal_rs_entry[i].t2;
+                        issue_pack[2].rob_index = internal_rs_entry[i].rob_index;
+
+                        //mark as not busy
+                        next_rs_entry[i] = '0;
+                    end
+                    if(issue_bus[1][i] && cdb_gnt_alu[1]) begin
+                        //to issue pack 1
+                        issue_pack[3].valid = 'b1;
+                        issue_pack[3].inst= internal_rs_entry[i].inst;
+                        issue_pack[3].PC= internal_rs_entry[i].PC;
+                        issue_pack[3].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[3].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[3].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[3].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[3].alu_func= internal_rs_entry[i].alu_func;
+                        issue_pack[3].mult= internal_rs_entry[i].mult;
+                        issue_pack[3].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[3].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[3].halt= internal_rs_entry[i].halt;
+                        issue_pack[3].illegal= internal_rs_entry[i].illegal;
+                        issue_pack[3].bmask_index= internal_rs_entry[i].bmask_index;
+                        issue_pack[3].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[3].T= internal_rs_entry[i].T;
+                        issue_pack[3].t1= internal_rs_entry[i].t1;
+                        issue_pack[3].t2= internal_rs_entry[i].t2;
+                        issue_pack[3].rob_index = internal_rs_entry[i].rob_index;
                     
                         //mark as not busy
                         next_rs_entry[i] = '0;
-
-                        dbg_issue_count = dbg_issue_count + 'd1;
                     end
                 end
             end
@@ -502,33 +664,26 @@ module rs(
                 for (int i = 0; i<`RS_SZ; i++)begin
                     if(issue_bus[0][i] && cdb_gnt_alu[0]) begin
                         //to issue pack 0
-                        issue_pack[1].valid= 'b1;
-                        issue_pack[1].inst= internal_rs_entry[i].inst;
-                        issue_pack[1].PC= internal_rs_entry[i].PC;
-                        issue_pack[1].NPC= internal_rs_entry[i].NPC;
-                        issue_pack[1].opa_select= internal_rs_entry[i].opa_select;
-                        issue_pack[1].opb_select= internal_rs_entry[i].opb_select;
-                        issue_pack[1].has_dest= internal_rs_entry[i].has_dest;
-                        issue_pack[1].alu_func= internal_rs_entry[i].alu_func;
-                        issue_pack[1].mult= internal_rs_entry[i].mult;
-                        issue_pack[1].rd_mem= internal_rs_entry[i].rd_mem;
-                        issue_pack[1].wr_mem= internal_rs_entry[i].wr_mem;
-                        issue_pack[1].cond_branch= internal_rs_entry[i].cond_branch;
-                        issue_pack[1].uncond_branch= internal_rs_entry[i].uncond_branch;
-                        issue_pack[1].csr_op= internal_rs_entry[i].csr_op;
-                        issue_pack[1].halt= internal_rs_entry[i].halt;
-                        issue_pack[1].illegal= internal_rs_entry[i].illegal;
-                        issue_pack[1].bmask_index= internal_rs_entry[i].bmask_index;
-                        issue_pack[1].bmask= internal_rs_entry[i].bmask;
-                        issue_pack[1].T= internal_rs_entry[i].T;
-                        issue_pack[1].t1= internal_rs_entry[i].t1;
-                        issue_pack[1].t2= internal_rs_entry[i].t2;
-                        issue_pack[1].rob_index = internal_rs_entry[i].rob_index;
-                        issue_pack[0].valid = 'b0;
+                        issue_pack[2].valid= 'b1;
+                        issue_pack[2].inst= internal_rs_entry[i].inst;
+                        issue_pack[2].PC= internal_rs_entry[i].PC;
+                        issue_pack[2].NPC= internal_rs_entry[i].NPC;
+                        issue_pack[2].opa_select= internal_rs_entry[i].opa_select;
+                        issue_pack[2].opb_select= internal_rs_entry[i].opb_select;
+                        issue_pack[2].has_dest= internal_rs_entry[i].has_dest;
+                        issue_pack[2].alu_func= internal_rs_entry[i].alu_func;
+                        issue_pack[2].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[2].csr_op= internal_rs_entry[i].csr_op;
+                        issue_pack[2].halt= internal_rs_entry[i].halt;
+                        issue_pack[2].illegal= internal_rs_entry[i].illegal;
+                        issue_pack[2].bmask_index= internal_rs_entry[i].bmask_index;
+                        issue_pack[2].bmask= internal_rs_entry[i].bmask;
+                        issue_pack[2].T= internal_rs_entry[i].T;
+                        issue_pack[2].t1= internal_rs_entry[i].t1;
+                        issue_pack[2].t2= internal_rs_entry[i].t2;
+                        issue_pack[2].rob_index = internal_rs_entry[i].rob_index;
                         //mark as not busy
                         next_rs_entry[i] = '0;
-
-                        dbg_issue_count = dbg_issue_count + 'd1;
                     end
                 end
             end
@@ -536,9 +691,14 @@ module rs(
             ISSUE_NOTHING: begin
                 issue_pack[0].valid = 'b0;
                 issue_pack[1].valid = 'b0;
+                issue_pack[2].valid = 'b0;
+                issue_pack[3].valid = 'b0;
             end
             default:begin
-                issue_pack = '{default:'0};
+                issue_pack[0].valid = 'b0;
+                issue_pack[1].valid = 'b0;
+                issue_pack[2].valid = 'b0;
+                issue_pack[3].valid = 'b0;
             end
         endcase
 
@@ -546,28 +706,42 @@ module rs(
         if(!empty_cond_branch_issue) begin
             for (int i = 0; i<`RS_SZ; i++)begin
                 if(cond_branch_issue_mask[i]) begin
-                    issue_pack[2].valid= 'b1;
-                    issue_pack[2].inst= internal_rs_entry[i].inst;
-                    issue_pack[2].PC= internal_rs_entry[i].PC;
-                    issue_pack[2].NPC= internal_rs_entry[i].NPC;
-                    issue_pack[2].opa_select= internal_rs_entry[i].opa_select;
-                    issue_pack[2].opb_select= internal_rs_entry[i].opb_select;
-                    issue_pack[2].has_dest= internal_rs_entry[i].has_dest;
-                    issue_pack[2].alu_func= internal_rs_entry[i].alu_func;
-                    issue_pack[2].mult= internal_rs_entry[i].mult;
-                    issue_pack[2].rd_mem= internal_rs_entry[i].rd_mem;
-                    issue_pack[2].wr_mem= internal_rs_entry[i].wr_mem;
-                    issue_pack[2].cond_branch= internal_rs_entry[i].cond_branch;
-                    issue_pack[2].uncond_branch= 'b0;
-                    issue_pack[2].csr_op= internal_rs_entry[i].csr_op;
-                    issue_pack[2].halt= internal_rs_entry[i].halt;
-                    issue_pack[2].illegal= internal_rs_entry[i].illegal;
-                    issue_pack[2].bmask_index= internal_rs_entry[i].bmask_index;
-                    issue_pack[2].bmask= internal_rs_entry[i].bmask;
-                    issue_pack[2].T= internal_rs_entry[i].T;
-                    issue_pack[2].t1= internal_rs_entry[i].t1;
-                    issue_pack[2].t2= internal_rs_entry[i].t2;
-                    issue_pack[2].rob_index = internal_rs_entry[i].rob_index;
+                    issue_pack[4].valid= 'b1;
+                    issue_pack[4].inst= internal_rs_entry[i].inst;
+                    issue_pack[4].PC= internal_rs_entry[i].PC;
+                    issue_pack[4].NPC= internal_rs_entry[i].NPC;
+                    issue_pack[4].opa_select= internal_rs_entry[i].opa_select;
+                    issue_pack[4].opb_select= internal_rs_entry[i].opb_select;
+                    issue_pack[4].cond_branch= internal_rs_entry[i].cond_branch;
+                    issue_pack[4].csr_op= internal_rs_entry[i].csr_op;
+                    issue_pack[4].bmask_index= internal_rs_entry[i].bmask_index;
+                    issue_pack[4].bmask= internal_rs_entry[i].bmask;
+                    issue_pack[4].t1= internal_rs_entry[i].t1;
+                    issue_pack[4].t2= internal_rs_entry[i].t2;
+                    issue_pack[4].rob_index = internal_rs_entry[i].rob_index;
+                    //mark as not busy
+                    next_rs_entry[i] = '0;
+                end
+            end
+        end
+
+        //issue store if any
+        if(!empty_store_issue) begin
+            for (int i = 0; i<`RS_SZ; i++)begin
+                if(store_issue_mask[i]) begin
+                    issue_pack[5].valid= 'b1;
+                    issue_pack[5].inst= internal_rs_entry[i].inst;
+                    issue_pack[5].PC= internal_rs_entry[i].PC;
+                    issue_pack[5].NPC= internal_rs_entry[i].NPC;
+                    issue_pack[5].opa_select= internal_rs_entry[i].opa_select;
+                    issue_pack[5].opb_select= internal_rs_entry[i].opb_select;
+                    issue_pack[5].wr_mem= internal_rs_entry[i].wr_mem;
+                    issue_pack[5].csr_op= internal_rs_entry[i].csr_op;
+                    issue_pack[5].bmask= internal_rs_entry[i].bmask;
+                    issue_pack[5].t1= internal_rs_entry[i].t1;
+                    issue_pack[5].t2= internal_rs_entry[i].t2;
+                    issue_pack[5].rob_index = internal_rs_entry[i].rob_index;
+                    issue_pack[5].sq_index = internal_rs_entry[i].sq_index;
                     //mark as not busy
                     next_rs_entry[i] = '0;
                 end

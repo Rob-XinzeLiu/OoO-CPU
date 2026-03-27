@@ -12,13 +12,17 @@ module branch_stack (
     input logic                                         branch_encountered       [`N-1:0],   //from dispatch stage
     input B_MASK                                        branch_idx               [`N-1:0],   //from dispatch stage
     input ADDR                                          pc_snapshot_in           [`N-1:0],   //from dispatch stage     
-    input ROB_IDX                                       rob_index_in             [`N-1:0],   //from rob                   
+    input ROB_IDX                                       rob_index_in             [`N-1:0],   //from rob  
+    input LQ_IDX                                        lq_index_in              [`N-1:0],   //from lq
+    input SQ_IDX                                        sq_index_in              [`N-1:0],   //from sq                  
     
     output logic [`MT_SIZE-1:0]                         mt_snapshot_out                  ,   //to maptable
     output FLIST_IDX                                    tail_ptr_out                     ,   //to freelist
     output ROB_IDX                                      rob_index_out                    ,   //to rob
     output logic [1:0]                                  branch_stack_space_avail         ,   //to dispatch stage
-    output ADDR                                         pc_snapshot_out                      //to fetch stage
+    output ADDR                                         pc_snapshot_out                  ,   //to fetch stage
+    output LQ_IDX                                       lq_index_out                     ,   //to lq
+    output SQ_IDX                                       sq_index_out                         //to sq
 );
 
     typedef struct packed {
@@ -28,8 +32,8 @@ module branch_stack (
         logic                          resolved;
         ADDR                           pc;
         ROB_IDX                        rob_index;
-                  
-        //TODO : LSQ
+        LQ_IDX                          lq_tail;
+        ST_IDX                          sq_tail;
     } checkpoint_t;
 
     checkpoint_t stack              [`BRANCH_STACK_DEPTH-1:0];
@@ -54,6 +58,8 @@ module branch_stack (
         tail_ptr_out     = '0;
         rob_index_out = '0;
         pc_snapshot_out = '0;
+        sq_tail_out = '0;
+        lq_tail_out = '0;
         
         //step 1 : mark as resolved
         if(resolved) begin
@@ -73,6 +79,8 @@ module branch_stack (
                     tail_ptr_out    = stack[i].freelist_tail_idx;
                     rob_index_out   = stack[i].rob_index;
                     pc_snapshot_out = stack[i].pc;
+                    lq_index_out    = stack[i].lq_index;
+                    sq_index_out    = stack[i].sq_index;
                     stack_ptr_temp1  = i;
                 end
             end
@@ -84,7 +92,6 @@ module branch_stack (
                 end
             end
             stack_ptr_next = stack_ptr_temp1; //point to the next free entry
-            //TODO: LSQ
         end
 
         //step 3 : pop logic 
@@ -114,8 +121,10 @@ module branch_stack (
                 stack_next[stack_ptr_temp2].freelist_tail_idx = tail_ptr_in[i];
                 stack_next[stack_ptr_temp2].pc = pc_snapshot_in[i];
                 stack_next[stack_ptr_temp2].rob_index = rob_index_in[i];
+                stack_next[stack_ptr_temp2].lq_index = lq_index_in[i];
+                stack_next[stack_ptr_temp2].sq_index = sq_index_in[i];
                 stack_ptr_temp2 = stack_ptr_temp2 + 1;
-                //TODO: LSQ
+                
             end
         end
         stack_ptr_next = stack_ptr_temp2;

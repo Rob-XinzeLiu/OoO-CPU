@@ -6,11 +6,10 @@ module rob(
     input logic                 mispredicted                    ,//from execute
     input ROB_IDX               mispredicted_index              ,//from branch stack
     input X_C_PACKET            [`N-1:0]   cdb                  ,//set complete bit
-    input COND_BRANCH_PACKET    cond_branch_in                  ,//from execute          
+    input COND_BRANCH_PACKET    cond_branch_in                  ,//from execute  
+    input SQ_PACKET             sq_in                           ,//from execute       
 
     output RETIRE_PACKET        [`N-1:0] rob_commit             ,//to retire stage
-    
-    //output logic [1:0]          retire_num                      ,//to retire stage
     output logic [1:0]          rob_space_avail                 ,//to dispatch stage
     output ROB_IDX              rob_index               [`N-1:0] //to rs & branch stack
 );
@@ -26,9 +25,10 @@ module rob(
         logic           has_dest;//for debug
         REG_IDX         dest_reg_idx;//for debug
         DATA            data;
+        logic           is_store;
+        LQ_IDX          lq_index;
+        SQ_IDX          sq_index;
 
-        //logic is_load;
-        //logic is_store;
     } ROB_ENTRY;
 
     ROB_ENTRY       rob_array           [`ROB_SZ-1:0];
@@ -91,6 +91,8 @@ module rob(
                 rob_commit[i].dest_reg_idx = rob_array[(head_ptr+i) % `ROB_SZ].dest_reg_idx;
                 rob_commit[i].t_old = rob_array[(head_ptr+i) % `ROB_SZ].told;
                 rob_commit[i].data = rob_array[(head_ptr+i) % `ROB_SZ].data;
+                rob_commit[i].is_store = rob_array[(head_ptr+i) % `ROB_SZ].is_store;
+                rob_commit[i].sq_index = rob_array[(head_ptr+i) % `ROB_SZ].sq_index;
             end
             next_head_ptr = head_ptr + 2;
             next_rob_count = rob_count - 2;
@@ -105,6 +107,8 @@ module rob(
             rob_commit[0].dest_reg_idx = rob_array[head_ptr].dest_reg_idx;
             rob_commit[0].t_old = rob_array[head_ptr].told;
             rob_commit[0].data = rob_array[head_ptr].data;
+            rob_commit[0].is_store = rob_array[head_ptr].is_store;
+            rob_commit[0].sq_index = rob_array[head_ptr].sq_index;
             next_head_ptr = head_ptr + 1;
             next_rob_count = rob_count - 1;
 
@@ -127,6 +131,11 @@ module rob(
         if(cond_branch_in.valid) begin
                 next_rob_array[cond_branch_in.br_rob_idx].ready_retire = 1'b1;
         end
+
+        if(sq_in.valid) begin
+                next_rob_array[sq_in.rob_index].ready_retire = 1'b1;
+        end
+
 
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
@@ -156,6 +165,9 @@ module rob(
             next_rob_array[tail_ptr].NPC = dispatch_pack[0].NPC;
             next_rob_array[tail_ptr].has_dest = dispatch_pack[0].has_dest;
             next_rob_array[tail_ptr].dest_reg_idx = dispatch_pack[0].dest_reg_idx;
+            next_rob_array[tail_ptr].lq_index = dispatch_pack[0].lq_index;
+            next_rob_array[tail_ptr].sq_index = dispatch_pack[0].sq_index;
+            next_rob_array[tail_ptr].is_store = dispatch_pack[0].wr_mem;
 
 
             next_tail_ptr = tail_ptr + 1;            
@@ -169,7 +181,10 @@ module rob(
             next_rob_array[tail_ptr].PC = dispatch_pack[0].PC;
             next_rob_array[tail_ptr].NPC = dispatch_pack[0].NPC;
             next_rob_array[tail_ptr].has_dest = dispatch_pack[0].has_dest;
-            next_rob_array[tail_ptr].dest_reg_idx = dispatch_pack[0].dest_reg_idx;            
+            next_rob_array[tail_ptr].dest_reg_idx = dispatch_pack[0].dest_reg_idx; 
+            next_rob_array[tail_ptr].lq_index = dispatch_pack[0].lq_index;
+            next_rob_array[tail_ptr].sq_index = dispatch_pack[0].sq_index;   
+            next_rob_array[tail_ptr].is_store = dispatch_pack[0].wr_mem;        
 
             next_rob_array[ROB_IDX'(tail_ptr + 1)].t = dispatch_pack[1].T;
             next_rob_array[ROB_IDX'(tail_ptr + 1)].told = dispatch_pack[1].Told;
@@ -180,6 +195,9 @@ module rob(
             next_rob_array[ROB_IDX'(tail_ptr + 1)].NPC = dispatch_pack[1].NPC;
             next_rob_array[ROB_IDX'(tail_ptr + 1)].has_dest = dispatch_pack[1].has_dest;
             next_rob_array[ROB_IDX'(tail_ptr + 1)].dest_reg_idx = dispatch_pack[1].dest_reg_idx;
+            next_rob_array[ROB_IDX'(tail_ptr + 1)].lq_index = dispatch_pack[1].lq_index;
+            next_rob_array[ROB_IDX'(tail_ptr + 1)].sq_index = dispatch_pack[1].sq_index;
+            next_rob_array[ROB_IDX'(tail_ptr + 1)].is_store = dispatch_pack[1].wr_mem;
 
             next_tail_ptr = tail_ptr + 2;            
             next_rob_count = next_rob_count + 2;

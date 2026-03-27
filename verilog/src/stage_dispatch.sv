@@ -23,10 +23,21 @@ module stage_dispatch (
 
     output D_S_PACKET                       dispatch_pack               [`N-1:0],
     output logic                            branch_encountered          [`N-1:0],
-    output B_MASK                           branch_index                [`N-1:0],  
+    output B_MASK                           branch_index                [`N-1:0], 
+    //for lsq
+    input  LQ_IDX                           lq_index_in                 [`N-1:0],
+    input  SQ_IDX                           sq_index_in                 [`N-1:0],
+    input  logic [1:0]                      lq_space_available                  ,
+    input  logic [1:0]                      sq_space_available                  ,
+    input  logic [`SQ_SZ-1:0]               sq_valid_mask               [`N-1:0],
+    output INST     [`N-1:0]                inst_out                            ,
+    output logic    [`N-1:0]                is_load_out                         ,
+    output logic    [`N-1:0]                is_store_out                        ,
+    output logic    [`N-1:0]                is_branch_out                       ,
+    output PRF_IDX  [`N-1:0]                dest_tag_out                        ,
     // maptable snapshot
     input  logic [`MT_SIZE-1:0]             maptable_snapshot_in                ,                         
-    output logic  [`N-1:0][`MT_SIZE-1:0]             maptable_snapshot_out       ,
+    output logic  [`N-1:0][`MT_SIZE-1:0]    maptable_snapshot_out               ,
 
     output ADDR                             pc_snapshot_out             [`N-1:0],
    
@@ -58,19 +69,30 @@ module stage_dispatch (
     REG_IDX [`N-1:0] rd;
     ALU_OPA_SELECT [`N-1:0] opa_select;
     ALU_OPB_SELECT [`N-1:0] opb_select; 
-    logic [`N-1:0] has_dest, is_branch, halt, cond_branch;
+    logic [`N-1:0] has_dest, is_branch, halt, cond_branch, is_load, is_store;
 
     PRF_IDX         [`N-1:0]    t1, t2, told;
     logic           [`N-1:0]    t1_ready, t2_ready;
     logic           [`N-1:0] [`MT_SIZE-1:0]  snapshot_out;
-    int unsigned      branch_count, next_branch_count;
-    int unsigned      branch_avail_slot;
-    int unsigned      small1, small2, small3, small4;
+    BMASK_CNT      branch_count, next_branch_count;
+    logic [1:0]      branch_avail_slot;
+    logic [1:0]      small1, small2, small3, small4, small5;
     
     // Bmask
     B_MASK  bmask, next_bmask, bmask_idx_0, bmask_idx_1;
    
-    
+    //for lsq
+    assign is_branch_out = is_branch;
+    assign is_load_out = is_load;
+    assign is_store_out = is_store;
+    assign dest_tag_out = t_new;
+    always_comb begin
+        for(int i = 0; i < `N; i++) begin
+            if(f_d_pack[i].valid) begin
+                inst_out[i] =  f_d_pack[i].inst;
+            end
+        end
+    end
 
 
     for (genvar i=0; i<`N; i++) begin : decoders
@@ -118,6 +140,8 @@ module stage_dispatch (
             is_branch[i] = decode_pack[i].cond_branch || decode_pack[i].uncond_branch;
             cond_branch[i]= decode_pack[i].cond_branch;
             halt[i] = decode_pack[i].halt;
+            is_load[i] = decode_pack[i].rd_mem;
+            is_store[i] = decode_pack[i].wr_mem;
         end
     end
 
@@ -259,6 +283,9 @@ module stage_dispatch (
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
                     dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
                     dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    dispatch_pack[0].sq_index = sq_index_in[0];
+                    dispatch_pack[0].lq_index = lq_index_in[0];
+                    dispatch_pack[0].sq_valid_mask = sq_valid_mask[0];
                     //debug
                     dispatch_pack[0].dest_reg_idx = (has_dest[0])? rd[0]:'0;
                 end
@@ -374,6 +401,9 @@ module stage_dispatch (
                         dispatch_pack[i].illegal = decode_pack[i].illegal;
                         dispatch_pack[i].predict_addr = f_d_pack[i].predict_addr;
                         dispatch_pack[i].predict_taken = f_d_pack[i].predict_taken;
+                        dispatch_pack[i].sq_index = sq_index_in[i];
+                        dispatch_pack[i].lq_index = lq_index_in[i];
+                        dispatch_pack[i].sq_valid_mask = sq_valid_mask[i];
                         //debug
                          dispatch_pack[i].dest_reg_idx = (has_dest[i])? rd[i]:'0;
                     end
@@ -406,7 +436,10 @@ module stage_dispatch (
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
                     dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
-                    dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken; 
+                    dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    dispatch_pack[0].sq_index = sq_index_in[0];
+                    dispatch_pack[0].lq_index = lq_index_in[0];
+                    dispatch_pack[0].sq_valid_mask = sq_valid_mask[0]; 
                     //debug
                     dispatch_pack[0].dest_reg_idx = (has_dest[0])? rd[0]:'0;              
                     //inst 1 is branch
@@ -520,6 +553,9 @@ module stage_dispatch (
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
                     dispatch_pack[1].predict_addr = f_d_pack[1].predict_addr;
                     dispatch_pack[1].predict_taken = f_d_pack[1].predict_taken;
+                    dispatch_pack[1].sq_index = sq_index_in[1];
+                    dispatch_pack[1].lq_index = lq_index_in[1];
+                    dispatch_pack[1].sq_valid_mask = sq_valid_mask[1];
                     //debug
                     dispatch_pack[1].dest_reg_idx = (has_dest[1])? rd[1]:'0;
                     //update branch count
@@ -539,8 +575,10 @@ module stage_dispatch (
             branch_avail_slot = (next_branch_count < 3)? 'd2:(next_branch_count == 3)? 'd1:'d0; 
             small1 = min2(branch_avail_slot,  rs_empty_entries_num);   
             small2 = min2(rob_space_avail,    avail_num);              
-            small3 = min2(small1, small2);                             
-            dispatch_num = min2(small3, branch_stack_space_avail);    
+            small3 = min2(lq_space_available, sq_space_available);
+            small4 = min2(small1, small2);
+            small5 = min2(small3, branch_stack_space_avail);                             
+            dispatch_num = min2(small4, small5);    
         end
     end
 
