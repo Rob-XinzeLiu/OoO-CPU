@@ -251,7 +251,7 @@ ALL_HEADERS = $(INC)*.svh
 # 	All headers must be in inc/ directly.
 
 # TODO: add more modules here, or rename the given ones
-MODULES = cpu mult rob rs psel_gen freelist
+MODULES = cpu mult rob rs psel_gen freelist victim_cache
 
 # TODO: add extra source file dependencies below
 
@@ -276,6 +276,11 @@ FREELIST_FILES =       $(SRC)freelist.sv
 build/freelist.simv:   $(FREELIST_FILES)
 build/freelist.cov.simv: $(FREELIST_FILES)
 synth/freelist.vg:     $(FREELIST_FILES)
+
+VICTIM_CACHE_FILES = $(SRC)victim_cache.sv
+build/victim_cache.simv:      $(VICTIM_CACHE_FILES)
+build/victim_cache.cov.simv:  $(VICTIM_CACHE_FILES)
+synth/victim_cache.vg:        $(VICTIM_CACHE_FILES)
 
 #################################
 # ---- Main CPU Definition ---- #

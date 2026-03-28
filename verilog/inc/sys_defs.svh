@@ -171,6 +171,11 @@ typedef struct packed {
     DATA                                      data;
 } dcache_data_t;
 
+typedef enum logic {
+    REQ_IDLE,
+    REQ_WAIT_ACCEPT
+} req_state_t;
+
 // Miss request from dcache to MSHR
 typedef struct packed {
     logic                                     valid;
