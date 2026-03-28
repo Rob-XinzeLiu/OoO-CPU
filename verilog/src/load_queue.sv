@@ -23,7 +23,7 @@ module load_queue(
     input logic [`SQ_SZ-1:0]     sq_valid_in                    ,
     input logic [`SQ_SZ-1:0]     sq_valid_in_mask       [`N-1:0],
     input SQ_IDX                 sq_tail_in             [`N-1:0],
-    input logic  [2:0]           sq_funct_in         [`SQ_SZ-1:0],//full word forwarding
+    input logic  [2:0]           sq_funct3_in         [`SQ_SZ-1:0],//full word forwarding
     //the address calculated from execute stage
     input LQ_PACKET              load_execute_pack              ,
     //data from dcache

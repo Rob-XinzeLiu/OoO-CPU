@@ -80,8 +80,6 @@ module cpu (
     //                                              //
     //////////////////////////////////////////////////
 
-    // Pipeline register enables
-    logic if_id_enable, id_ex_enable, ex_mem_enable, mem_wb_enable;
 
     // From IF stage to memory
     MEM_COMMAND Imem_command; // Command sent to memory
@@ -101,6 +99,12 @@ module cpu (
     logic           dispatch_valid [`N-1:0];
     logic           branch_encountered [`N-1:0];
     B_MASK          branch_index [`N-1:0];
+    INST        [`N-1:0] inst;
+    logic       [`N-1:0] is_load;
+    logic       [`N-1:0] is_store;
+    logic       [`N-1:0] is_branch;
+    PRF_IDX     [`N-1:0] dest_tag;
+
     logic [`N-1:0][`MT_SIZE-1:0] maptable_snapshot_out ;
     ADDR            pc_snapshot_out [`N-1:0];
     logic [1:0]     dispatch_num;
@@ -110,13 +114,15 @@ module cpu (
     D_S_PACKET  d_s_pack [5:0];
 
     // Outputs from ISSUE stage and ISSUE/EX Pipeline Register
-    S_X_PACKET s_x_pack [`N:0];
-    S_X_PACKET s_x_pack_reg [`N:0];
+    S_X_PACKET s_x_pack [5:0];
+    S_X_PACKET s_x_pack_reg [5:0];
 
     // Outputs from EX-Stage and EX/COM Pipeline Register
     X_C_PACKET x_c_pack [`N-1:0];
     X_C_PACKET x_c_pack_reg [`N-1:0];
     COND_BRANCH_PACKET cond_pack, cond_pack_reg;
+    SQ_PACKET          store_pack, store_pack_reg;
+    LQ_PACKET          load_execute_pack;
     MISPREDICT_PACKET mispredict_pack_out;
     ETB_TAG_PACKET  etb_bus [`N-1:0];
 
@@ -127,6 +133,7 @@ module cpu (
     FL_RETIRE_PACKET [`N-1:0] freelist_pack;
     logic       stall_fetch;
     RETIRE_PACKET [`N-1:0] commit_pack;
+    SQ_PACKET       store_retire_pack [`N-1:0];
 
 
     // ROB
@@ -140,6 +147,8 @@ module cpu (
     ROB_IDX         rob_index_out;
     logic [1:0]     branch_stack_space_avail;
     ADDR            pc_BS_out;
+    LQ_IDX          BS_lq_tail_out;
+    SQ_IDX          BS_sq_tail_out;
 
     // Freelist
     FLIST_IDX   BS_tail [`N-1:0];
@@ -161,6 +170,31 @@ module cpu (
         end
     end
 
+    //load queue
+    LQ_IDX                lq_index               [`N-1:0];
+    LQ_IDX                BS_lq_tail_out         [`N-1:0];
+    logic [1:0]           lq_space_available             ;
+    LQ_PACKET             load_packet                    ;
+    logic                 cdb_req_load                   ;
+    LQ_PACKET             lq_out                         ;
+
+
+
+    //store queue
+    SQ_PACKET            sq_out                          ;
+    SQ_IDX               BS_sq_tail_out          [`N-1:0];
+    logic [1:0]          sq_space_available              ;
+    logic [`SQ_SZ-1:0]   sq_addr_ready_mask              ;
+    SQ_IDX               sq_index                [`N-1:0];
+    ADDR                 sq_addr_out         [`SQ_SZ-1:0];
+    logic                sq_addr_ready_out   [`SQ_SZ-1:0];
+    DATA                 sq_data_out         [`SQ_SZ-1:0];
+    logic                sq_data_ready_out   [`SQ_SZ-1:0];
+    logic [2:0]          sq_funct3_out       [`SQ_SZ-1:0];
+    logic [`SQ_SZ-1:0]   sq_valid_out                    ;
+    logic [`SQ_SZ-1:0]   sq_valid_out_mask       [`N-1:0];
+    SQ_IDX               sq_tail_out             [`N-1:0];
+
     // CDB_Arbiter
     typedef enum logic [3:0] {
         MULT_1,
@@ -174,6 +208,7 @@ module cpu (
      } cdb_arbiter_state_t;
 
     logic   cdb_req_mult;
+    logic   cdb_req_load;
     logic   cdb_req_alu [`N-1:0];
     logic   cdb_gnt_alu [`N-1:0];
     cdb_arbiter_state_t cdb_arbiter_state;
@@ -371,6 +406,11 @@ module cpu (
         .dispatch_pack(dispatch_out_pack),
         .branch_encountered(branch_encountered),
         .branch_index(branch_index),
+        .inst_out(inst),
+        .is_load_out(is_load),
+        .is_store_out(is_store),
+        .is_branch_out(is_branch),
+        .dest_tag_out(dest_tag),
         .maptable_snapshot_out(maptable_snapshot_out),
         .pc_snapshot_out(pc_snapshot_out),
         .dispatch_num(dispatch_num)
@@ -449,6 +489,8 @@ module cpu (
         .clock (clock),
         .reset (reset),
         .s_x_pack(s_x_pack_reg),
+        .lq_in(lq_out),
+        
         
         // Output
         .x_c_pack(x_c_pack),
@@ -460,7 +502,9 @@ module cpu (
         .resolve_index_out(global_resolve_index),
         .resolve_signal_out(global_resolve),
         .early_tag_bus(etb_bus),
-        .mispredict_pack_out(mispredict_pack_out)
+        .mispredict_pack_out(mispredict_pack_out),
+        .lq_execute_pack(load_execute_pack),
+        .sq_execute_pack(store_pack)
     );
 
     //////////////////////////////////////////////////
@@ -471,13 +515,14 @@ module cpu (
     //don't need to flush the reg here
     always_ff @(posedge clock) begin
         if(reset) begin
-            x_c_pack_reg    <= '{default: '0};;
-            cond_pack_reg   <= '{default: '0};;
-            //mispredict_pack_reg <= '{default: '0};;
+            x_c_pack_reg    <= '{default: '0};
+            cond_pack_reg   <= '{default: '0};
+            store_pack_reg   <= '{default: '0};
+
         end else begin
             x_c_pack_reg    <= x_c_pack;
             cond_pack_reg   <= cond_pack;
-            //mispredict_pack_reg <= mispredict_pack_out;
+            store_pack_reg   <= store_pack;
         end
     end
 
@@ -490,18 +535,26 @@ module cpu (
     //we will always grant mult, so cdb_req_mult just means if there's a mult inst in that stage.
     always_comb begin
         cdb_arbiter_state = NONE;  // default
-        if(cdb_req_alu[0] && cdb_req_mult) begin
+        if(cdb_req_load && cdb_req_mult) begin
+            cdb_arbiter_state = MULT_1_LOAD_1;
+        end else if(cdb_req_mult && !cdb_req_load && cdb_req_alu[0]) begin
             cdb_arbiter_state = MULT_1_ALU_1;
-        end else if(cdb_req_mult && !cdb_req_alu[0]) begin
+        end else if(cdb_req_mult && !cdb_req_load && !cdb_req_alu[0] && !cdb_req_alu[1]) begin
             cdb_arbiter_state = MULT_1;
-        end else if(!cdb_req_mult && cdb_req_alu[0] && !cdb_req_alu[1]) begin
-            cdb_arbiter_state = ALU_1;
-        end else if(!cdb_req_mult && cdb_req_alu[0] && cdb_req_alu[1])  begin           
+        end else if(!cdb_req_mult && cdb_req_load && cdb_req_alu[0])  begin           
+            cdb_arbiter_state = LOAD_1_ALU_1;
+        end else if (!cdb_req_mult && cdb_req_load && !cdb_req_alu[0]) begin
+            cdb_arbiter_state = LOAD_1;
+        end else if (!cdb_req_mult && !cdb_req_load && cdb_req_alu[0] && cdb_req_alu[1])begin
             cdb_arbiter_state = ALU_2;
+        end else if (!cdb_req_mult && !cdb_req_load && cdb_req_alu[0] && !cdb_req_alu[1]) begin
+            cdb_arbiter_state = ALU_1;
+        end else begin
+            cdb_arbiter_state = NONE;
         end
 
         case (cdb_arbiter_state)
-            MULT_1: begin
+            MULT_1_LOAD_1: begin
                 cdb_gnt_alu[0] = 0;
                 cdb_gnt_alu[1] = 0;
             end
@@ -509,8 +562,12 @@ module cpu (
                 cdb_gnt_alu[0] = 1;
                 cdb_gnt_alu[1] = 0;
             end
-            ALU_1: begin
+            ALU_1, LOAD_1_ALU_1: begin
                 cdb_gnt_alu[0] = 1;
+                cdb_gnt_alu[1] = 0;
+            end      
+            LOAD_1, MULT_1: begin
+                cdb_gnt_alu[0] = 0;
                 cdb_gnt_alu[1] = 0;
             end
             ALU_2: begin
@@ -535,8 +592,6 @@ module cpu (
         .clock(clock),
         .reset(reset),
         .x_c_packet(x_c_pack_reg),
-        .branch_mispredicted(global_mispredict),
-        .mispred_mask_idx(global_mispredict_index),
 
         // Output
         .cdb(cdb),
@@ -560,6 +615,7 @@ module cpu (
 
         // Output
         .freelist_pack(freelist_pack),
+        .store_retire_pack(store_retire_pack),
         .commit_pack(commit_pack),
         .stall_fetch(stall_fetch)
     );
@@ -601,6 +657,7 @@ module cpu (
         .mispredicted_index(rob_index_out), 
         .cdb(cdb),
         .cond_branch_in(cond_pack_reg),
+        .sq_in(store_pack_reg),
 
         // Output
         .rob_commit(rob_commit_pack),
@@ -657,7 +714,9 @@ module cpu (
         .tail_ptr_out(tail_ptr_out),
         .rob_index_out(rob_index_out),
         .branch_stack_space_avail(branch_stack_space_avail),
-        .pc_snapshot_out(pc_BS_out)
+        .pc_snapshot_out(pc_BS_out),
+        .lq_tail_out(BS_lq_tail_out),
+        .sq_tail_out(BS_sq_tail_out)
     );
 
     //////////////////////////////////////////////////
@@ -679,14 +738,89 @@ module cpu (
         .cdb(cdb),
         .early_tag_bus(etb_bus),
         .cdb_gnt_alu(cdb_gnt_alu),
+        .sq_valid_in(sq_valid_out),
+        .sq_addr_ready_mask(sq_addr_ready_mask),
         
 
         // Output
         .cdb_req_alu(cdb_req_alu),
         .issue_pack(d_s_pack),
-        .rs_empty_entries_num(rs_empty_entries_num),
-        .dbg_issue_count()
+        .rs_empty_entries_num(rs_empty_entries_num)
     );
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //               load      queue                //
+    //                                              //
+    //////////////////////////////////////////////////
+    load_queue lq_0 (
+        //input
+        .clock(clock),
+        .reset(reset),
+        .inst_in(inst),
+        .is_load(is_load),
+        .is_branch(is_branch),
+        .dest_tag_in(dest_tag),
+        .rob_index(rob_index),
+        .mispredicted(global_mispredict),
+        .BS_lq_tail_in(BS_lq_tail_out),
+        .sq_addr_in(sq_addr_out),
+        .sq_addr_ready_in(sq_addr_ready_out),
+        .sq_data_in(sq_data_out),
+        .sq_data_ready_in(sq_data_ready_out),
+        .sq_valid_in(sq_valid_out),
+        .sq_valid_in_mask(sq_valid_out_mask),
+        .sq_tail_in(sq_tail_out),
+        .sq_funct3_in(sq_funct3_out),
+        .load_execute_pack(load_execute_pack),
+        .dcache_load_packet(),
+
+        //output
+        .lq_index(lq_index),
+        .BS_lq_tail_out(BS_lq_tail_out),
+        .lq_space_available(lq_space_available),
+        .load_packet(load_packet),
+        .cdb_req_load(cdb_req_load),
+        .lq_out(lq_out)
+    );
+
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //              store      queue                //
+    //                                              //
+    //////////////////////////////////////////////////
+    store_queue sq_0 (
+        //input
+        .clock(clock),
+        .reset(reset),
+        .inst_in(inst),
+        .is_load(is_load),
+        .is_store(is_store),
+        .is_branch(is_branch),
+        .rob_index(rob_index),
+        .store_execute_pack(store_pack),
+        .store_retire_pack(store_retire_pack),
+        .mispredicted(global_mispredict),
+        .BS_sq_tail_in(BS_sq_tail_out),
+        .dcache_can_accept(),
+
+        //output
+        .sq_out(sq_out),
+        .BS_sq_tail_out(BS_sq_tail_out),
+        .sq_space_available(sq_space_available),
+        .sq_addr_ready_mask(sq_addr_ready_mask),
+        .sq_index(sq_index),
+        .sq_addr_out(sq_addr_out),
+        .sq_addr_ready_out(sq_addr_ready_out),
+        .sq_funct3_out(sq_funct3_out),
+        .sq_valid_out(sq_valid_out),
+        .sq_valid_out_mask(sq_valid_out_mask),
+        .sq_tail_out(sq_tail_out)
+    );
+
+
+
 
 
     //////////////////////////////////////////////////

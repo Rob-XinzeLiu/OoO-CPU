@@ -13,16 +13,16 @@ module branch_stack (
     input B_MASK                                        branch_idx               [`N-1:0],   //from dispatch stage
     input ADDR                                          pc_snapshot_in           [`N-1:0],   //from dispatch stage     
     input ROB_IDX                                       rob_index_in             [`N-1:0],   //from rob  
-    input LQ_IDX                                        lq_index_in              [`N-1:0],   //from lq
-    input SQ_IDX                                        sq_index_in              [`N-1:0],   //from sq                  
+    input LQ_IDX                                        lq_tail_in              [`N-1:0],   //from lq
+    input SQ_IDX                                        sq_tail_in              [`N-1:0],   //from sq                  
     
     output logic [`MT_SIZE-1:0]                         mt_snapshot_out                  ,   //to maptable
     output FLIST_IDX                                    tail_ptr_out                     ,   //to freelist
     output ROB_IDX                                      rob_index_out                    ,   //to rob
     output logic [1:0]                                  branch_stack_space_avail         ,   //to dispatch stage
     output ADDR                                         pc_snapshot_out                  ,   //to fetch stage
-    output LQ_IDX                                       lq_index_out                     ,   //to lq
-    output SQ_IDX                                       sq_index_out                         //to sq
+    output LQ_IDX                                       lq_tail_out                     ,   //to lq
+    output SQ_IDX                                       sq_tail_out                         //to sq
 );
 
     typedef struct packed {
@@ -79,8 +79,8 @@ module branch_stack (
                     tail_ptr_out    = stack[i].freelist_tail_idx;
                     rob_index_out   = stack[i].rob_index;
                     pc_snapshot_out = stack[i].pc;
-                    lq_index_out    = stack[i].lq_index;
-                    sq_index_out    = stack[i].sq_index;
+                    lq_tail_out    = stack[i].lq_tail;
+                    sq_tail_out    = stack[i].sq_tail;
                     stack_ptr_temp1  = i;
                 end
             end
@@ -121,8 +121,8 @@ module branch_stack (
                 stack_next[stack_ptr_temp2].freelist_tail_idx = tail_ptr_in[i];
                 stack_next[stack_ptr_temp2].pc = pc_snapshot_in[i];
                 stack_next[stack_ptr_temp2].rob_index = rob_index_in[i];
-                stack_next[stack_ptr_temp2].lq_index = lq_index_in[i];
-                stack_next[stack_ptr_temp2].sq_index = sq_index_in[i];
+                stack_next[stack_ptr_temp2].lq_tail = lq_tail_in[i];
+                stack_next[stack_ptr_temp2].sq_tail = sq_tail_in[i];
                 stack_ptr_temp2 = stack_ptr_temp2 + 1;
                 
             end
