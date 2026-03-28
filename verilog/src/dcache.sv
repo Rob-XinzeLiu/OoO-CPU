@@ -176,10 +176,10 @@ module Dcache
             for (int i = 0; i < WAYS; ++i) begin
                 if (!cache_tags[com_miss_req.miss_req_set][i].valid && !found_way_miss) begin
                     found_way_miss = 1'b1;
-                    way_index_miss = [$clog2(WAYS)-1:0](i); // cast this
+                    way_index_miss = i[$clog2(WAYS)-1:0]; // cast this
                 end 
                 else if (cache_tags[com_miss_req.miss_req_set][i].lru_val == 'd0 && !found_way_miss) begin
-                    way_index_miss = [$clog2(WAYS)-1:0](i); // cast this
+                    way_index_miss = i[$clog2(WAYS)-1:0]; // cast this
                     found_way_miss = 1'b1;
                 end
             end

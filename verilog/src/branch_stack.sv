@@ -33,7 +33,7 @@ module branch_stack (
         ADDR                           pc;
         ROB_IDX                        rob_index;
         LQ_IDX                          lq_tail;
-        ST_IDX                          sq_tail;
+        SQ_IDX                          sq_tail;
     } checkpoint_t;
 
     checkpoint_t stack              [`BRANCH_STACK_DEPTH-1:0];

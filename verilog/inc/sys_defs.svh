@@ -77,7 +77,7 @@ typedef logic [31:0] ADDR;
 typedef logic [31:0] DATA;
 typedef logic [4:0] REG_IDX;
 typedef logic [2*`N-1:0] B_MASK;
-typedef logic [$clog2(`B_MASK+1)-1:0] BMASK_CNT;
+typedef logic [$clog2($bits(B_MASK)+1)-1:0] BMASK_CNT;
 
 // the zero register
 // In RISC-V, any read of this register returns zero and any writes are thrown away

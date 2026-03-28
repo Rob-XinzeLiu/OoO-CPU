@@ -12,8 +12,6 @@ module mshr #(
     input  MEM_TAG        mem2proc_transaction_tag,
     input  MEM_TAG        mem2proc_data_tag,
     input  MEM_BLOCK      mem2proc_data,
-
-    input
     
     output MEM_COMMAND    proc2mem_command,
     output ADDR           proc2mem_addr,
