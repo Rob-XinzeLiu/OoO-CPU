@@ -24,9 +24,10 @@ module Dcache
     output  logic            cache_ready, // it is ready while the miss queue is not full
     output  miss_request_t   miss_request,
 
-    // write buffer interface (VC dirty evictions)
-    output  vc_wb_req_t      wb_req,  //to write buffer
-    input   logic            wb_ready //from write buffer
+    output MEM_COMMAND      vc2mem_command,
+    output ADDR             vc2mem_addr,
+    output MEM_BLOCK        vc2mem_data,
+    output MEM_SIZE         vc2mem_size
 );
 
     localparam int ADDR_BITS   = $bits(ADDR);
@@ -107,6 +108,7 @@ module Dcache
     logic [`DCACHE_SET_BITS-1:0] dcache_evicted_set;
     MEM_BLOCK                dcache_evicted_data;
     logic                    dcache_evicted_dirty;
+    logic                    vc_store_ready;
  
     //LRU LOGIC STUFF
     logic [$clog2(WAYS)-1:0] old_lru_index_hit;
@@ -347,31 +349,31 @@ module Dcache
             end
             // Vc Load hit
             if (vc_hit && req_is_load) begin
-                /* unique case (d_request_size)
+                unique case (d_request_size)
                     BYTE: begin
-                        cache_resp_data = d_req_unsigned ?
+                        cache_resp_data.data = d_req_unsigned ?
                             {{24{1'b0}}, vc_hit_data.byte_level[d_request_offset]} :
                             {{24{vc_hit_data.byte_level[d_request_offset][7]}},
                             vc_hit_data.byte_level[d_request_offset]};
                     end
 
                     HALF: begin
-                        cache_resp_data = d_req_unsigned ?
+                        cache_resp_data.data = d_req_unsigned ?
                             {{16{1'b0}}, vc_hit_data.half_level[d_request_offset[2:1]]} :
                             {{16{vc_hit_data.half_level[d_request_offset[2:1]][15]}},
                             vc_hit_data.half_level[d_request_offset[2:1]]};
                     end
 
                     WORD: begin
-                        cache_resp_data = vc_hit_data.word_level[d_request_offset[2]];
+                        cache_resp_data.data = vc_hit_data.word_level[d_request_offset[2]];
                     end
 
                     default: begin
-                        cache_resp_data = '0;
+                        cache_resp_data.data = '0;
                     end
                 endcase
 
-                resp_valid = 1'b1;*/
+                resp_valid = 1'b1;
             end
         end   
     end
@@ -408,7 +410,7 @@ module Dcache
         .vc_store_offset      (d_request_offset),
         .vc_store_size        (d_request_size),
         .vc_store_data        (req_store_data),
-        .vc_store_ready       (),
+        .vc_store_ready       (vc_store_ready),
 
         // dcache eviction into VC
         .dcache_evicted_valid (dcache_evicted_valid),
@@ -418,9 +420,11 @@ module Dcache
         .dcache_evicted_dirty (dcache_evicted_dirty),
         .dcache_evicted_ready (vc_evicted_ready),
 
-        // write buffer
-        .wb_req               (wb_req),
-        .wb_ready             (wb_ready)
+        // vc write to mem 
+        .vc2mem_command       (vc2mem_command),
+        .vc2mem_addr          (vc2mem_addr),
+        .vc2mem_data          (vc2mem_data),
+        .vc2mem_size          (vc2mem_size)
     );
 
 endmodule

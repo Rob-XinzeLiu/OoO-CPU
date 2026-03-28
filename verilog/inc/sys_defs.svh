@@ -223,16 +223,6 @@ typedef struct packed {
     MEM_BLOCK                                 refill_data;
 } completed_mshr_t;
 
-// Writeback request from VC to write buffer
-typedef struct packed {
-    logic                                     valid;
-    logic                                     dirty;
-    logic [`DCACHE_TAG_BITS-1:0]              tag;
-    logic [`DCACHE_SET_BITS-1:0]              set;
-    logic [VC_WAY_BITS-1:0]                   lru_val;
-    MEM_BLOCK                                 data;
-} vc_entry_t;
-
 ///////////////////////////////
 // ---- Exception Codes ---- //
 ///////////////////////////////
