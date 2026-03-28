@@ -140,7 +140,98 @@ typedef struct packed {
     logic                          valid;
 } ICACHE_TAG;
 
+//////////////////////////////////////
+// ---- Cache / Victim Typedefs ---- //
+//////////////////////////////////////
 
+// Dcache geometry for current design
+`define DCACHE_WAYS        4
+`define DCACHE_SETS        8
+`define DCACHE_LINE_BYTES  8
+
+`define DCACHE_OFFSET_BITS $clog2(`DCACHE_LINE_BYTES)
+`define DCACHE_SET_BITS    $clog2(`DCACHE_SETS)
+`define DCACHE_TAG_BITS    ($bits(ADDR) - `DCACHE_OFFSET_BITS - `DCACHE_SET_BITS)
+
+// Full cache-line address without byte offset.
+// Since line size is 8 bytes, this is ADDR[31:3].
+typedef logic [$bits(ADDR)-`DCACHE_OFFSET_BITS-1:0] BLOCK_ADDR;
+
+// Main dcache tag metadata per way
+typedef struct packed {
+    logic [`DCACHE_TAG_BITS-1:0]              tag;
+    logic                                     valid;
+    logic                                     dirty;
+    logic [$clog2(`DCACHE_WAYS)-1:0]          lru_val;
+} cache_tag_t;
+
+typedef struct packed {
+    logic                                     valid;
+    ADDR                                      address;
+    DATA                                      data;
+} dcache_data_t;
+
+// Miss request from dcache to MSHR
+typedef struct packed {
+    logic                                     valid;
+    ADDR                                      miss_req_address;
+    logic [`DCACHE_TAG_BITS-1:0]              miss_req_tag;
+    logic [`DCACHE_SET_BITS-1:0]              miss_req_set;
+    logic [`DCACHE_OFFSET_BITS-1:0]           miss_req_offset;
+    logic                                     req_is_load;
+    logic [2:0]                               miss_req_size;
+    logic                                     miss_req_unsigned;
+    DATA                                      miss_req_data;
+} miss_request_t;
+
+typedef struct packed {
+    logic                                     valid;
+    ADDR                                      miss_req_address;
+    logic [`DCACHE_TAG_BITS-1:0]              miss_req_tag;
+    logic [`DCACHE_SET_BITS-1:0]              miss_req_set;
+    logic [`DCACHE_OFFSET_BITS-1:0]           miss_req_offset;
+    logic                                     req_is_load;
+    logic [2:0]                               miss_req_size;
+    logic                                     miss_req_unsigned;
+    DATA                                      miss_req_data;
+} miss_fifo_entry_t;
+
+typedef struct packed {
+    logic                                     valid;
+    MEM_TAG                                   trans_tag;
+    ADDR                                      miss_req_address;
+    logic [`DCACHE_TAG_BITS-1:0]              miss_req_tag;
+    logic [`DCACHE_SET_BITS-1:0]              miss_req_set;
+    logic [`DCACHE_OFFSET_BITS-1:0]           miss_req_offset;
+    logic                                     req_is_load;
+    logic [2:0]                               miss_req_size;
+    logic                                     miss_req_unsigned;
+    DATA                                      miss_req_data;
+} outstanding_entry_t;
+
+
+typedef struct packed {
+    logic                                     valid;
+    ADDR                                      miss_req_address;
+    logic [`DCACHE_TAG_BITS-1:0]              miss_req_tag;
+    logic [`DCACHE_SET_BITS-1:0]              miss_req_set;
+    logic [`DCACHE_OFFSET_BITS-1:0]           miss_req_offset;
+    logic                                     req_is_load;
+    logic [2:0]                               miss_req_size;
+    logic                                     miss_req_unsigned;
+    DATA                                      miss_req_data;
+    MEM_BLOCK                                 refill_data;
+} completed_mshr_t;
+
+// Writeback request from VC to write buffer
+typedef struct packed {
+    logic                                     valid;
+    logic                                     dirty;
+    logic [`DCACHE_TAG_BITS-1:0]              tag;
+    logic [`DCACHE_SET_BITS-1:0]              set;
+    logic [VC_WAY_BITS-1:0]                   lru_val;
+    MEM_BLOCK                                 data;
+} vc_entry_t;
 
 ///////////////////////////////
 // ---- Exception Codes ---- //
