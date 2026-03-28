@@ -54,14 +54,36 @@ module Dcache
     // MEMDP VARIABLES //
     //////////////////////
 
-    localparam int DATA_DEPTH = SETS * WAYS;
-    logic                           data_re; // read enable per way
-    logic [$clog2(DATA_DEPTH)-1:0]  data_raddr; //read addr per way
-    MEM_BLOCK                       data_rdata; 
+    localparam int DATA_DEPTH      = LINES;
+    localparam int DATA_WIDTH      = $bits(MEM_BLOCK);
+    localparam int DATA_READ_PORTS = 1;
+    localparam int DATA_ADDR_BITS  = $clog2(DATA_DEPTH);
 
-    logic                           data_we; // write enable per way
-    logic [$clog2(DATA_DEPTH)-1:0]  data_waddr; // write addr per way
-    MEM_BLOCK                       data_wdata; // write data per way
+    logic [DATA_READ_PORTS-1:0]                    data_re;
+    logic [DATA_READ_PORTS-1:0][DATA_ADDR_BITS-1:0] data_raddr;
+    logic [DATA_READ_PORTS-1:0][DATA_WIDTH-1:0]     data_rdata;
+
+    logic                       data_we;
+    logic [DATA_ADDR_BITS-1:0]  data_waddr;
+    logic [DATA_WIDTH-1:0]      data_wdata;
+
+    memDP #(
+        .WIDTH(DATA_WIDTH),
+        .DEPTH(DATA_DEPTH),
+        .READ_PORTS(DATA_READ_PORTS),
+        .BYPASS_EN(0)
+    ) cache_structure (
+        .clock(clock),
+        .reset(reset),
+
+        .re(data_re),
+        .raddr(data_raddr),
+        .rdata(data_rdata),
+
+        .we(data_we),
+        .waddr(data_waddr),
+        .wdata(data_wdata)
+    );
     
     assign d_request_size   = MEM_SIZE'(inst.r.funct3[1:0]);
     assign d_req_unsigned   = inst.r.funct3[2];
@@ -72,8 +94,6 @@ module Dcache
 
     assign cache_ready  = !miss_returned ; // && mshr is not full // TODO: PLEASE ENSURE THAT THIS CHANGES. for now cache ready
 
-
-   
     // VC signals
     logic                    vc_hit;
     MEM_BLOCK                vc_hit_data;
@@ -94,7 +114,7 @@ module Dcache
     logic [$clog2(WAYS)-1:0] way_index_miss;
     logic [$clog2(WAYS)-1:0] old_lru_index_miss;
     
-    assign vc_lookup_valid = req_valid && !hit;
+    assign vc_lookup_valid = req_valid && !hit && cache_ready; // only look up when not refilling
 
     logic is_valid_load;
     logic is_valid_store;
@@ -104,9 +124,8 @@ module Dcache
 
     MEM_BLOCK selected_read_data;
     MEM_BLOCK merged_store_data;
-
-    assign selected_read_data = hit ? data_rdata : '0 ;
-
+    
+    assign selected_read_data = hit ? MEM_BLOCK'(data_rdata[0]) : '0;
 
     function automatic logic [$clog2(SETS*WAYS)-1:0] flat_idx(
         input logic [SET_BITS-1:0] set_idx,
@@ -122,17 +141,15 @@ module Dcache
 
         hit     = 1'b0;
         hit_way = '0;
+        old_lru_index_hit = '0;
         
        
-        data_re    = 1'b0;
-        data_raddr = '0;
+        data_re[0]    = 1'b0;
+        data_raddr[0] = '0;
         data_we    = 1'b0;
         data_waddr = '0;
         data_wdata = '0;
     
-
-        old_lru_index_hit = '0;
-
         dcache_evicted_valid = 1'b0;
         dcache_evicted_tag   = '0;
         dcache_evicted_set   = '0;
@@ -218,13 +235,13 @@ module Dcache
                 end
     
                 if (cache_tags[com_miss_req.miss_req_set][way_index_miss].valid) begin
-                    data_re = 1'b1;
-                    data_raddr = flat_idx(com_miss_req.miss_req_set, way_index_miss);
+                    data_re[0] = 1'b1;
+                    data_raddr[0] = flat_idx(com_miss_req.miss_req_set, way_index_miss);
 
                     dcache_evicted_valid = 1'b1;
                     dcache_evicted_tag   = cache_tags[com_miss_req.miss_req_set][way_index_miss].tag;
                     dcache_evicted_set   = com_miss_req.miss_req_set;
-                    dcache_evicted_data  = data_rdata; 
+                    dcache_evicted_data  = data_rdata[0]; 
                     dcache_evicted_dirty = cache_tags[com_miss_req.miss_req_set][way_index_miss].dirty;
                 end
 
@@ -248,23 +265,15 @@ module Dcache
                 end
             end
         end else begin
-            next_miss_request.valid             = (!hit && !vc_hit && req_valid && cache_ready) ? 1'b1 : 1'b0;
-            next_miss_request.miss_req_address  = request_address;
-            next_miss_request.miss_req_tag      = d_request_tag;
-            next_miss_request.miss_req_set      = d_request_set;
-            next_miss_request.miss_req_offset   = d_request_offset;
-            next_miss_request.req_is_load       = req_is_load;
-            next_miss_request.miss_req_size     = d_request_size;
-            next_miss_request.miss_req_unsigned = d_req_unsigned;
-            next_miss_request.miss_req_data     = !req_is_load ? req_store_data : '0; 
+            
             for (int i = 0; i < WAYS; i++) begin
                 if (cache_ready && req_valid && cache_tags[d_request_set][i].valid &&
                     cache_tags[d_request_set][i].tag == d_request_tag && !hit) begin
-                    data_re = 1'b1;
+                    data_re[0] = 1'b1;
                     hit     = 1'b1;
                     hit_way = i[$clog2(WAYS)-1:0];
-                    
-                    data_raddr = flat_idx(d_request_set, i[$clog2(WAYS)-1:0]); // request for memDP
+
+                    data_raddr[0] = flat_idx(d_request_set, i[$clog2(WAYS)-1:0]); // request for memDP
 
                     old_lru_index_hit = cache_tags[d_request_set][i].lru_val;// should be 0 if not valid
 
@@ -277,6 +286,17 @@ module Dcache
                     end
                     next_cache_tags[d_request_set][i].lru_val = WAYS - 'd1;
                 end
+            end
+            if (!hit && !vc_hit && req_valid && cache_ready) begin
+                next_miss_request.valid             = 1'b1;
+                next_miss_request.miss_req_address  = request_address;
+                next_miss_request.miss_req_tag      = d_request_tag;
+                next_miss_request.miss_req_set      = d_request_set;
+                next_miss_request.miss_req_offset   = d_request_offset;
+                next_miss_request.req_is_load       = req_is_load;
+                next_miss_request.miss_req_size     = d_request_size;
+                next_miss_request.miss_req_unsigned = d_req_unsigned;
+                next_miss_request.miss_req_data     = !req_is_load ? req_store_data : '0; 
             end
             if(hit && is_valid_load) begin
                 cache_resp_data.address = request_address;
