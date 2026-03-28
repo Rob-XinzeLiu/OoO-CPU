@@ -4,24 +4,25 @@
 module mshr #(
     parameter int ENTRIES = 16
 )(
-    input logic             clock,
-    input logic             reset,
+    input logic                 clock,
+    input logic                 reset,
 
-    input miss_request_t    dcache_miss_req,
+    input miss_request_t        dcache_miss_req,
 
-    input  MEM_TAG        mem2proc_transaction_tag,
-    input  MEM_TAG        mem2proc_data_tag,
-    input  MEM_BLOCK      mem2proc_data,
+    input  MEM_TAG              mem2proc_transaction_tag,
+    input  MEM_TAG              mem2proc_data_tag,
+    input  MEM_BLOCK            mem2proc_data,
+
     
-    output MEM_COMMAND    proc2mem_command,
-    output ADDR           proc2mem_addr,
-    output MEM_SIZE       proc2mem_size,
-    output MEM_BLOCK      proc2mem_data,
-    output completed_mshr_t   com_miss_req,
-    output logic          miss_queue_full
+    output MEM_COMMAND          mshr2mem_command,
+    output ADDR                 mshr2mem_addr,
+    output MEM_SIZE             mshr2mem_size,
+    output MEM_BLOCK            mshr2mem_data,
+    output completed_mshr_t     com_miss_req,
+    output logic                miss_queue_full
 
 );
-      
+
     miss_fifo_entry_t miss_fifo      [ENTRIES-1:0];
     miss_fifo_entry_t next_miss_fifo [ENTRIES-1:0];
 
@@ -53,9 +54,11 @@ module mshr #(
         next_active_req        = active_req;
         next_outstanding_table = outstanding_table;
 
-        proc2mem_command = MEM_NONE;
-        proc2mem_addr    = '0;
+        mshr2mem_command = MEM_NONE;
+        mshr2mem_addr    = '0;
         com_miss_req     = '0;
+        mshr2mem_size    = DOUBLE;
+        mshr2mem_data    = '0;
 
         found_free_outstanding = 1'b0;
         free_outstanding_idx   = '0;
@@ -88,20 +91,30 @@ module mshr #(
         end
 
         case (req_state) 
-            REQ_IDLE: begin
-                if(miss_count != 0) begin
-                    next_active_req = miss_fifo[miss_head];
-                    next_req_state = REQ_WAIT_ACCEPT;
+            // REQ_IDLE: begin
+            //     if(miss_count != 0) begin
+            //         next_active_req = miss_fifo[miss_head];
+            //         next_req_state = REQ_WAIT_ACCEPT;
 
-                    next_miss_fifo[miss_head] = '0;
-                    next_miss_head = miss_head + 1'd1;
-                    next_miss_count = miss_count - 1'd1;
+            //         next_miss_fifo[miss_head] = '0;
+            //         next_miss_head = miss_head + 1'd1;
+            //         next_miss_count = miss_count - 1'd1;
+            //     end
+            // end
+            REQ_IDLE: begin
+                if (next_miss_count != 0) begin
+                    next_active_req = next_miss_fifo[next_miss_head];
+                    next_req_state  = REQ_WAIT_ACCEPT;
+
+                    next_miss_fifo[next_miss_head] = '0;
+                    next_miss_head  = next_miss_head + 1'd1;
+                    next_miss_count = next_miss_count - 1'd1;
                 end
             end
             REQ_WAIT_ACCEPT: begin
                 if (found_free_outstanding) begin
-                    proc2mem_command = MEM_LOAD;
-                    proc2mem_addr    = active_req.miss_req_address;        
+                    mshr2mem_command = MEM_LOAD;
+                    mshr2mem_addr    = active_req.miss_req_address;        
                     if(mem2proc_transaction_tag != '0) begin 
                         next_outstanding_table[free_outstanding_idx].valid             = 1'b1;
                         next_outstanding_table[free_outstanding_idx].trans_tag         = mem2proc_transaction_tag;
