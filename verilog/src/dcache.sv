@@ -17,6 +17,7 @@ module Dcache
     input   logic            req_valid,
     input   completed_mshr_t com_miss_req, // from mshr
     input   logic            miss_returned,
+    input   logic            miss_queue_full,
 
     output  dcache_data_t   cache_resp_data, // slot 2 will be for cache miss loads
     output  logic            resp_valid,
@@ -92,7 +93,7 @@ module Dcache
     assign d_request_set    = request_address[OFFSET_BITS + SET_BITS - 1 : OFFSET_BITS];
     assign d_request_offset = request_address[OFFSET_BITS-1:0];
 
-    assign cache_ready  = !miss_returned ; // && mshr is not full // TODO: PLEASE ENSURE THAT THIS CHANGES. for now cache ready
+    assign cache_ready  = !miss_returned && !miss_queue_full ; // && mshr is not full // TODO: PLEASE ENSURE THAT THIS CHANGES. for now cache ready
 
     // VC signals
     logic                    vc_hit;
