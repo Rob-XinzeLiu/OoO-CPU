@@ -19,7 +19,8 @@ module mshr #(
     output MEM_SIZE             mshr2mem_size,
     output MEM_BLOCK            mshr2mem_data,
     output completed_mshr_t     com_miss_req,
-    output logic                miss_queue_full
+    output logic                miss_queue_full,
+    output logic                miss_returned
 
 );
 
@@ -43,6 +44,7 @@ module mshr #(
     logic [$clog2(ENTRIES)-1:0] completed_idx;
 
     assign miss_queue_full = (miss_count == ENTRIES);
+    assign miss_returned   = found_completed;
 
     always_comb begin: MISS_QUEUE_LOGIC
         next_miss_head         = miss_head;
