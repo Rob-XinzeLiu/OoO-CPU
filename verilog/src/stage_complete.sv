@@ -1,7 +1,7 @@
 `include "sys_defs.svh"
 
 module stage_complete(
-    input  X_C_PACKET                x_c_packet       [1:0],
+    input  X_C_PACKET                x_c_packet       [`N-1:0],
 
 
     //data for the regfile

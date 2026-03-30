@@ -201,7 +201,7 @@ module cpu (
 
     //store queue
     SQ_PACKET            sq_out                          ;
-    SQ_IDX               BS_sq_tail         [`N-1:0];
+    SQ_IDX               BS_sq_tail              [`N-1:0];
     logic [1:0]          sq_space_available              ;
     logic [`SQ_SZ-1:0]   sq_addr_ready_mask              ;
     SQ_IDX               sq_index                [`N-1:0];
@@ -290,8 +290,7 @@ module cpu (
             proc2mem_size    = vc2mem_size;
             proc2mem_addr    = vc2mem_addr;
             proc2mem_data    = vc2mem_data;
-        end
-        else begin
+        end else begin
             proc2mem_command = MEM_LOAD;
             proc2mem_size    = DOUBLE;
             proc2mem_addr    = Imem_addr;
@@ -367,21 +366,6 @@ module cpu (
         .if_packet      (f_pack)
         // Imem_addr output removed — testbench owns the PC
     );
-
-    // stage_if stage_if_0 (
-    //     //Input
-    //     .clock(clock),
-    //     .reset(reset),
-    //     .if_valid(if_valid),
-    //     .Imem_data(mem2proc_data),
-    //     .mispredict_pack(mispredict_pack_reg),
-    //     .fetch_req(can_fetch_num),
-    //     .stop_fetch(stall_fetch),
-        
-    //     //Output
-    //     .if_packet(f_pack),
-    //     .Imem_addr(proc2mem_addr)
-    // );
 
     //////////////////////////////////////////////////
     //                                              //
@@ -810,6 +794,7 @@ module cpu (
         .sq_tail_in(sq_tail_out),
         .sq_funct3_in(sq_funct3_out),
         .load_execute_pack(load_execute_pack),
+        .dcache_can_accept_load(dcache_can_accept_load),
         .dcache_load_packet(cache_resp_data),
 
         //output
@@ -820,6 +805,12 @@ module cpu (
         .cdb_req_load(cdb_req_load),
         .lq_out(lq_out)
     );
+
+    //////////////////////////////////////////////////
+    //                                              //
+    //              Dcache                          //
+    //                                              //
+    //////////////////////////////////////////////////
 
     Dcache dcache (
         .clock(clock),

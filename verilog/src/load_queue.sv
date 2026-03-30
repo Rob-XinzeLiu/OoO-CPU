@@ -26,6 +26,8 @@ module load_queue(
     input logic  [2:0]           sq_funct3_in         [`SQ_SZ-1:0],//full word forwarding
     //the address calculated from execute stage
     input LQ_PACKET              load_execute_pack              ,
+    //dcache can accept load
+    input logic                  dcache_can_accept_load         ,
     //data from dcache
     input dcache_data_t          dcache_load_packet             ,
  
@@ -238,6 +240,7 @@ module load_queue(
             dcache_req_idx = LQ_IDX'(head + i);
             if(lq[dcache_req_idx].valid 
                 && lq[dcache_req_idx].addr_ready 
+                && dcache_can_accept_load
                 && !lq[dcache_req_idx].data_ready 
                 && !lq[dcache_req_idx].issued 
                 && !fwd_hit_arr[dcache_req_idx]
