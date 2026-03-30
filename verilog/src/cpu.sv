@@ -37,15 +37,15 @@ module cpu (
     // ----------------------------------------------------------------
     output logic        branch_taken,
     output ADDR         branch_target,
-    output logic        mispredicted
-    // input MEM_TAG   mem2proc_transaction_tag, // Memory tag for current transaction
-    // input MEM_BLOCK mem2proc_data,            // Data coming back from memory
-    // input MEM_TAG   mem2proc_data_tag,        // Tag for which transaction data is for
+    output logic        mispredicted,
+    input MEM_TAG   mem2proc_transaction_tag, // Memory tag for current transaction
+    input MEM_BLOCK mem2proc_data,            // Data coming back from memory
+    input MEM_TAG   mem2proc_data_tag,        // Tag for which transaction data is for
 
-    // output MEM_COMMAND proc2mem_command, // Command sent to memory
-    // output ADDR        proc2mem_addr,    // Address sent to memory
-    // output MEM_BLOCK   proc2mem_data,    // Data sent to memory
-    // output MEM_SIZE    proc2mem_size,    // Data size sent to memory
+    output MEM_COMMAND proc2mem_command, // Command sent to memory
+    output ADDR        proc2mem_addr,    // Address sent to memory
+    output MEM_BLOCK   proc2mem_data,    // Data sent to memory
+    output MEM_SIZE    proc2mem_size    // Data size sent to memory
 
     // // Note: these are assigned at the very bottom of the module
     // output RETIRE_PACKET [`N-1:0] committed_insts,
@@ -158,13 +158,13 @@ module cpu (
     logic      [`N-1:0] write_enable;
     PRF_IDX    [`N-1:0] write_index;
     DATA       [`N-1:0] write_data;
-    DATA       [`N:0] rs1_value;
-    DATA       [`N:0] rs2_value;
-    PRF_IDX    [`N:0] read_idx_1;
-    PRF_IDX    [`N:0] read_idx_2;
+    DATA       [5:0]    rs1_value;
+    DATA       [5:0]    rs2_value;
+    PRF_IDX    [5:0]    read_idx_1;
+    PRF_IDX    [5:0]    read_idx_2;
 
     always_comb begin
-        for(int i = 0; i < `N + 1; i++) begin
+        for(int i = 0; i < 6; i++) begin
             read_idx_1[i] = d_s_pack[i].t1;
             read_idx_2[i] = d_s_pack[i].t2;
         end
@@ -172,17 +172,36 @@ module cpu (
 
     //load queue
     LQ_IDX                lq_index               [`N-1:0];
-    LQ_IDX                BS_lq_tail_out         [`N-1:0];
+    LQ_IDX                BS_lq_tail             [`N-1:0];
     logic [1:0]           lq_space_available             ;
     LQ_PACKET             load_packet                    ;
-    logic                 cdb_req_load                   ;
     LQ_PACKET             lq_out                         ;
 
+    //dcache
+    LQ_PACKET             load_req_pack;
+    SQ_PACKET             store_req_pack; 
+    logic                 miss_returned;
+    dcache_data_t         cache_resp_data; 
+    miss_request_t        miss_request;
+    MEM_COMMAND           vc2mem_command;
+    ADDR                  vc2mem_addr;
+    MEM_BLOCK             vc2mem_data;
+    MEM_SIZE              vc2mem_size;
+    logic                 dcache_can_accept_store;
+    logic                 dcache_can_accept_load;
 
+    //mshr
+    miss_request_t        dcache_miss_req;
+    MEM_COMMAND           mshr2mem_command;
+    ADDR                  mshr2mem_addr;
+    MEM_SIZE              mshr2mem_size;
+    MEM_BLOCK             mshr2mem_data;
+    completed_mshr_t      com_miss_req;
+    logic                 miss_queue_full;
 
     //store queue
     SQ_PACKET            sq_out                          ;
-    SQ_IDX               BS_sq_tail_out          [`N-1:0];
+    SQ_IDX               BS_sq_tail         [`N-1:0];
     logic [1:0]          sq_space_available              ;
     logic [`SQ_SZ-1:0]   sq_addr_ready_mask              ;
     SQ_IDX               sq_index                [`N-1:0];
@@ -257,8 +276,28 @@ module cpu (
     //     proc2mem_data = Dmem_store_data;
     // end
 
-    assign proc2mem_command = 2'h1;
-    assign proc2mem_size    = DOUBLE;
+    //assign proc2mem_command = 2'h1;
+    //assign proc2mem_size    = DOUBLE;
+    always_comb begin
+        if(mshr2mem_command == MEM_LOAD) begin
+            proc2mem_command = mshr2mem_command;
+            proc2mem_size    = mshr2mem_size;
+            proc2mem_addr    = mshr2mem_addr;
+            proc2mem_data    = '0;
+        end
+        else if(vc2mem_command == MEM_STORE)begin 
+            proc2mem_command = vc2mem_command;
+            proc2mem_size    = vc2mem_size;
+            proc2mem_addr    = vc2mem_addr;
+            proc2mem_data    = vc2mem_data;
+        end
+        else begin
+            proc2mem_command = MEM_LOAD;
+            proc2mem_size    = DOUBLE;
+            proc2mem_addr    = Imem_addr;
+            proc2mem_data    = '0;
+        end
+    end
 
     //////////////////////////////////////////////////
     //                                              //
@@ -589,8 +628,6 @@ module cpu (
 
     stage_complete stage_complete_0 (
         // Input
-        .clock(clock),
-        .reset(reset),
         .x_c_packet(x_c_pack_reg),
 
         // Output
@@ -773,15 +810,48 @@ module cpu (
         .sq_tail_in(sq_tail_out),
         .sq_funct3_in(sq_funct3_out),
         .load_execute_pack(load_execute_pack),
-        .dcache_load_packet(),
+        .dcache_load_packet(cache_resp_data),
 
         //output
         .lq_index(lq_index),
-        .BS_lq_tail_out(BS_lq_tail_out),
+        .BS_lq_tail_out(BS_lq_tail),
         .lq_space_available(lq_space_available),
         .load_packet(load_packet),
         .cdb_req_load(cdb_req_load),
         .lq_out(lq_out)
+    );
+
+    Dcache dcache (
+        .clock(clock),
+        .reset(reset),
+        .load_req_pack(load_req_pack),
+        .store_req_pack(store_req_pack),
+        .com_miss_req(com_miss_req),
+        .miss_returned(miss_returned),
+        .miss_queue_full(miss_queue_full),
+        .cache_resp_data(cache_resp_data),
+        .miss_request(miss_request),
+        .vc2mem_command(vc2mem_command),
+        .vc2mem_addr(vc2mem_addr),
+        .vc2mem_data(vc2mem_data),
+        .vc2mem_size(vc2mem_size),
+        .dcache_can_accept_store(dcache_can_accept_store),
+        .dcache_can_accept_load(dcache_can_accept_load)
+    );
+
+    mshr mshr (
+        .clock(clock),
+        .reset(reset),
+        .dcache_miss_req(dcache_miss_req),
+        .mem2proc_transaction_tag(mem2proc_transaction_tag),
+        .mem2proc_data_tag(mem2proc_data_tag),
+        .mem2proc_data(mem2proc_data),
+        .mshr2mem_command(mshr2mem_command),
+        .mshr2mem_addr(mshr2mem_addr),
+        .mshr2mem_size(mshr2mem_size),
+        .mshr2mem_data(mshr2mem_data),
+        .com_miss_req(com_miss_req),
+        .miss_queue_full(miss_queue_full)
     );
 
 
@@ -803,11 +873,11 @@ module cpu (
         .store_retire_pack(store_retire_pack),
         .mispredicted(global_mispredict),
         .BS_sq_tail_in(BS_sq_tail_out),
-        .dcache_can_accept(),
+        .dcache_can_accept(dcache_can_accept_store),
 
         //output
         .sq_out(sq_out),
-        .BS_sq_tail_out(BS_sq_tail_out),
+        .BS_sq_tail_out(BS_sq_tail),
         .sq_space_available(sq_space_available),
         .sq_addr_ready_mask(sq_addr_ready_mask),
         .sq_index(sq_index),

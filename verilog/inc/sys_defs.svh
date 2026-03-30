@@ -167,8 +167,8 @@ typedef struct packed {
 
 typedef struct packed {
     logic                                     valid;
-    ADDR                                      address;
     DATA                                      data;
+    LQ_IDX                                    lq_index;
 } dcache_data_t;
 
 typedef enum logic {
@@ -187,6 +187,7 @@ typedef struct packed {
     logic [2:0]                               miss_req_size;
     logic                                     miss_req_unsigned;
     DATA                                      miss_req_data;
+    LQ_IDX                                    lq_index;
 } miss_request_t;
 
 typedef struct packed {
@@ -199,6 +200,7 @@ typedef struct packed {
     logic [2:0]                               miss_req_size;
     logic                                     miss_req_unsigned;
     DATA                                      miss_req_data;
+    LQ_IDX                                    lq_index;
 } miss_fifo_entry_t;
 
 typedef struct packed {
@@ -212,6 +214,8 @@ typedef struct packed {
     logic [2:0]                               miss_req_size;
     logic                                     miss_req_unsigned;
     DATA                                      miss_req_data;
+    LQ_IDX                                    lq_index;
+
 } outstanding_entry_t;
 
 
@@ -226,6 +230,8 @@ typedef struct packed {
     logic                                     miss_req_unsigned;
     DATA                                      miss_req_data;
     MEM_BLOCK                                 refill_data;
+    LQ_IDX                                    lq_index;
+
 } completed_mshr_t;
 
 ///////////////////////////////
@@ -577,6 +583,8 @@ typedef struct packed{
     DATA            rs2_value;
     ADDR            predict_addr;     // predict address
     logic           predict_taken;    // predict taken
+    LQ_IDX          lq_index;
+    SQ_IDX          sq_index;
 } S_X_PACKET;
 
 typedef struct packed{
@@ -602,7 +610,7 @@ typedef struct packed{
     ROB_IDX         complete_index;//rob
     PRF_IDX         complete_tag;
     //B_MASK          bmask_index;
-   // B_MASK          bmask;
+    B_MASK          bmask;
     //logic           uncond_branch;//for unconditional branches, write NPC into PRF 
     DATA            result;//write to PRF
     //ADDR            NPC;//for unconditional branches, write NPC into PRF
@@ -641,8 +649,9 @@ typedef struct packed{
     ADDR            addr;
     DATA            data;
     logic [2:0]     funct3;  
-    SQ_IDX          lq_index;
+    LQ_IDX          lq_index;
     ROB_IDX         rob_index;
+    PRF_IDX         dest_tag;
 } LQ_PACKET;
 
 `endif // __SYS_DEFS_SVH__

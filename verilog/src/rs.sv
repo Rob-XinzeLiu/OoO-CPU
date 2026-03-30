@@ -155,7 +155,6 @@ module rs(
         issue_pack = '{default:'0};
         mult_mask = '0;
         cdb_req_alu = '{default:'0};
-        dbg_issue_count = 'd0;
         cond_branch_mask =  '0;
         rs_empty_entries_num  = '0;
 

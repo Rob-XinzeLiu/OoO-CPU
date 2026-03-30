@@ -14,14 +14,14 @@ module regfile #(
 )(
     input         clock, // system clock
     input         reset,
-    input PRF_IDX [`N:0] read_idx_1, 
-    input PRF_IDX [`N:0] read_idx_2, 
+    input PRF_IDX [5:0]    read_idx_1, 
+    input PRF_IDX [5:0]    read_idx_2, 
     input PRF_IDX [`N-1:0] write_idx,
     input logic   [`N-1:0] write_en,
     input DATA    [`N-1:0] write_data,
 
-    output DATA   [`N:0] read_out_1, 
-    output DATA   [`N:0] read_out_2
+    output DATA   [5:0]    read_out_1, 
+    output DATA   [5:0]    read_out_2
 );
     // Don't read or write when dealing with register 0
     logic [2:0] re2; 

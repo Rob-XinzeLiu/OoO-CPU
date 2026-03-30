@@ -78,6 +78,7 @@ module mshr #(
             next_miss_fifo[miss_tail].miss_req_size     = dcache_miss_req.miss_req_size;
             next_miss_fifo[miss_tail].miss_req_unsigned = dcache_miss_req.miss_req_unsigned;
             next_miss_fifo[miss_tail].miss_req_data     = dcache_miss_req.miss_req_data;
+            next_miss_fifo[miss_tail].lq_index          = dcache_miss_req.lq_index;
 
             next_miss_count = next_miss_count + 1'd1;
             next_miss_tail  = next_miss_tail + 1'd1;
@@ -126,6 +127,7 @@ module mshr #(
                         next_outstanding_table[free_outstanding_idx].miss_req_size     = active_req.miss_req_size;
                         next_outstanding_table[free_outstanding_idx].miss_req_unsigned = active_req.miss_req_unsigned;
                         next_outstanding_table[free_outstanding_idx].miss_req_data     = active_req.miss_req_data;
+                        next_outstanding_table[free_outstanding_idx].lq_index          = active_req.lq_index;
 
                         next_active_req = '0;
                         next_req_state  = REQ_IDLE;
@@ -156,6 +158,7 @@ module mshr #(
             com_miss_req.miss_req_unsigned = outstanding_table[completed_idx].miss_req_unsigned;
             com_miss_req.miss_req_data     = outstanding_table[completed_idx].miss_req_data;
             com_miss_req.refill_data       = mem2proc_data;
+            com_miss_req.lq_index          = outstanding_table[completed_idx].lq_index;
 
             next_outstanding_table[completed_idx] = '0;
         end

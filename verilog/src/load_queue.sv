@@ -27,7 +27,7 @@ module load_queue(
     //the address calculated from execute stage
     input LQ_PACKET              load_execute_pack              ,
     //data from dcache
-    input LQ_PACKET              dcache_load_packet             ,
+    input dcache_data_t          dcache_load_packet             ,
  
 
     //to dispatch stage, then go to rs & rob
@@ -96,7 +96,7 @@ module load_queue(
         lq_n = lq;
         entry_cnt = '0;
         load_packet = '0;
-        lq_out = '0;
+        lq_out_next = lq_out_r;
         cdb_req_load = '0;
         lq_index = '{default: '0};
 
@@ -141,8 +141,8 @@ module load_queue(
         //----------------------------------------------------
         // step2: generate addr match mask for each lq entry
         //----------------------------------------------------
-        addr_match_mask[i] = '0;
         for(int i = 0; i < `LQ_SZ; i++) begin
+        addr_match_mask[i] = '0;
             if(lq[i].valid && lq[i].addr_ready && !lq[i].data_ready) begin
                 for(int j = 0; j < `SQ_SZ; j++) begin
                     addr_match_mask[i][j] = fwd_mask_arr[i][j]

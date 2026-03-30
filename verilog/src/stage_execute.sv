@@ -32,7 +32,7 @@ module stage_execute(
 
     //wires for function units
     logic start_mult, mult_done;
-    DATA rs1_mult,rs2_mult, rs1_cond, rs2_cond;
+    DATA rs1_mult,rs2_mult, rs1_cond, rs2_cond, rs1_load, rs1_store, rs2_store;
     MULT_FUNC func_mult;
     ALU_FUNC func1_alu,func2_alu;
     logic take;
@@ -391,7 +391,7 @@ module stage_execute(
                 x_c_pack[0].complete_tag   = s_x_pack[2].T;
                 x_c_pack[0].result         = s_x_pack[2].uncond_branch? s_x_pack[2].NPC : result1_alu;
 
-                x_c_pack[1].valid          = 1
+                x_c_pack[1].valid          = 1;
                 x_c_pack[1].complete_index = s_x_pack[3].rob_index;
                 x_c_pack[1].complete_tag   = s_x_pack[3].T;
                 x_c_pack[1].result         = s_x_pack[3].uncond_branch? s_x_pack[3].NPC : result2_alu;

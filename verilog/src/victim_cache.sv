@@ -12,6 +12,7 @@ module victim_cache #(
     input  logic                          req_is_load,
     input  logic [`DCACHE_TAG_BITS-1:0]   dcache_miss_req_tag,
     input  logic [`DCACHE_SET_BITS-1:0]   dcache_miss_req_set,
+    input  LQ_IDX                         lq_index,
     output logic                          vc_hit,
     output MEM_BLOCK                      vc_hit_data,
     output logic                          vc_hit_dirty,
@@ -47,6 +48,7 @@ module victim_cache #(
         logic [`DCACHE_SET_BITS-1:0] set;
         logic [VC_WAY_BITS-1:0]      lru_val;
         MEM_BLOCK                    data;
+        LQ_IDX                       lq_index;
     } vc_entry_t;
 
     vc_entry_t vc_entries      [VC_LINES-1:0];
@@ -227,6 +229,7 @@ module victim_cache #(
                 next_vc_entries[evict_idx].tag   = dcache_evicted_tag;
                 next_vc_entries[evict_idx].set   = dcache_evicted_set;
                 next_vc_entries[evict_idx].data  = dcache_evicted_data;
+                next_vc_entries[evict_idx].lq_index = lq_index;
 
                 old_lru = vc_entries[evict_idx].valid ? vc_entries[evict_idx].lru_val : 'd0;
                 next_vc_entries[evict_idx].lru_val = VC_LINES - 1;

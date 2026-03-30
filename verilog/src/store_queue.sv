@@ -80,7 +80,7 @@ module store_queue (
         sq_valid_out_mask = '{default: '0};
         BS_sq_tail_out = '{default: '0};
         sq_funct3_out = '{default:'0};
-        sq_tail_out = '0;
+        sq_tail_out = '{default:'0};
         sq_valid_out = '0;
 
 

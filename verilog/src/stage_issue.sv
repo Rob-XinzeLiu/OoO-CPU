@@ -3,10 +3,10 @@ module stage_issue(
     input logic                             clock                               , 
     input logic                             reset                               , 
     //from rs
-    input D_S_PACKET                        issue_pack                    [5:0],
+    input D_S_PACKET                        issue_pack                    [5:0] ,
     //from prf
-    input DATA          [5:0]                    rs1_value                     ,
-    input DATA          [5:0]                    rs2_value                     ,
+    input DATA          [5:0]               rs1_value                           ,
+    input DATA          [5:0]               rs2_value                           ,
     //For branch resolve
     input logic                             resolved                            ,
     input B_MASK                            resolved_bmask_index                , 

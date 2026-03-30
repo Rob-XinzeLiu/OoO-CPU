@@ -10,24 +10,30 @@ module Dcache
 )(
     input   logic            clock,
     input   logic            reset,
-    input   INST             inst,
-    input   ADDR             request_address,
-    input   logic            req_is_load, 
-    input   DATA             req_store_data,
-    input   logic            req_valid,
+    //input   INST             inst,
+    //in/put   ADDR            request_address,
+    //input   logic            req_is_load, 
+    //input   DATA             req_store_data,
+    //input   logic            req_valid,
+    input   LQ_PACKET        load_req_pack,
+    input   SQ_PACKET        store_req_pack,
+    
     input   completed_mshr_t com_miss_req, // from mshr
     input   logic            miss_returned,
     input   logic            miss_queue_full,
 
-    output  dcache_data_t   cache_resp_data, // slot 2 will be for cache miss loads
-    output  logic            resp_valid,
-    output  logic            cache_ready, // it is ready while the miss queue is not full
+
+    output  dcache_data_t    cache_resp_data, // slot 2 will be for cache miss loads
+    //output  logic            cache_ready, // it is ready while the miss queue is not full
     output  miss_request_t   miss_request,
 
     output MEM_COMMAND      vc2mem_command,
     output ADDR             vc2mem_addr,
     output MEM_BLOCK        vc2mem_data,
-    output MEM_SIZE         vc2mem_size
+    output MEM_SIZE         vc2mem_size,
+
+    output logic           dcache_can_accept_store,
+    output logic           dcache_can_accept_load
 );
 
     localparam int ADDR_BITS   = $bits(ADDR);
@@ -48,7 +54,7 @@ module Dcache
     logic [OFFSET_BITS-1:0]  d_request_offset;
     logic                    hit;
     logic [$clog2(WAYS)-1:0] hit_way;
-
+    logic cache_ready;
     //logic [$clog2(WAYS)-1:0] lru_way; //to tell VC we're eveicting 
 
 
@@ -87,15 +93,22 @@ module Dcache
         .wdata(data_wdata)
     );
     
-    assign d_request_size   = MEM_SIZE'(inst.r.funct3[1:0]);
-    assign d_req_unsigned   = inst.r.funct3[2];
-
-    assign d_request_tag    = request_address[ADDR_BITS-1 : OFFSET_BITS + SET_BITS];
-    assign d_request_set    = request_address[OFFSET_BITS + SET_BITS - 1 : OFFSET_BITS];
-    assign d_request_offset = request_address[OFFSET_BITS-1:0];
+    assign d_request_size   = load_req_pack.valid ? MEM_SIZE'(load_req_pack.funct3) : store_req_pack.valid ? MEM_SIZE'(store_req_pack.funct3) : '0;
+    assign d_req_unsigned   = load_req_pack.valid ? load_req_pack.funct3[2] : store_req_pack.valid ? store_req_pack.funct3[2] : '0;
+    ADDR   curr_req_addr;
+    assign curr_req_addr = load_req_pack.valid ? load_req_pack.addr : store_req_pack.valid ? store_req_pack.addr : '0;
+    assign d_request_tag    = curr_req_addr[ADDR_BITS-1 : OFFSET_BITS + SET_BITS];
+    assign d_request_set    = curr_req_addr[OFFSET_BITS + SET_BITS - 1 : OFFSET_BITS];
+    assign d_request_offset = curr_req_addr[OFFSET_BITS-1:0];
 
     assign cache_ready  = !miss_returned && !miss_queue_full ; // && mshr is not full // TODO: PLEASE ENSURE THAT THIS CHANGES. for now cache ready
+    
+    logic load_req_active;
+    assign load_req_active         = load_req_pack.valid;
+    assign dcache_can_accept_store = !load_req_active && cache_ready;
+    assign dcache_can_accept_load  = cache_ready;
 
+    logic req_valid = load_req_pack.valid || store_req_pack.valid;
     // VC signals
     logic                    vc_hit;
     MEM_BLOCK                vc_hit_data;
@@ -122,8 +135,8 @@ module Dcache
     logic is_valid_load;
     logic is_valid_store;
 
-    assign is_valid_load = req_valid && req_is_load;
-    assign is_valid_store = req_valid && !req_is_load;
+    assign is_valid_load = load_req_pack.valid;
+    assign is_valid_store = store_req_pack.valid;
 
     MEM_BLOCK selected_read_data;
     MEM_BLOCK merged_store_data;
@@ -160,7 +173,6 @@ module Dcache
         dcache_evicted_dirty = '0;
 
         cache_resp_data = '0;
-        resp_valid      = 1'b0;
 
         //data_re    = req_valid;
         /////////////////
@@ -192,8 +204,9 @@ module Dcache
                 data_wdata = com_miss_req.refill_data;
 
                 if (com_miss_req.req_is_load) begin
-                    cache_resp_data.address = com_miss_req.miss_req_address;
                     cache_resp_data.valid   = 1'b1;
+                    cache_resp_data.lq_index = com_miss_req.lq_index;
+                    
 
                     unique case (com_miss_req.miss_req_size)
                         BYTE: begin
@@ -219,8 +232,6 @@ module Dcache
                             cache_resp_data.data = '0;
                         end
                     endcase
-
-                    resp_valid = 1'b1;
                 end
 
                 if(!com_miss_req.req_is_load) begin
@@ -235,6 +246,7 @@ module Dcache
 
                     data_wdata = merged_store_data;
                     next_cache_tags[com_miss_req.miss_req_set][way_index_miss].dirty = 1'b1;
+
                 end
     
                 if (cache_tags[com_miss_req.miss_req_set][way_index_miss].valid) begin
@@ -292,18 +304,19 @@ module Dcache
             end
             if (!hit && !vc_hit && req_valid && cache_ready) begin
                 next_miss_request.valid             = 1'b1;
-                next_miss_request.miss_req_address  = request_address;
+                next_miss_request.miss_req_address  = load_req_pack.valid ? load_req_pack.addr : store_req_pack.valid ? store_req_pack.addr : '0;
                 next_miss_request.miss_req_tag      = d_request_tag;
                 next_miss_request.miss_req_set      = d_request_set;
                 next_miss_request.miss_req_offset   = d_request_offset;
-                next_miss_request.req_is_load       = req_is_load;
+                next_miss_request.req_is_load       = load_req_pack.valid;
                 next_miss_request.miss_req_size     = d_request_size;
                 next_miss_request.miss_req_unsigned = d_req_unsigned;
-                next_miss_request.miss_req_data     = !req_is_load ? req_store_data : '0; 
+                next_miss_request.miss_req_data     = !load_req_pack.valid ? store_req_pack.data : '0; 
+                next_miss_request.lq_index          = load_req_pack.lq_index;
             end
             if(hit && is_valid_load) begin
-                cache_resp_data.address = request_address;
                 cache_resp_data.valid   = 1'b1;
+                cache_resp_data.lq_index = load_req_pack.lq_index;
                 case (d_request_size)
                     BYTE: begin
                         cache_resp_data.data = d_req_unsigned ?
@@ -324,7 +337,6 @@ module Dcache
                         cache_resp_data.data = '0;
                     end
                 endcase
-                resp_valid = 1'b1;
             end
             if(hit && is_valid_store)begin
                 merged_store_data = selected_read_data;
@@ -333,13 +345,13 @@ module Dcache
                 next_cache_tags[d_request_set][hit_way].dirty = 1'b1;
                 case (d_request_size)
                     BYTE: begin
-                        merged_store_data.byte_level[d_request_offset] = req_store_data[7:0];
+                        merged_store_data.byte_level[d_request_offset] = store_req_pack.data[7:0];
                     end
                     HALF: begin
-                        merged_store_data.half_level[d_request_offset[2:1]] = req_store_data[15:0];
+                        merged_store_data.half_level[d_request_offset[2:1]] = store_req_pack.data[15:0];
                     end
                     WORD: begin
-                        merged_store_data.word_level[d_request_offset[2]] = req_store_data;
+                        merged_store_data.word_level[d_request_offset[2]] = store_req_pack.data;
                     end
                     default: begin
                         merged_store_data = '0;
@@ -348,7 +360,7 @@ module Dcache
                 data_wdata = merged_store_data;
             end
             // Vc Load hit
-            if (vc_hit && req_is_load) begin
+            if (vc_hit && load_req_pack.valid) begin
                 unique case (d_request_size)
                     BYTE: begin
                         cache_resp_data.data = d_req_unsigned ?
@@ -372,8 +384,6 @@ module Dcache
                         cache_resp_data.data = '0;
                     end
                 endcase
-
-                resp_valid = 1'b1;
             end
         end   
     end
@@ -399,9 +409,10 @@ module Dcache
 
         // dcache miss lookup
         .dcache_miss_req_valid(vc_lookup_valid), //valid request and not hit
-        .req_is_load          (req_is_load),     
+        .req_is_load          (load_req_pack.valid),     
         .dcache_miss_req_tag  (d_request_tag),
         .dcache_miss_req_set  (d_request_set),
+        .lq_index             (load_req_pack.lq_index),
         .vc_hit               (vc_hit),
         .vc_hit_data          (vc_hit_data),
         .vc_hit_dirty         (vc_hit_dirty),
@@ -409,7 +420,7 @@ module Dcache
         // store update from dcache
         .vc_store_offset      (d_request_offset),
         .vc_store_size        (d_request_size),
-        .vc_store_data        (req_store_data),
+        .vc_store_data        (store_req_pack.data),
         .vc_store_ready       (vc_store_ready),
 
         // dcache eviction into VC
