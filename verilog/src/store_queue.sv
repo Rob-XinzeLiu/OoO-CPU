@@ -172,8 +172,8 @@ module store_queue (
 
         //calculate available space
         entry_cnt = SQ_CNT'(tail_next - head_next);
-        sq_space_available = (`SQ_SZ -  entry_cnt) >= 2 ? 2 :
-                                (`SQ_SZ -  entry_cnt) == 1 ? 1 : 0 ;
+        sq_space_available = (`SQ_SZ - entry_cnt) >= 2 ? 2 :
+                             (`SQ_SZ - entry_cnt) == 1 ? 1 : 0;
 
 
 

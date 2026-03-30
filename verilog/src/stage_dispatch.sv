@@ -246,6 +246,10 @@ module stage_dispatch (
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
                     dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
                     dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    dispatch_pack[0].c_type = f_d_pack[0].c_type;
+                    dispatch_pack[0].current_head = f_d_pack[0].current_head;
+                    dispatch_pack[0].current_count = f_d_pack[0].current_count;
+                    
                     //debug
                     dispatch_pack[0].dest_reg_idx = (has_dest[0])? rd[0]:'0;
                     //send to branch stack
@@ -286,6 +290,9 @@ module stage_dispatch (
                     dispatch_pack[0].sq_index = sq_index_in[0];
                     dispatch_pack[0].lq_index = lq_index_in[0];
                     dispatch_pack[0].sq_valid_mask = sq_valid_mask[0];
+                    dispatch_pack[0].c_type = f_d_pack[0].c_type;
+                    dispatch_pack[0].current_head = f_d_pack[0].current_head;
+                    dispatch_pack[0].current_count = f_d_pack[0].current_count;
                     //debug
                     dispatch_pack[0].dest_reg_idx = (has_dest[0])? rd[0]:'0;
                 end
@@ -325,6 +332,9 @@ module stage_dispatch (
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
                     dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
                     dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    dispatch_pack[0].c_type = f_d_pack[0].c_type;
+                    dispatch_pack[0].current_head = f_d_pack[0].current_head;
+                    dispatch_pack[0].current_count = f_d_pack[0].current_count;
                     //debug
                     dispatch_pack[0].dest_reg_idx = (has_dest[0])? rd[0]:'0;
                     //send to branch stack
@@ -364,6 +374,9 @@ module stage_dispatch (
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
                     dispatch_pack[1].predict_addr = f_d_pack[1].predict_addr;
                     dispatch_pack[1].predict_taken = f_d_pack[1].predict_taken;
+                    dispatch_pack[1].c_type = f_d_pack[1].c_type;
+                    dispatch_pack[1].current_head = f_d_pack[1].current_head;
+                    dispatch_pack[1].current_count = f_d_pack[1].current_count;
                     //debug
                     dispatch_pack[1].dest_reg_idx = (has_dest[1])? rd[1]:'0;
                     //send to branch stack
@@ -404,6 +417,9 @@ module stage_dispatch (
                         dispatch_pack[i].sq_index = sq_index_in[i];
                         dispatch_pack[i].lq_index = lq_index_in[i];
                         dispatch_pack[i].sq_valid_mask = sq_valid_mask[i];
+                        dispatch_pack[i].c_type = f_d_pack[i].c_type;
+                        dispatch_pack[i].current_head = f_d_pack[i].current_head;
+                        dispatch_pack[i].current_count = f_d_pack[i].current_count;
                         //debug
                          dispatch_pack[i].dest_reg_idx = (has_dest[i])? rd[i]:'0;
                     end
@@ -440,6 +456,9 @@ module stage_dispatch (
                     dispatch_pack[0].sq_index = sq_index_in[0];
                     dispatch_pack[0].lq_index = lq_index_in[0];
                     dispatch_pack[0].sq_valid_mask = sq_valid_mask[0]; 
+                    dispatch_pack[0].c_type = f_d_pack[0].c_type;
+                    dispatch_pack[0].current_head = f_d_pack[0].current_head;
+                    dispatch_pack[0].current_count = f_d_pack[0].current_count;
                     //debug
                     dispatch_pack[0].dest_reg_idx = (has_dest[0])? rd[0]:'0;              
                     //inst 1 is branch
@@ -476,6 +495,9 @@ module stage_dispatch (
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
                     dispatch_pack[1].predict_addr = f_d_pack[1].predict_addr;
                     dispatch_pack[1].predict_taken = f_d_pack[1].predict_taken;
+                    dispatch_pack[1].c_type = f_d_pack[1].c_type;
+                    dispatch_pack[1].current_head = f_d_pack[1].current_head;
+                    dispatch_pack[1].current_count = f_d_pack[1].current_count;
                     //debug
                     dispatch_pack[1].dest_reg_idx = (has_dest[1])? rd[1]:'0;
                     //send to branch stack
@@ -520,6 +542,9 @@ module stage_dispatch (
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
                     dispatch_pack[0].predict_addr = f_d_pack[0].predict_addr;
                     dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
+                    dispatch_pack[0].c_type = f_d_pack[0].c_type;
+                    dispatch_pack[0].current_head = f_d_pack[0].current_head;
+                    dispatch_pack[0].current_count = f_d_pack[0].current_count;
                     //debug
                     dispatch_pack[0].dest_reg_idx = (has_dest[0])? rd[0]:'0;
                     //send to branch stack
@@ -556,6 +581,9 @@ module stage_dispatch (
                     dispatch_pack[1].sq_index = sq_index_in[1];
                     dispatch_pack[1].lq_index = lq_index_in[1];
                     dispatch_pack[1].sq_valid_mask = sq_valid_mask[1];
+                    dispatch_pack[1].c_type = f_d_pack[1].c_type;
+                    dispatch_pack[1].current_head = f_d_pack[1].current_head;
+                    dispatch_pack[1].current_count = f_d_pack[1].current_count;
                     //debug
                     dispatch_pack[1].dest_reg_idx = (has_dest[1])? rd[1]:'0;
                     //update branch count

@@ -96,11 +96,12 @@ module load_queue(
         head_next = head;
         tail_next = tail;
         lq_n = lq;
-        entry_cnt = '0;
         load_packet = '0;
+        entry_cnt = '0;
         lq_out_next = lq_out_r;
         cdb_req_load = '0;
         lq_index = '{default: '0};
+        BS_lq_tail_out = '{default: '0};
 
 
 
@@ -297,8 +298,10 @@ module load_queue(
 
          //calculate available space
         entry_cnt = LQ_CNT'(tail_next - head_next);
-        lq_space_available = (`LQ_SZ -  entry_cnt) >= 2 ? 2 :
-                                (`LQ_SZ -  entry_cnt) == 1 ? 1 : 0 ;
+
+        lq_space_available = (entry_cnt <= (`SQ_SZ - 2)) ? 2 :
+                             (entry_cnt == (`SQ_SZ - 1)) ? 1 : 0;
+
 
     
 

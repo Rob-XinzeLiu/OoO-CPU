@@ -123,6 +123,10 @@ module stage_execute(
             mispredict_pack.is_cond_branch = 1'b1;
             mispredict_pack.take_branch    = take;
             mispredict_pack.correct_next_pc = take ? actual_cond_target : s_x_pack[4].NPC;
+            mispredict_pack.c_type          = s_x_pack[4].c_type;
+            mispredict_pack.current_PC      = s_x_pack[4].PC;
+            mispredict_pack.current_head    = s_x_pack[4].current_head;
+            mispredict_pack.current_count   = s_x_pack[4].current_count;
         end else begin
             for (int i = 2; i < 4; i++) begin
                 if (s_x_pack[i].valid && s_x_pack[i].uncond_branch && 
@@ -134,6 +138,10 @@ module stage_execute(
                     mispredict_pack.is_uncond_branch = 1'b1;
                     mispredict_pack.take_branch      = 1'b1;
                     mispredict_pack.correct_next_pc  = (i==2) ? result1_alu : result2_alu;
+                    mispredict_pack.c_type          = s_x_pack[i].c_type;
+                    mispredict_pack.current_PC      = s_x_pack[i].PC;
+                    mispredict_pack.current_head    = s_x_pack[i].current_head;
+                    mispredict_pack.current_count   = s_x_pack[i].current_count;
                 end
             end
 
@@ -469,9 +477,9 @@ module stage_execute(
             if (~|(s_x_pack[2].bmask & mispredicted_bmask_index) ||
                 (s_x_pack[2].bmask_index == mispredicted_bmask_index ) || !mispredicted) begin
                 conditional_branch_out.valid = 1'b1;
-                //conditional_branch_out.take_branch = take;
+                conditional_branch_out.result = take;
                 conditional_branch_out.br_rob_idx = s_x_pack[2].rob_index;
-            // conditional_branch_out.correct_next_pc = take ? branch_target : s_x_pack[2].NPC;
+                conditional_branch_out.PC = s_x_pack[2].PC;
             end
         end
     end

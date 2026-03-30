@@ -391,124 +391,18 @@ typedef enum logic [2:0] {
     M_MULHU
 } MULT_FUNC;
 
-
-////////////////////////////////
-// ---- Entry def. ----       //
-////////////////////////////////
-
-
-// typedef struct packed {
-//     logic [$clog2(`PHYS_REG_SZ_R10K)-1:0]   p_tag; 
-//     logic                                   ready;
-// } MT_ENTRY;
-
+typedef enum logic [1:0] {
+    C_NONE  = 2'b00,
+    C_BR    = 2'b01,
+    C_JAL   = 2'b10,
+    C_JALR  = 2'b11      
+} CTYPE;
 
 
 ////////////////////////////////
 // ---- Datapath Packets ---- //
 ////////////////////////////////
 
-/**
- * Packets are used to move many variables between modules with
- * just one datatype, but can be cumbersome in some circumstances.
- *
- * Define new ones in the final project at your own discretion
- */
-
-/**
- * IF_ID Packet:ADDR
- * Data exchanged from the IF to the ID stage
-//  */
-// typedef struct packed {
-//     INST  inst;
-//     ADDR  PC;
-//     ADDR  NPC; // PC + 4
-//     logic valid;
-// } IF_ID_PACKET;
-
-// /**
-//  * ID_EX Packet:
-//  * Data exchanged from the ID to the EX stage
-//  */
-// typedef struct packed {
-//     INST inst;
-//     ADDR PC;
-//     ADDR NPC; // PC + 4
-
-//     DATA rs1_value; // reg A value
-//     DATA rs2_value; // reg B value
-
-//     ALU_OPA_SELECT opa_select; // ALU opa mux select (ALU_OPA_xxx *)
-//     ALU_OPB_SELECT opb_select; // ALU opb mux select (ALU_OPB_xxx *)
-
-//     REG_IDX  dest_reg_idx;  // destination (writeback) register index
-//     ALU_FUNC alu_func;      // ALU function select (ALU_xxx *)
-//     logic    mult;          // Is inst a multiply instruction?
-//     logic    rd_mem;        // Does inst read memory?
-//     logic    wr_mem;        // Does inst write memory?
-//     logic    cond_branch;   // Is inst a conditional branch?
-//     logic    uncond_branch; // Is inst an unconditional branch?
-//     logic    halt;          // Is this a halt?
-//     logic    illegal;       // Is this instruction illegal?
-//     logic    csr_op;        // Is this a CSR operation? (we only used this as a cheap way to get return code)
-
-//     logic    valid;
-// } ID_EX_PACKET;
-
-// /**
-//  * EX_MEM Packet:
-//  * Data exchanged from the EX to the MEM stage
-//  */
-// typedef struct packed {
-//     DATA alu_result;
-//     ADDR NPC;
-
-//     logic    take_branch; // Is this a taken branch?
-//     // Pass-through from decode stage
-//     DATA     rs2_value;
-//     logic    rd_mem;
-//     logic    wr_mem;
-//     REG_IDX  dest_reg_idx;
-//     logic    halt;
-//     logic    illegal;
-//     logic    csr_op;
-//     logic    rd_unsigned; // Whether proc2Dmem_data is signed or unsigned
-//     MEM_SIZE mem_size;
-//     logic    valid;
-// } EX_MEM_PACKET;
-
-// /**
-//  * MEM_WB Packet:
-//  * Data exchanged from the MEM to the WB stage
-//  *
-//  * Does not include data sent from the MEM stage to memory
-//  */
-// typedef struct packed {
-//     DATA    result;
-//     ADDR    NPC;
-//     REG_IDX dest_reg_idx; // writeback destination (ZERO_REG if no writeback)
-//     logic   take_branch;
-//     logic   halt;    // not used by wb stage
-//     logic   illegal; // not used by wb stage
-//     logic   valid;
-// } MEM_WB_PACKET;
-
-// /**
-//  * Commit Packet:
-//  * This is an output of the processor and used in the testbench for counting
-//  * committed instructions
-//  *
-//  * It also acts as a "WB_PACKET", and can be reused in the final project with
-//  * some slight changes
-//  */
-// typedef struct packed {
-//     ADDR    NPC;
-//     DATA    data;
-//     REG_IDX reg_idx;
-//     logic   halt;
-//     logic   illegal;
-//     logic   valid;
-// } COMMIT_PACKET;
 
 typedef struct packed {
     ADDR    PC;
@@ -517,6 +411,9 @@ typedef struct packed {
     logic   valid;
     ADDR    predict_addr;     // predict address
     logic   predict_taken;    // predict taken
+    CTYPE   c_type;
+    logic [1:0] current_head;
+    logic [2:0] current_count;
 } F_D_PACKET;
 
 
@@ -552,6 +449,10 @@ typedef struct packed{
     SQ_IDX          sq_index;
     logic [`SQ_SZ-1:0]   sq_valid_mask;//record when dispatch
 
+    logic [1:0]     current_head;
+    logic [2:0]     current_count;
+    CTYPE           c_type;
+
     REG_IDX         dest_reg_idx;//for debug
 } D_S_PACKET;
 
@@ -584,6 +485,9 @@ typedef struct packed{
     logic           predict_taken;    // predict taken
     LQ_IDX          lq_index;
     SQ_IDX          sq_index;
+    CTYPE           c_type;
+    logic [1:0]     current_head;
+    logic [2:0]     current_count;
 } S_X_PACKET;
 
 typedef struct packed{
@@ -594,6 +498,8 @@ typedef struct packed{
 typedef struct packed{
     logic           valid;
     ROB_IDX         br_rob_idx;
+    logic           result;         // taken or not taken
+    ADDR            PC;
 } COND_BRANCH_PACKET;
 
 typedef struct packed{
@@ -602,6 +508,10 @@ typedef struct packed{
     ADDR            correct_next_pc;
     logic           is_cond_branch;
     logic           is_uncond_branch;
+    ADDR            current_PC;
+    CTYPE           c_type;
+    logic [1:0]     current_head;
+    logic [2:0]     current_count;
 } MISPREDICT_PACKET;
 
 typedef struct packed{

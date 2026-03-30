@@ -57,6 +57,9 @@ module rs(
         LQ_IDX              lq_index;
         SQ_IDX              sq_index;
         logic [`SQ_SZ-1:0]  sq_valid_mask;
+        CTYPE               c_type;
+        logic [1:0]         current_head;
+        logic [2:0]         current_count;
         
     } RS_ENTRY;
 
@@ -157,6 +160,8 @@ module rs(
         cdb_req_alu = '{default:'0};
         cond_branch_mask =  '0;
         rs_empty_entries_num  = '0;
+        t1_hit = '0;
+        t2_hit = '0;
 
         for (int i = 0; i< `RS_SZ; i++)begin
             empty_entry_mask[i] = !rs_entry[i].busy;
@@ -195,6 +200,9 @@ module rs(
                     next_rs_entry[i].sq_index = dispatch_pack[0].sq_index;
                     next_rs_entry[i].sq_valid_mask = dispatch_pack[0].sq_valid_mask;
                     next_rs_entry[i].busy = 1;
+                    next_rs_entry[i].c_type = dispatch_pack[0].c_type;
+                    next_rs_entry[i].current_count = dispatch_pack[0].current_count;
+                    next_rs_entry[i].current_head = dispatch_pack[0].current_head;
 
                     //from rob
                     next_rs_entry[i].rob_index = rob_index[0];
@@ -234,6 +242,9 @@ module rs(
                     next_rs_entry[i].sq_index = dispatch_pack[0].sq_index;
                     next_rs_entry[i].sq_valid_mask = dispatch_pack[0].sq_valid_mask;
                     next_rs_entry[i].busy = 1;
+                    next_rs_entry[i].c_type = dispatch_pack[0].c_type;
+                    next_rs_entry[i].current_count = dispatch_pack[0].current_count;
+                    next_rs_entry[i].current_head = dispatch_pack[0].current_head;
 
                     //from rob
                     next_rs_entry[i].rob_index = rob_index[0];
@@ -270,6 +281,9 @@ module rs(
                     next_rs_entry[i].sq_index = dispatch_pack[1].sq_index;
                     next_rs_entry[i].sq_valid_mask = dispatch_pack[1].sq_valid_mask;
                     next_rs_entry[i].busy = 1;
+                    next_rs_entry[i].c_type = dispatch_pack[1].c_type;
+                    next_rs_entry[i].current_count = dispatch_pack[1].current_count;
+                    next_rs_entry[i].current_head = dispatch_pack[1].current_head;
                     //from rob
                     next_rs_entry[i].rob_index = rob_index[1];
                 end
@@ -473,6 +487,9 @@ module rs(
                         issue_pack[0].t1= internal_rs_entry[i].t1;
                         issue_pack[0].t2= internal_rs_entry[i].t2;
                         issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
+                        issue_pack[0].c_type = internal_rs_entry[i].c_type;
+                        issue_pack[0].current_count = internal_rs_entry[i].current_count;
+                        issue_pack[0].current_head = internal_rs_entry[i].current_head;
 
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -497,6 +514,9 @@ module rs(
                         issue_pack[2].t1= internal_rs_entry[i].t1;
                         issue_pack[2].t2= internal_rs_entry[i].t2;
                         issue_pack[2].rob_index = internal_rs_entry[i].rob_index;
+                        issue_pack[2].c_type = internal_rs_entry[i].c_type;
+                        issue_pack[2].current_count = internal_rs_entry[i].current_count;
+                        issue_pack[2].current_head = internal_rs_entry[i].current_head;
                         //mark as not busy
                         next_rs_entry[i] = '0;
                     end 
@@ -521,6 +541,9 @@ module rs(
                         issue_pack[0].t1= internal_rs_entry[i].t1;
                         issue_pack[0].t2= internal_rs_entry[i].t2;
                         issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
+                        issue_pack[0].c_type = internal_rs_entry[i].c_type;
+                        issue_pack[0].current_count = internal_rs_entry[i].current_count;
+                        issue_pack[0].current_head = internal_rs_entry[i].current_head;
                         //mark as not busy
                         next_rs_entry[i] = '0;
                     end
@@ -570,6 +593,9 @@ module rs(
                         issue_pack[2].t1= internal_rs_entry[i].t1;
                         issue_pack[2].t2= internal_rs_entry[i].t2;
                         issue_pack[2].rob_index = internal_rs_entry[i].rob_index;
+                        issue_pack[2].c_type = internal_rs_entry[i].c_type;
+                        issue_pack[2].current_count = internal_rs_entry[i].current_count;
+                        issue_pack[2].current_head = internal_rs_entry[i].current_head;
                         //mark as not busy
                         next_rs_entry[i] = '0;
                     end 
@@ -627,6 +653,9 @@ module rs(
                         issue_pack[2].t1= internal_rs_entry[i].t1;
                         issue_pack[2].t2= internal_rs_entry[i].t2;
                         issue_pack[2].rob_index = internal_rs_entry[i].rob_index;
+                        issue_pack[2].c_type = internal_rs_entry[i].c_type;
+                        issue_pack[2].current_count = internal_rs_entry[i].current_count;
+                        issue_pack[2].current_head = internal_rs_entry[i].current_head;
 
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -652,6 +681,9 @@ module rs(
                         issue_pack[3].t1= internal_rs_entry[i].t1;
                         issue_pack[3].t2= internal_rs_entry[i].t2;
                         issue_pack[3].rob_index = internal_rs_entry[i].rob_index;
+                        issue_pack[3].c_type = internal_rs_entry[i].c_type;
+                        issue_pack[3].current_count = internal_rs_entry[i].current_count;
+                        issue_pack[3].current_head = internal_rs_entry[i].current_head;
                     
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -681,6 +713,9 @@ module rs(
                         issue_pack[2].t1= internal_rs_entry[i].t1;
                         issue_pack[2].t2= internal_rs_entry[i].t2;
                         issue_pack[2].rob_index = internal_rs_entry[i].rob_index;
+                        issue_pack[2].c_type = internal_rs_entry[i].c_type;
+                        issue_pack[2].current_count = internal_rs_entry[i].current_count;
+                        issue_pack[2].current_head = internal_rs_entry[i].current_head;
                         //mark as not busy
                         next_rs_entry[i] = '0;
                     end
@@ -718,6 +753,9 @@ module rs(
                     issue_pack[4].t1= internal_rs_entry[i].t1;
                     issue_pack[4].t2= internal_rs_entry[i].t2;
                     issue_pack[4].rob_index = internal_rs_entry[i].rob_index;
+                    issue_pack[4].c_type = internal_rs_entry[i].c_type;
+                    issue_pack[4].current_count = internal_rs_entry[i].current_count;
+                    issue_pack[4].current_head = internal_rs_entry[i].current_head;
                     //mark as not busy
                     next_rs_entry[i] = '0;
                 end

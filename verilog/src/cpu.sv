@@ -12,43 +12,22 @@
 
 `include "sys_defs.svh"
 
+
 module cpu (
     input clock, // System clock
     input reset, // System reset
 
-    // ----------------------------------------------------------------
-    //  Step 3/4: testbench drives PC and raw instruction data directly
-    // ----------------------------------------------------------------
-    input  ADDR         tb_PC,          // current fetch address from testbench
-    input  MEM_BLOCK    tb_imem_data,   // 64-bit memory line for that address
- 
-    // ----------------------------------------------------------------
-    //  Step 5: tell the testbench how many instructions we accepted
-    // ----------------------------------------------------------------
-    output logic [1:0]  fetch_accepted,
- 
-    // ----------------------------------------------------------------
-    //  Retire / writeback (step 7)
-    // ----------------------------------------------------------------
-    output RETIRE_PACKET [`N-1:0] committed_insts,
- 
-    // ----------------------------------------------------------------
-    //  Step 8: branch redirect back to testbench
-    // ----------------------------------------------------------------
-    output logic        branch_taken,
-    output ADDR         branch_target,
-    output logic        mispredicted,
-    input MEM_TAG   mem2proc_transaction_tag, // Memory tag for current transaction
-    input MEM_BLOCK mem2proc_data,            // Data coming back from memory
-    input MEM_TAG   mem2proc_data_tag,        // Tag for which transaction data is for
+    input MEM_TAG       mem2proc_transaction_tag, // Memory tag for current transaction
+    input MEM_BLOCK     mem2proc_data,            // Data coming back from memory
+    input MEM_TAG       mem2proc_data_tag,        // Tag for which transaction data is for
 
     output MEM_COMMAND proc2mem_command, // Command sent to memory
     output ADDR        proc2mem_addr,    // Address sent to memory
     output MEM_BLOCK   proc2mem_data,    // Data sent to memory
-    output MEM_SIZE    proc2mem_size    // Data size sent to memory
+    output MEM_SIZE    proc2mem_size,    // Data size sent to memory
 
     // // Note: these are assigned at the very bottom of the module
-    // output RETIRE_PACKET [`N-1:0] committed_insts,
+    output RETIRE_PACKET [`N-1:0] committed_insts
 
     // // Debug outputs: these signals are solely used for debugging in testbenches
     // // You should definitely change these for the final project
@@ -87,6 +66,7 @@ module cpu (
     // Outputs from IF-Stage and IF/ID Pipeline Register
     F_D_PACKET  f_pack [`N-1:0];
     logic [1:0] dispatch_num_reg ;
+    ADDR        proc2icache_addr;
 
  
     // Outputs from Fetch buffer
@@ -154,6 +134,17 @@ module cpu (
     FLIST_IDX   BS_tail [`N-1:0];
     logic [1:0] avail_num;
 
+    // From icache
+    MEM_BLOCK   Icache_data_out;
+    logic       Icache_valid_out;
+    MEM_COMMAND Imem_command;
+    ADDR        Imem_addr;
+
+    // From Predictor
+    logic       taken;
+    ADDR        PC_taken_addr;
+    logic       btb_slot;
+
     // PRF
     logic      [`N-1:0] write_enable;
     PRF_IDX    [`N-1:0] write_index;
@@ -178,9 +169,7 @@ module cpu (
     LQ_PACKET             lq_out                         ;
 
     //dcache
-    LQ_PACKET             load_req_pack;
-    SQ_PACKET             store_req_pack; 
-    logic                 miss_returned;
+
     dcache_data_t         cache_resp_data; 
     miss_request_t        miss_request;
     MEM_COMMAND           vc2mem_command;
@@ -191,13 +180,14 @@ module cpu (
     logic                 dcache_can_accept_load;
 
     //mshr
-    miss_request_t        dcache_miss_req;
+
     MEM_COMMAND           mshr2mem_command;
     ADDR                  mshr2mem_addr;
     MEM_SIZE              mshr2mem_size;
     MEM_BLOCK             mshr2mem_data;
     completed_mshr_t      com_miss_req;
     logic                 miss_queue_full;
+    logic                 miss_returned;
 
     //store queue
     SQ_PACKET            sq_out                          ;
@@ -238,20 +228,6 @@ module cpu (
 
 
     // Outputs from MEM-Stage to memory
-    ADDR        Dmem_addr;
-    MEM_BLOCK   Dmem_store_data;
-    MEM_COMMAND Dmem_command;
-    MEM_SIZE    Dmem_size;
-
-
-
-    // Logic for stalling memory stage
-    logic       load_stall;
-    logic       new_load;
-    logic       mem_tag_match;
-    logic       rd_mem_q;       // previous load
-    MEM_TAG     outstanding_mem_tag;    // tag load is waiting in
-    MEM_COMMAND Dmem_command_filtered;  // removes redundant loads
 
     //////////////////////////////////////////////////
     //                                              //
@@ -259,25 +235,7 @@ module cpu (
     //                                              //
     //////////////////////////////////////////////////
 
-    // these signals go to and from the processor and memory
-    // we give precedence to the mem stage over instruction fetch
-    // note: there will be a 100ns memory latency in the final project
 
-    // always_comb begin
-    //     if (Dmem_command != MEM_NONE) begin  // read or write DATA from memory
-    //         proc2mem_command = Dmem_command_filtered;
-    //         proc2mem_size    = Dmem_size;
-    //         proc2mem_addr    = Dmem_addr;
-    //     end else begin                      // read an INSTRUCTION from memory
-    //         proc2mem_command = Imem_command;
-    //         proc2mem_addr    = Imem_addr;
-    //         proc2mem_size    = DOUBLE;      // instructions load a full memory line (64 bits)
-    //     end
-    //     proc2mem_data = Dmem_store_data;
-    // end
-
-    //assign proc2mem_command = 2'h1;
-    //assign proc2mem_size    = DOUBLE;
     always_comb begin
         if(mshr2mem_command == MEM_LOAD) begin
             proc2mem_command = mshr2mem_command;
@@ -291,7 +249,7 @@ module cpu (
             proc2mem_addr    = vc2mem_addr;
             proc2mem_data    = vc2mem_data;
         end else begin
-            proc2mem_command = MEM_LOAD;
+            proc2mem_command = Imem_command;
             proc2mem_size    = DOUBLE;
             proc2mem_addr    = Imem_addr;
             proc2mem_data    = '0;
@@ -351,20 +309,24 @@ module cpu (
 
     // stage_if no longer manages its own PC.
     // We pass tb_PC (from testbench) and tb_imem_data (direct memory line).
-    stage_if stage_if_0 (
-        .clock          (clock),
-        .reset          (reset),
-        .if_valid       (if_valid),
-        // ---- direct-fetch inputs (replaces Imem_addr / Imem_data round-trip) ----
-        .tb_PC          (tb_PC),
-        .Imem_data      (tb_imem_data),
-        // ---- other control ----
-        .mispredict_pack (mispredict_pack_out),
-        .fetch_req      (can_fetch_num_reg),
-        .stop_fetch     (stall_fetch),
-        // ---- outputs ----
-        .if_packet      (f_pack)
-        // Imem_addr output removed — testbench owns the PC
+    stage_if stage_fetch_0 (
+        .clock(clock),
+        .reset(reset),
+
+        .if_valid(if_valid),
+        .stop_fetch(stall_fetch),
+        .mispredict_pack(mispredict_pack_out),
+        .fetch_req(can_fetch_num_reg),
+        // icache
+        .icache_data(Icache_data_out),
+        .icache_valid(Icache_valid_out),
+        // Predictor
+        .taken(taken),
+        .predicted_addr(PC_taken_addr),
+        .btb_slot(btb_slot),
+        // Output
+        .if_packet(f_pack),
+        .proc2icache_addr(proc2icache_addr)
     );
 
     //////////////////////////////////////////////////
@@ -423,6 +385,12 @@ module cpu (
         .mispredicted_bmask_index(global_mispredict_index),
         .mispredicted_bmask(global_mispredict_bmask),
         .maptable_snapshot_in(mt_BS_out),
+        .lq_index_in(lq_index),
+        .sq_index_in(sq_index),
+        .lq_space_available(lq_space_available),
+        .sq_space_available(sq_space_available),
+        .sq_valid_mask(sq_valid_out_mask),
+
 
         // Output
         .dispatch_valid(dispatch_valid),
@@ -710,6 +678,46 @@ module cpu (
 
     //////////////////////////////////////////////////
     //                                              //
+    //           Icache                             //
+    //                                              //
+    //////////////////////////////////////////////////
+    icache icache_0 (
+        .clock(clock),
+        .reset(reset),
+        // Input
+        .Imem2proc_transaction_tag(mem2proc_transaction_tag),
+        .Imem2proc_data(mem2proc_data),
+        .Imem2proc_data_tag(mem2proc_data_tag),
+        .proc2Icache_addr(proc2icache_addr),
+
+        // Output
+        .proc2Imem_command(Imem_command),
+        .proc2Imem_addr(Imem_addr),
+        .Icache_data_out(Icache_data_out),
+        .Icache_valid_out(Icache_valid_out)
+    );
+
+     //////////////////////////////////////////////////
+    //                                              //
+    //           Branch Predictor                   //
+    //                                              //
+    //////////////////////////////////////////////////
+
+    branch_predicotr predictor_0 (
+        .clock(clock),
+        .reset(reset),
+        // Input
+        .proc2icache_addr(proc2icache_addr),
+        .conditional_branch_out(cond_pack_reg),
+        .mispredict_pack(mispredict_pack_out),
+        // Output
+        .taken(taken),
+        .PC_taken_addr(PC_taken_addr),
+        .btb_slot(btb_slot)
+    );
+
+    //////////////////////////////////////////////////
+    //                                              //
     //           Branch Stack                       //
     //                                              //
     //////////////////////////////////////////////////
@@ -815,10 +823,10 @@ module cpu (
     Dcache dcache (
         .clock(clock),
         .reset(reset),
-        .load_req_pack(load_req_pack),
-        .store_req_pack(store_req_pack),
+        .load_req_pack(load_packet),
+        .store_req_pack(sq_out),
         .com_miss_req(com_miss_req),
-        .miss_returned(miss_returned),
+        .miss_returned(miss_returned),//missing
         .miss_queue_full(miss_queue_full),
         .cache_resp_data(cache_resp_data),
         .miss_request(miss_request),
@@ -833,7 +841,7 @@ module cpu (
     mshr mshr (
         .clock(clock),
         .reset(reset),
-        .dcache_miss_req(dcache_miss_req),
+        .dcache_miss_req(miss_request),
         .mem2proc_transaction_tag(mem2proc_transaction_tag),
         .mem2proc_data_tag(mem2proc_data_tag),
         .mem2proc_data(mem2proc_data),
@@ -842,7 +850,8 @@ module cpu (
         .mshr2mem_size(mshr2mem_size),
         .mshr2mem_data(mshr2mem_data),
         .com_miss_req(com_miss_req),
-        .miss_queue_full(miss_queue_full)
+        .miss_queue_full(miss_queue_full),
+        .miss_returned(miss_returned)
     );
 
 

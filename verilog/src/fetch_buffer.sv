@@ -54,8 +54,10 @@ module fetch_buffer(
         end
 
         //calculate available slots
-        free_slots = (head_n >= tail_n) ? FB_IDX'(head_n - tail_n) :
-                                          FB_IDX'(`FB_SZ - (tail_n - head_n));
+        free_slots = (full_n)? 0 : 
+                        (head_n == tail_n) ? `FB_SZ :
+                        (head_n > tail_n) ? FB_IDX'(head_n - tail_n) : 
+                        FB_IDX'(`FB_SZ - (tail_n - head_n));
         
        full_n = full ? (head_n == tail_n) :  // 继承：满了之后只有dequeue才能变不满//inherit: if already full, only dequeue can make it not full
                 ((tail_n == head_n) && (tail_n != tail)); // 新满：这周期tail追上了head//new full: tail caught up with head this cycle

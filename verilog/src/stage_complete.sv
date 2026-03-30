@@ -11,6 +11,7 @@ module stage_complete(
     output DATA  [`N-1:0]            data_for_prf          
 );
     always_comb begin 
+        cdb = '0;
 
         for (int i = 0; i < `N; i++)begin
             if(x_c_packet[i].valid)begin

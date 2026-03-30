@@ -44,7 +44,10 @@ module stage_issue(
             next_s_x_pack[i].rs1_value = rs1_value[i];
             next_s_x_pack[i].rs2_value = rs2_value[i];
             next_s_x_pack[i].predict_taken = issue_pack[i].predict_taken;
-            next_s_x_pack[i].predict_addr = issue_pack[i].predict_addr;     
+            next_s_x_pack[i].predict_addr = issue_pack[i].predict_addr;  
+            next_s_x_pack[i].c_type = issue_pack[i].c_type;
+            next_s_x_pack[i].current_count = issue_pack[i].current_count;
+            next_s_x_pack[i].current_head = issue_pack[i].current_head;   
         end
 
         if (resolved) begin
