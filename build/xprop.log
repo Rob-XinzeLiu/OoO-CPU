@@ -1,0 +1,14 @@
+verilog/src/dcache.sv:187 YES
+verilog/src/dcache.sv:395 YES
+verilog/src/victim_cache.sv:82 YES
+verilog/src/victim_cache.sv:136 YES
+verilog/src/victim_cache.sv:145 YES
+verilog/src/victim_cache.sv:152 YES
+verilog/src/victim_cache.sv:250 YES
+verilog/src/memDP.sv:48 YES
+verilog/src/memDP.sv:68 YES
+==================================================
+X P R O P   S T A T I S T I C S
+instrumentable assignments:    175
+instrumented assignments:      175
+instrumentation success rate:  100%

@@ -251,7 +251,7 @@ ALL_HEADERS = $(INC)*.svh
 # 	All headers must be in inc/ directly.
 
 # TODO: add more modules here, or rename the given ones
-MODULES = cpu mult rob rs psel_gen freelist victim_cache mshr
+MODULES = cpu mult rob rs psel_gen freelist victim_cache mshr dcache
 
 # TODO: add extra source file dependencies below
 
@@ -286,6 +286,14 @@ MSHR_FILES = $(SRC)mshr.sv
 build/mshr.simv:      $(MSHR_FILES)
 build/mshr.cov.simv:  $(MSHR_FILES)
 synth/mshr.vg:        $(MSHR_FILES)
+
+DCACHE_FILES = \
+	$(SRC)dcache.sv \
+	$(SRC)memDP.sv \
+	$(SRC)victim_cache.sv
+build/dcache.simv:      $(DCACHE_FILES)
+build/dcache.cov.simv:  $(DCACHE_FILES)
+synth/dcache.vg:        $(DCACHE_FILES)
 
 #################################
 # ---- Main CPU Definition ---- #

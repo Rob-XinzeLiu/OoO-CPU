@@ -108,7 +108,8 @@ module Dcache
     assign dcache_can_accept_store = !load_req_active && cache_ready;
     assign dcache_can_accept_load  = cache_ready;
 
-    logic req_valid = load_req_pack.valid || store_req_pack.valid;
+    logic req_valid;
+    assign req_valid = load_req_pack.valid || store_req_pack.valid;
     // VC signals
     logic                    vc_hit;
     MEM_BLOCK                vc_hit_data;

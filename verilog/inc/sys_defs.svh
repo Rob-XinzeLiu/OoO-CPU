@@ -231,7 +231,6 @@ typedef struct packed {
     DATA                                      miss_req_data;
     MEM_BLOCK                                 refill_data;
     LQ_IDX                                    lq_index;
-
 } completed_mshr_t;
 
 ///////////////////////////////

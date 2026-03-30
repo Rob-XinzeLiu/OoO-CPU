@@ -1,0 +1,26 @@
+rc file Version 1.0
+
+[Design]
+COMPILE_PATH=/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8
+VCS_HOME=/usr/caen/vcs-2023.12-SP2-1
+VERDI_HOME=/usr/caen/verdi-2023.12-SP2-1
+SystemC=FALSE
+UUM=FALSE
+KDB=TRUE
+USE_NOVAS_HOME=FALSE
+COSIM=FALSE
+TOP=testbench 
+OPTION=-ssv -ssy 
+ELAB_OPTION=-ssv -ssy 
+OTHER_OPTION=-xprop=tmerge 
+ELAB=TRUE
+SIMV_WRAPPER=FALSE
+[vcs]
+RUN_ELABCOM=unset TURBO_LOG_DIR ;\rm -rf /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/dcache.simv.daidir/elabcomLog ;/usr/caen/vcs-2023.12-SP2-1/linux64/bin/elabcom -logdir /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/dcache.simv.daidir/elabcomLog  -simvdaidir /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/dcache.simv.daidir  -lib /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/dcache.simv.daidir/work  -saveLevel  -elab /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/dcache.simv.daidir/kdb -simflow -simdir /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/dcache.simv.daidir/kdb_libs -topfile /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/dcache.simv.daidir/.elabcomTopFile -ssv -ssy  -Lf work +disable_message+C00380+C00381 +disable_message+C00388+C00389  >& /dev/null  && echo Success >& /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/dcache.simv.daidir/.elabcomReport || echo Fail >& /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/dcache.simv.daidir/.elabcomReport; \rm -rf /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/dcache.simv.daidir/work.lib++ /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/build/dcache.simv.daidir/kdb_libs/ 
+
+[Value]
+WREALX=ffff534e50535f58
+WREALZ=ffff534e50535f5a
+
+[CompInfo]
+FLOW_OPTS=-kdb -ssv -ssy 

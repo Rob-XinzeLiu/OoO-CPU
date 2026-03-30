@@ -1,0 +1,9 @@
+{"vcs1":{"timestamp_begin":1774897265.110587108, "rt":3.20, "ut":0.44, "st":0.30}}
+{"vcselab":{"timestamp_begin":1774897268.395807468, "rt":1.28, "ut":0.20, "st":0.11}}
+{"link":{"timestamp_begin":1774897269.760099271, "rt":1.07, "ut":0.18, "st":0.12}}
+{"SNPS_VCS_INTERNAL_ROOT_START_TIME": 1774897264.315642198}
+{"VCS_COMP_START_TIME": 1774897264.315642198}
+{"VCS_COMP_END_TIME": 1774897271.508868894}
+{"VCS_USER_OPTIONS": "-sverilog -xprop=tmerge +vc -Mupdate -Mdir=build/csrc -line -full64 -kdb -lca -nc -debug_access+all+reverse +warn=noTFIPC +warn=noDEBUG_DEP +warn=noENUMASSIGN +warn=noLCA_FEATURES_ENABLED +define+CLOCK_PERIOD=30.0 +incdir+verilog/inc/ test/testbenches/dcache_test.sv verilog/src/dcache.sv verilog/src/memDP.sv verilog/src/victim_cache.sv -o build/dcache.simv"}
+{"vcs1": {"peak_mem": 466212}}
+{"vcselab": {"peak_mem": 182604}}
