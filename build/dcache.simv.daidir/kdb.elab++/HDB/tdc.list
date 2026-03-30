@@ -1,6 +1,0 @@
-test/testbenches/dcache_test.sv
-verilog/inc/ISA.svh
-verilog/inc/sys_defs.svh
-verilog/src/dcache.sv
-verilog/src/memDP.sv
-verilog/src/victim_cache.sv

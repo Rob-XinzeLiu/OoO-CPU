@@ -1,6 +1,0 @@
-/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/test/testbenches/dcache_test.sv
-/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/verilog/inc/ISA.svh
-/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/verilog/inc/sys_defs.svh
-/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/verilog/src/dcache.sv
-/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/verilog/src/memDP.sv
-/home/cargarci/eecs472/final_proj/pfinal_472-w26.group8/verilog/src/victim_cache.sv
