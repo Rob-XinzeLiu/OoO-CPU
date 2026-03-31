@@ -65,14 +65,12 @@ module stage_if (
     always_comb begin
         PC_increase = 'd0;
         if(if_valid && icache_valid && !stop_fetch) begin
-            if(proc2icache_addr[2] == 1'b1) begin
-                PC_increase = ADDR'(4);
-            end if(if_packet[1].valid) begin
+            if(if_packet[1].valid) begin
                 PC_increase = ADDR'(8);
             end else if(if_packet[0].valid) begin
                 PC_increase = ADDR'(4);
             end else begin
-                PC_increase = 'd0;
+                PC_increase = '0;
             end
         end
     end

@@ -517,6 +517,8 @@ module rs(
                         issue_pack[2].c_type = internal_rs_entry[i].c_type;
                         issue_pack[2].current_count = internal_rs_entry[i].current_count;
                         issue_pack[2].current_head = internal_rs_entry[i].current_head;
+                        issue_pack[2].predict_addr = internal_rs_entry[i].predict_addr;
+                        issue_pack[2].predict_taken = internal_rs_entry[i].predict_taken;
                         //mark as not busy
                         next_rs_entry[i] = '0;
                     end 
@@ -596,6 +598,8 @@ module rs(
                         issue_pack[2].c_type = internal_rs_entry[i].c_type;
                         issue_pack[2].current_count = internal_rs_entry[i].current_count;
                         issue_pack[2].current_head = internal_rs_entry[i].current_head;
+                        issue_pack[2].predict_addr = internal_rs_entry[i].predict_addr;
+                        issue_pack[2].predict_taken = internal_rs_entry[i].predict_taken;
                         //mark as not busy
                         next_rs_entry[i] = '0;
                     end 
@@ -656,6 +660,8 @@ module rs(
                         issue_pack[2].c_type = internal_rs_entry[i].c_type;
                         issue_pack[2].current_count = internal_rs_entry[i].current_count;
                         issue_pack[2].current_head = internal_rs_entry[i].current_head;
+                        issue_pack[2].predict_addr = internal_rs_entry[i].predict_addr;
+                        issue_pack[2].predict_taken = internal_rs_entry[i].predict_taken;
 
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -684,6 +690,8 @@ module rs(
                         issue_pack[3].c_type = internal_rs_entry[i].c_type;
                         issue_pack[3].current_count = internal_rs_entry[i].current_count;
                         issue_pack[3].current_head = internal_rs_entry[i].current_head;
+                        issue_pack[3].predict_addr = internal_rs_entry[i].predict_addr;
+                        issue_pack[3].predict_taken = internal_rs_entry[i].predict_taken;
                     
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -716,6 +724,8 @@ module rs(
                         issue_pack[2].c_type = internal_rs_entry[i].c_type;
                         issue_pack[2].current_count = internal_rs_entry[i].current_count;
                         issue_pack[2].current_head = internal_rs_entry[i].current_head;
+                        issue_pack[2].predict_addr = internal_rs_entry[i].predict_addr;
+                        issue_pack[2].predict_taken = internal_rs_entry[i].predict_taken;
                         //mark as not busy
                         next_rs_entry[i] = '0;
                     end
@@ -756,6 +766,8 @@ module rs(
                     issue_pack[4].c_type = internal_rs_entry[i].c_type;
                     issue_pack[4].current_count = internal_rs_entry[i].current_count;
                     issue_pack[4].current_head = internal_rs_entry[i].current_head;
+                    issue_pack[4].predict_addr = internal_rs_entry[i].predict_addr;
+                    issue_pack[4].predict_taken = internal_rs_entry[i].predict_taken;
                     //mark as not busy
                     next_rs_entry[i] = '0;
                 end

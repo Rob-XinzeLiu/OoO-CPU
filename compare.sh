@@ -12,7 +12,7 @@ echo_color() {
 }
 
 echo "Comparing ground truth outputs to new processor"
-cd /home/weitungl/Documents/EECS472/Final_project/pfinal_472-w26.group8
+cd /home/xinzeliu/eecs472/pfinal_472-w26.group8
 
 for source_file in programs/*.s programs/*c; do
     program=$(echo "$source_file" | cut -d '.' -f1 | cut -d '/' -f 2)

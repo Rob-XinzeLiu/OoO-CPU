@@ -46,6 +46,8 @@ module stage_issue(
             next_s_x_pack[i].c_type = issue_pack[i].c_type;
             next_s_x_pack[i].current_count = issue_pack[i].current_count;
             next_s_x_pack[i].current_head = issue_pack[i].current_head;   
+            next_s_x_pack[i].sq_index = issue_pack[i].sq_index;
+            next_s_x_pack[i].lq_index = issue_pack[i].lq_index;
         end
 
         if (resolved) begin

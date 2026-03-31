@@ -176,6 +176,9 @@ module stage_execute(
         func2_alu ='0;
         rs1_cond ='0;
         rs2_cond = '0;
+        rs1_load = '0;
+        rs1_store = '0;
+        rs2_store = '0;
         func_cond = '0;
         fwd_data_1 = '0;
         fwd_data_2 = '0;
