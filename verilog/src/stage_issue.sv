@@ -1,7 +1,5 @@
 `include "sys_defs.svh"
 module stage_issue(
-    input logic                             clock                               , 
-    input logic                             reset                               , 
     //from rs
     input D_S_PACKET                        issue_pack                    [5:0] ,
     //from prf

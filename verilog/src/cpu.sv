@@ -481,7 +481,7 @@ module cpu (
         .reset (reset),
         .s_x_pack(s_x_pack_reg),
         .lq_in(lq_out),
-        
+        .cdb(cdb),
         
         // Output
         .x_c_pack(x_c_pack),
@@ -737,6 +737,8 @@ module cpu (
         .resolved(global_resolve),
         .resolved_bmask_index(global_resolve_index),
         .rob_index_in(rob_index),
+        .lq_tail_in(BS_lq_tail),
+        .sq_tail_in(BS_sq_tail),
 
         // Output
         .mt_snapshot_out(mt_BS_out),

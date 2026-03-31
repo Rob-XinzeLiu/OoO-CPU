@@ -12,7 +12,9 @@ module stage_complete(
 );
     always_comb begin 
         cdb = '0;
-
+        write_en = '0;
+        prf_index = '0;
+        data_for_prf = '0;
         for (int i = 0; i < `N; i++)begin
             if(x_c_packet[i].valid)begin
                 write_en[i] = '1;    

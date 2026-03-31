@@ -6,7 +6,7 @@ module stage_execute(
     // from RS                             
     input S_X_PACKET                        s_x_pack                      [5:0],
     //from cdb, data forwarding
-    input X_C_PACKET                        cdb                         [`N-1:0],
+    input X_C_PACKET                [`N-1:0]        cdb                         ,
     //from lq
     input LQ_PACKET                         lq_in                               ,   
     //to complete stage
@@ -223,14 +223,14 @@ module stage_execute(
         if (s_x_pack[2].valid) begin
             func1_alu = s_x_pack[2].alu_func;
             case(s_x_pack[2].opa_select) 
-                OPA_IS_RS1:  opa1_alu = s_x_pack[2].rs1_value;
+                OPA_IS_RS1:  opa1_alu = fwd_hit_1[2]? fwd_data_1[2] : s_x_pack[2].rs1_value;
                 OPA_IS_NPC:  opa1_alu = s_x_pack[2].NPC;    //npc
                 OPA_IS_PC:   opa1_alu = s_x_pack[2].PC;    //pc
                 OPA_IS_ZERO: opa1_alu = 0;
                 default:     opa1_alu = 32'hdeadface; // dead face
             endcase
             case(s_x_pack[2].opb_select) 
-                OPB_IS_RS2:   opb1_alu = s_x_pack[2].rs2_value;
+                OPB_IS_RS2:   opb1_alu = fwd_hit_2[2]? fwd_data_2[2] : s_x_pack[2].rs2_value;
                 OPB_IS_I_IMM: opb1_alu = `RV32_signext_Iimm(s_x_pack[2].inst);
                 OPB_IS_S_IMM: opb1_alu = `RV32_signext_Simm(s_x_pack[2].inst);
                 OPB_IS_B_IMM: opb1_alu = `RV32_signext_Bimm(s_x_pack[2].inst);
@@ -240,7 +240,7 @@ module stage_execute(
             endcase
         end
 
-
+        //fourth pack decide alu2
         if (s_x_pack[3].valid) begin
             func2_alu = s_x_pack[3].alu_func;
             case(s_x_pack[3].opa_select) 
@@ -265,7 +265,7 @@ module stage_execute(
         //fifth pack decide conditional branch
         if (s_x_pack[4].valid ) begin
             rs1_cond = fwd_hit_1[4]? fwd_data_1[4] : s_x_pack[4].rs1_value;
-            rs2_cond = fwd_hit_2[4]? fwd_data_2[4] : s_x_pack[2].rs2_value;
+            rs2_cond = fwd_hit_2[4]? fwd_data_2[4] : s_x_pack[4].rs2_value;
             func_cond = s_x_pack[4].inst.b.funct3;
         end
 
@@ -473,13 +473,13 @@ module stage_execute(
    // assign branch_target = s_x_pack[2].valid? (s_x_pack[2].PC + `RV32_signext_Bimm(s_x_pack[2].inst)) : 'b0;
     always_comb begin
         conditional_branch_out = '0;
-        if(s_x_pack[2].valid) begin
-            if (~|(s_x_pack[2].bmask & mispredicted_bmask_index) ||
-                (s_x_pack[2].bmask_index == mispredicted_bmask_index ) || !mispredicted) begin
+        if(s_x_pack[4].valid) begin
+            if (~|(s_x_pack[4].bmask & mispredicted_bmask_index) ||
+                (s_x_pack[4].bmask_index == mispredicted_bmask_index ) || !mispredicted) begin
                 conditional_branch_out.valid = 1'b1;
                 conditional_branch_out.result = take;
-                conditional_branch_out.br_rob_idx = s_x_pack[2].rob_index;
-                conditional_branch_out.PC = s_x_pack[2].PC;
+                conditional_branch_out.br_rob_idx = s_x_pack[4].rob_index;
+                conditional_branch_out.PC = s_x_pack[4].PC;
             end
         end
     end
