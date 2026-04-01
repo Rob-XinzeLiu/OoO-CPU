@@ -76,8 +76,6 @@ module load_queue(
     logic [`SQ_SZ-1:0] shifted_trunc       [`LQ_SZ-1:0];
     logic [`SQ_SZ-1:0] prefix_or           [`LQ_SZ-1:0];
     logic [`SQ_SZ-1:0] highest_mask        [`LQ_SZ-1:0];
-    logic [2*`SQ_SZ-1:0]     lowest_double [`LQ_SZ-1:0];
-    logic [`SQ_SZ-1:0]       youngest_mask [`LQ_SZ-1:0];
     logic                    fwd_hit_arr   [`LQ_SZ-1:0];
     DATA                     fwd_data_arr  [`LQ_SZ-1:0];
     SQ_IDX highest_idx                     [`LQ_SZ-1:0];
@@ -98,10 +96,26 @@ module load_queue(
         lq_n = lq;
         load_packet = '0;
         entry_cnt = '0;
-        lq_out_next = lq_out_r;
+        lq_out_next = '0;
         cdb_req_load = '0;
         lq_index = '{default: '0};
         BS_lq_tail_out = '{default: '0};
+        addr_match_mask  = '{default: '0};
+        conflict_arr     = '{default: '0};
+        fwd_mask_arr     = '{default: '0};
+        doubled          = '{default: '0};
+        shifted          = '{default: '0};
+        shifted_trunc    = '{default: '0};
+        prefix_or        = '{default: '0};
+        highest_mask     = '{default: '0};
+        fwd_hit_arr      = '{default: '0};
+        fwd_data_arr     = '{default: '0};
+        highest_idx      = '{default: '0};
+        selected_idx     = '0;
+        load_is_lw       = '0;
+        store_is_sw      = '0;
+        dcache_req_idx   = '0;
+        
 
 
 
@@ -193,7 +207,7 @@ module load_queue(
                 highest_idx[i] = '0;
                 for (int j = 0; j < `SQ_SZ; j++) begin
                     if (highest_mask[i][j])
-                        highest_idx[i] |= SQ_IDX'(j);
+                        highest_idx[i] = SQ_IDX'(j);
                 end
 
 
@@ -299,8 +313,8 @@ module load_queue(
          //calculate available space
         entry_cnt = LQ_CNT'(tail_next - head_next);
 
-        lq_space_available = (entry_cnt <= (`SQ_SZ - 2)) ? 2 :
-                             (entry_cnt == (`SQ_SZ - 1)) ? 1 : 0;
+        lq_space_available = (entry_cnt <= (`LQ_SZ - 2)) ? 2 :
+                             (entry_cnt == (`LQ_SZ - 1)) ? 1 : 0;
 
 
     

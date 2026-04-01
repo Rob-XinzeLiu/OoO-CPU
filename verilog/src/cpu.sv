@@ -885,6 +885,8 @@ module cpu (
         .sq_index(sq_index),
         .sq_addr_out(sq_addr_out),
         .sq_addr_ready_out(sq_addr_ready_out),
+        .sq_data_out(sq_data_out),
+        .sq_data_ready_out(sq_data_ready_out),
         .sq_funct3_out(sq_funct3_out),
         .sq_valid_out(sq_valid_out),
         .sq_valid_out_mask(sq_valid_out_mask),

@@ -628,6 +628,7 @@ module stage_dispatch (
         .opb_select             (opb_select),
         .has_dest               (has_dest),
         .cond_branch            (cond_branch),
+        .is_store               (is_store),
         .halt                   (halt),
         .cdb                    (cdb),
         .t_from_freelist        (t_new),

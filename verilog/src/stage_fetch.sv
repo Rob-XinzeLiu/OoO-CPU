@@ -119,7 +119,7 @@ module stage_if (
     assign if_packet[1].inst = (icache_valid && two_valid_insts) ? icache_data.word_level[1] : `NOP;
     assign if_packet[1].PC  = proc2icache_addr + 4;
     assign if_packet[1].NPC = proc2icache_addr + 8; // pass PC+4 down pipeline w/instruction
-    assign if_packet[1].valid = if_valid && !stop_fetch && icache_valid && two_valid_insts &&
+    assign if_packet[1].valid = if_valid && !stop_fetch && icache_valid && two_valid_insts && 
                                     !(if_packet[0].predict_taken) && (if_packet[0].c_type == C_NONE || if_packet[0].c_type == C_BR);
     assign if_packet[1].predict_taken = (return_valid1 || if_packet[1].c_type == C_JAL)? 1'b1 : slot1_taken;
     assign if_packet[1].predict_addr = (return_valid1)? return_addr1 : (slot1_taken)? predicted_addr : proc2icache_addr + 8;
