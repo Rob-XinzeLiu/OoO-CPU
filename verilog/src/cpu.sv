@@ -234,21 +234,31 @@ module cpu (
     //                Memory Outputs                //
     //                                              //
     //////////////////////////////////////////////////
-
+    logic icache_gnt, mshr_gnt, dcache_store_gnt;
+    logic unanswered_miss, mshr_wait_for_trans, vc_requesting;
 
     always_comb begin
-        if(mshr2mem_command == MEM_LOAD) begin
+        icache_gnt = 1'b0;
+        mshr_gnt   = 1'b0;
+        dcache_store_gnt = 1'b0;
+        proc2mem_command = MEM_NONE;
+
+
+        if(mshr2mem_command == MEM_LOAD && (!unanswered_miss && !vc_requesting)) begin
+            mshr_gnt = 1'b1;
             proc2mem_command = mshr2mem_command;
             proc2mem_size    = mshr2mem_size;
             proc2mem_addr    = mshr2mem_addr;
             proc2mem_data    = '0;
         end
-        else if(vc2mem_command == MEM_STORE)begin 
+        else if(vc2mem_command == MEM_STORE && (!unanswered_miss && !mshr_wait_for_trans))begin 
+            dcache_store_gnt = 1'b1;
             proc2mem_command = vc2mem_command;
             proc2mem_size    = vc2mem_size;
             proc2mem_addr    = vc2mem_addr;
             proc2mem_data    = vc2mem_data;
         end else begin
+            icache_gnt       = (Imem_command != MEM_NONE);
             proc2mem_command = Imem_command;
             proc2mem_size    = DOUBLE;
             proc2mem_addr    = Imem_addr;
@@ -685,6 +695,7 @@ module cpu (
         .clock(clock),
         .reset(reset),
         // Input
+        .grant(icache_gnt),
         .Imem2proc_transaction_tag(mem2proc_transaction_tag),
         .Imem2proc_data(mem2proc_data),
         .Imem2proc_data_tag(mem2proc_data_tag),
@@ -694,7 +705,8 @@ module cpu (
         .proc2Imem_command(Imem_command),
         .proc2Imem_addr(Imem_addr),
         .Icache_data_out(Icache_data_out),
-        .Icache_valid_out(Icache_valid_out)
+        .Icache_valid_out(Icache_valid_out),
+        .unanswered_miss(unanswered_miss)
     );
 
      //////////////////////////////////////////////////
@@ -830,6 +842,7 @@ module cpu (
         .com_miss_req(com_miss_req),
         .miss_returned(miss_returned),//missing
         .miss_queue_full(miss_queue_full),
+        .mem2proc_transaction_tag(mem2proc_transaction_tag),
         .cache_resp_data(cache_resp_data),
         .miss_request(miss_request),
         .vc2mem_command(vc2mem_command),
@@ -837,7 +850,8 @@ module cpu (
         .vc2mem_data(vc2mem_data),
         .vc2mem_size(vc2mem_size),
         .dcache_can_accept_store(dcache_can_accept_store),
-        .dcache_can_accept_load(dcache_can_accept_load)
+        .dcache_can_accept_load(dcache_can_accept_load),
+        .vc_requesting(vc_requesting)
     );
 
     mshr mshr (
@@ -853,7 +867,8 @@ module cpu (
         .mshr2mem_data(mshr2mem_data),
         .com_miss_req(com_miss_req),
         .miss_queue_full(miss_queue_full),
-        .miss_returned(miss_returned)
+        .miss_returned(miss_returned),
+        .mshr_wait_for_trans(mshr_wait_for_trans)
     );
 
 

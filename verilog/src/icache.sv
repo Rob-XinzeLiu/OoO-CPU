@@ -14,6 +14,7 @@ module icache (
     input reset,
 
     // From memory
+    input logic     grant,
     input MEM_TAG   Imem2proc_transaction_tag, // Should be zero unless there is a response
     input MEM_BLOCK Imem2proc_data,
     input MEM_TAG   Imem2proc_data_tag,
@@ -27,13 +28,14 @@ module icache (
 
     // To fetch stage
     output MEM_BLOCK Icache_data_out, // Data is mem[proc2Icache_addr]
-    output logic     Icache_valid_out // When valid is high
+    output logic     Icache_valid_out, // When valid is high
+    output logic     unanswered_miss
 );
     localparam INDEX_BITS = $clog2(`ICACHE_LINES / 2);
     localparam TAG_BITS = 13 - INDEX_BITS;
 
     // Note: cache tags, not memory tags
-    logic [TAG_BITS-1:0]    current_tag,   last_tag; // 8 bits
+    logic [TAG_BITS-1:0]    current_tag,   last_tag; // 9 bits
     logic [INDEX_BITS-1:0]  current_index, last_index; // 4 bits for 2-way
 
     assign {current_tag, current_index} = proc2Icache_addr[15:3];
@@ -70,7 +72,6 @@ module icache (
     logic miss_outstanding; // Whether a miss has received its response tag to wait on
 
     logic changed_addr;
-    logic unanswered_miss;
     logic got_mem_data;
     logic [TAG_BITS-1:0]    locked_tag;
     logic [INDEX_BITS-1:0]  locked_index;
@@ -133,7 +134,7 @@ module icache (
             last_tag         <= current_tag;
             miss_outstanding <= unanswered_miss;
             // Lock request address
-            if(unanswered_miss && Imem2proc_transaction_tag != 0) begin
+            if(grant && unanswered_miss && Imem2proc_transaction_tag != 0) begin
                 current_mem_tag <= Imem2proc_transaction_tag;
                 locked_index    <= current_index;
                 locked_tag      <= current_tag;
@@ -143,7 +144,7 @@ module icache (
             // Prefetch mem tag
             if(changed_addr || got_prefetch_data) begin
                 prefetch_mem_tag    <= '0;
-            end else if(prefetching && !unanswered_miss && Imem2proc_transaction_tag != 0) begin
+            end else if(grant && prefetching && !unanswered_miss && Imem2proc_transaction_tag != 0) begin
                 prefetch_mem_tag    <= Imem2proc_transaction_tag;      // Update transaction tag
                 locked_pf_index     <= next_index;
                 locked_pf_tag       <= next_tag;
