@@ -32,10 +32,12 @@ module victim_cache #(
     output logic                          dcache_evicted_ready, //in case we're evicting dirty from vc make sure it can go in wb
 
     // MEM commands
+    input  MEM_TAG                        mem2proc_transaction_tag,
     output MEM_COMMAND                    vc2mem_command,
     output ADDR                           vc2mem_addr,
     output MEM_BLOCK                      vc2mem_data,
-    output MEM_SIZE                       vc2mem_size
+    output MEM_SIZE                       vc2mem_size,
+    output logic                          vc_requesting
 );
 
     localparam int OFFSET_BITS = $clog2(LINE_BYTES);
@@ -106,6 +108,11 @@ module victim_cache #(
         end
     endfunction
 
+    req_state_t req_state, next_req_state;
+
+    ADDR      wb_addr, next_wb_addr;
+    MEM_BLOCK wb_data, next_wb_data;
+
     always_comb begin
         next_vc_entries = vc_entries;
 
@@ -126,10 +133,15 @@ module victim_cache #(
 
         dcache_evicted_ready = 1'b1;
 
-        vc2mem_command = MEM_NONE;
-        vc2mem_addr    = '0;
-        vc2mem_data    = '0;
-        vc2mem_size    = DOUBLE;
+        vc2mem_command       = MEM_NONE;
+        vc2mem_addr          = '0;
+        vc2mem_data          = '0;
+        vc2mem_size          = DOUBLE;
+        vc_requesting        = 1'b0;
+
+        next_req_state       = req_state;
+        next_wb_addr         = wb_addr;
+        next_wb_data         = wb_data;
 
         // lookup
         for (int i = 0; i < VC_LINES; i++) begin
@@ -210,17 +222,48 @@ module victim_cache #(
             dcache_evicted_ready =
                 !overwrite_dirty_valid; //in case we need to evict vc lru make sure we can evict to wb 
 
-            // send write req
-            if (dcache_evicted_valid && overwrite_dirty_valid) begin
-                vc2mem_command = MEM_STORE;
-                vc2mem_addr    = {
-                    vc_entries[evict_idx].tag,
-                    vc_entries[evict_idx].set,
-                    {OFFSET_BITS{1'b0}}
-                };
-                vc2mem_data    = vc_entries[evict_idx].data;
-                vc2mem_size    = DOUBLE;   //we send the whole line
-            end
+            case (req_state)
+                REQ_IDLE: begin
+                    if (dcache_evicted_valid && overwrite_dirty_valid) begin
+                        dcache_evicted_ready = 1'b0;
+
+                        next_wb_addr = {
+                            vc_entries[evict_idx].tag,
+                            vc_entries[evict_idx].set,
+                            {OFFSET_BITS{1'b0}}
+                        };
+                        next_wb_data = vc_entries[evict_idx].data;
+
+                        vc_requesting  = 1'b1;
+                        vc2mem_command = MEM_STORE;
+                        vc2mem_addr    = {
+                            vc_entries[evict_idx].tag,
+                            vc_entries[evict_idx].set,
+                            {OFFSET_BITS{1'b0}}
+                        };
+                        vc2mem_data    = vc_entries[evict_idx].data;
+                        vc2mem_size    = DOUBLE;
+
+                        if (mem2proc_transaction_tag != '0)
+                            next_req_state = REQ_IDLE;
+                        else
+                            next_req_state = REQ_WAIT_ACCEPT;
+                    end
+                end
+
+                REQ_WAIT_ACCEPT: begin
+                    dcache_evicted_ready = 1'b0;
+
+                    vc_requesting  = 1'b1;
+                    vc2mem_command = MEM_STORE;
+                    vc2mem_addr    = wb_addr;
+                    vc2mem_data    = wb_data;
+                    vc2mem_size    = DOUBLE;
+
+                    if (mem2proc_transaction_tag != '0)
+                        next_req_state = REQ_IDLE;
+                end
+            endcase
 
             // insert new line
             if (dcache_evicted_valid && dcache_evicted_ready) begin
@@ -246,18 +289,24 @@ module victim_cache #(
             end
         end
     end
-    
     always_ff @(posedge clock) begin
         if (reset) begin
+            req_state <= REQ_IDLE;
+            wb_addr   <= '0;
+            wb_data   <= '0;
+
             for (int i = 0; i < VC_LINES; i++) begin
                 vc_entries[i] <= '0;
             end
         end
         else begin
+            req_state <= next_req_state;
+            wb_addr   <= next_wb_addr;
+            wb_data   <= next_wb_data;
+
             for (int i = 0; i < VC_LINES; i++) begin
                 vc_entries[i] <= next_vc_entries[i];
             end
         end
     end
-
 endmodule

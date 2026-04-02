@@ -21,6 +21,7 @@ module Dcache
     input   completed_mshr_t com_miss_req, // from mshr
     input   logic            miss_returned,
     input   logic            miss_queue_full,
+    input   MEM_TAG          mem2proc_transaction_tag,
 
 
     output  dcache_data_t    cache_resp_data, // slot 2 will be for cache miss loads
@@ -33,7 +34,8 @@ module Dcache
     output MEM_SIZE         vc2mem_size,
 
     output logic           dcache_can_accept_store,
-    output logic           dcache_can_accept_load
+    output logic           dcache_can_accept_load,
+    output logic           vc_requesting
 );
 
     localparam int ADDR_BITS   = $bits(ADDR);
@@ -433,10 +435,12 @@ module Dcache
         .dcache_evicted_ready (vc_evicted_ready),
 
         // vc write to mem 
+        .mem2proc_transaction_tag(mem2proc_transaction_tag),
         .vc2mem_command       (vc2mem_command),
         .vc2mem_addr          (vc2mem_addr),
         .vc2mem_data          (vc2mem_data),
-        .vc2mem_size          (vc2mem_size)
+        .vc2mem_size          (vc2mem_size),
+        .vc_requesting        (vc_requesting)
     );
 
 endmodule
