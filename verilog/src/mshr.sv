@@ -20,7 +20,8 @@ module mshr #(
     output MEM_BLOCK            mshr2mem_data,
     output completed_mshr_t     com_miss_req,
     output logic                miss_queue_full,
-    output logic                miss_returned
+    output logic                miss_returned,
+    output logic                mshr_wait_for_trans
 
 );
 
@@ -61,6 +62,7 @@ module mshr #(
         com_miss_req     = '0;
         mshr2mem_size    = DOUBLE;
         mshr2mem_data    = '0;
+        mshr_wait_for_trans = 1'b0;
 
         found_free_outstanding = 1'b0;
         free_outstanding_idx   = '0;
@@ -94,16 +96,6 @@ module mshr #(
         end
 
         case (req_state) 
-            // REQ_IDLE: begin
-            //     if(miss_count != 0) begin
-            //         next_active_req = miss_fifo[miss_head];
-            //         next_req_state = REQ_WAIT_ACCEPT;
-
-            //         next_miss_fifo[miss_head] = '0;
-            //         next_miss_head = miss_head + 1'd1;
-            //         next_miss_count = miss_count - 1'd1;
-            //     end
-            // end
             REQ_IDLE: begin
                 if (next_miss_count != 0) begin
                     next_active_req = next_miss_fifo[next_miss_head];
@@ -117,7 +109,9 @@ module mshr #(
             REQ_WAIT_ACCEPT: begin
                 if (found_free_outstanding) begin
                     mshr2mem_command = MEM_LOAD;
-                    mshr2mem_addr    = active_req.miss_req_address;        
+                    mshr2mem_addr    = active_req.miss_req_address;  
+                    mshr_wait_for_trans = 1'b1;
+                    
                     if(mem2proc_transaction_tag != '0) begin 
                         next_outstanding_table[free_outstanding_idx].valid             = 1'b1;
                         next_outstanding_table[free_outstanding_idx].trans_tag         = mem2proc_transaction_tag;
@@ -178,17 +172,18 @@ module mshr #(
                 miss_fifo[i] <= '0;
                 outstanding_table[i] <= '0;
             end
+
         end else begin
             miss_head <= next_miss_head;
             miss_tail <= next_miss_tail;
             miss_count <= next_miss_count;
             req_state <= next_req_state;
             active_req <= next_active_req;
-
             for (int i = 0; i < ENTRIES; i++) begin
                 miss_fifo[i] <= next_miss_fifo[i];
                 outstanding_table[i] <= next_outstanding_table[i];
             end
         end
+
     end
 endmodule
