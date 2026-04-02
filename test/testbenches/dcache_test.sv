@@ -8,6 +8,10 @@ module testbench;
     localparam int SETS  = 8;
     localparam int LINES = WAYS * SETS;
 
+    localparam int OFFSET_BITS = $clog2(8);
+    localparam int SET_BITS    = $clog2(SETS);
+    localparam int TAG_BITS    = 32 - OFFSET_BITS - SET_BITS;
+
     logic            clock, reset;
 
     LQ_PACKET        load_req_pack;
@@ -16,6 +20,7 @@ module testbench;
     completed_mshr_t com_miss_req;
     logic            miss_returned;
     logic            miss_queue_full;
+    MEM_TAG          mem2proc_transaction_tag;
 
     dcache_data_t    cache_resp_data;
     miss_request_t   miss_request;
@@ -27,6 +32,7 @@ module testbench;
 
     logic            dcache_can_accept_store;
     logic            dcache_can_accept_load;
+    logic            vc_requesting;
 
     bit test_failed = 0;
 
@@ -43,6 +49,7 @@ module testbench;
         .com_miss_req(com_miss_req),
         .miss_returned(miss_returned),
         .miss_queue_full(miss_queue_full),
+        .mem2proc_transaction_tag(mem2proc_transaction_tag),
 
         .cache_resp_data(cache_resp_data),
         .miss_request(miss_request),
@@ -53,21 +60,52 @@ module testbench;
         .vc2mem_size(vc2mem_size),
 
         .dcache_can_accept_store(dcache_can_accept_store),
-        .dcache_can_accept_load(dcache_can_accept_load)
+        .dcache_can_accept_load(dcache_can_accept_load),
+        .vc_requesting(vc_requesting)
     );
 
     always #(`CLOCK_PERIOD/2.0) clock = ~clock;
+
+    function automatic logic [SET_BITS-1:0] addr_set(input ADDR addr);
+        addr_set = addr[OFFSET_BITS + SET_BITS - 1 : OFFSET_BITS];
+    endfunction
+
+    function automatic logic [TAG_BITS-1:0] addr_tag(input ADDR addr);
+        addr_tag = addr[31 : OFFSET_BITS + SET_BITS];
+    endfunction
+
+    function automatic int count_data_writes();
+        int cnt;
+        begin
+            cnt = 0;
+            for (int i = 0; i < WAYS; i++) begin
+                if (dut.data_we[i]) cnt++;
+            end
+            return cnt;
+        end
+    endfunction
+
+    function automatic int first_write_way();
+        begin
+            first_write_way = -1;
+            for (int i = 0; i < WAYS; i++) begin
+                if (dut.data_we[i] && first_write_way == -1)
+                    first_write_way = i;
+            end
+        end
+    endfunction
 
     task reset_dut();
         begin
             clock = 0;
             reset = 1;
 
-            load_req_pack   = '0;
-            store_req_pack  = '0;
-            com_miss_req    = '0;
-            miss_returned   = 1'b0;
-            miss_queue_full = 1'b0;
+            load_req_pack            = '0;
+            store_req_pack           = '0;
+            com_miss_req             = '0;
+            miss_returned            = 1'b0;
+            miss_queue_full          = 1'b0;
+            mem2proc_transaction_tag = '0;
 
             @(negedge clock);
             reset = 0;
@@ -84,12 +122,12 @@ module testbench;
         input logic [$bits(load_req_pack.lq_index)-1:0] lq_idx
     );
         begin
-            load_req_pack              = '0;
-            store_req_pack             = '0;
-            load_req_pack.valid        = 1'b1;
-            load_req_pack.addr         = addr;
-            load_req_pack.funct3       = {unsigned_load, size};
-            load_req_pack.lq_index     = lq_idx;
+            load_req_pack          = '0;
+            store_req_pack         = '0;
+            load_req_pack.valid    = 1'b1;
+            load_req_pack.addr     = addr;
+            load_req_pack.funct3   = {unsigned_load, size};
+            load_req_pack.lq_index = lq_idx;
         end
     endtask
 
@@ -99,12 +137,12 @@ module testbench;
         input DATA     data
     );
         begin
-            load_req_pack              = '0;
-            store_req_pack             = '0;
-            store_req_pack.valid       = 1'b1;
-            store_req_pack.addr        = addr;
-            store_req_pack.funct3      = {1'b0, size};
-            store_req_pack.data        = data;
+            load_req_pack          = '0;
+            store_req_pack         = '0;
+            store_req_pack.valid   = 1'b1;
+            store_req_pack.addr    = addr;
+            store_req_pack.funct3  = {1'b0, size};
+            store_req_pack.data    = data;
         end
     endtask
 
@@ -125,19 +163,19 @@ module testbench;
         input MEM_BLOCK refill_block
     );
         begin
-            com_miss_req                       = '0;
-            com_miss_req.valid                 = 1'b1;
-            com_miss_req.miss_req_address      = addr;
-            com_miss_req.miss_req_tag          = addr[31:6];
-            com_miss_req.miss_req_set          = addr[5:3];
-            com_miss_req.miss_req_offset       = addr[2:0];
-            com_miss_req.req_is_load           = req_is_load;
-            com_miss_req.miss_req_size         = size;
-            com_miss_req.miss_req_unsigned     = unsigned_load;
-            com_miss_req.miss_req_data         = req_data;
-            com_miss_req.lq_index              = lq_idx;
-            com_miss_req.refill_data           = refill_block;
-            miss_returned                      = 1'b1;
+            com_miss_req                   = '0;
+            com_miss_req.valid             = 1'b1;
+            com_miss_req.miss_req_address  = addr;
+            com_miss_req.miss_req_tag      = addr[31:6];
+            com_miss_req.miss_req_set      = addr[5:3];
+            com_miss_req.miss_req_offset   = addr[2:0];
+            com_miss_req.req_is_load       = req_is_load;
+            com_miss_req.miss_req_size     = size;
+            com_miss_req.miss_req_unsigned = unsigned_load;
+            com_miss_req.miss_req_data     = req_data;
+            com_miss_req.lq_index          = lq_idx;
+            com_miss_req.refill_data       = refill_block;
+            miss_returned                  = 1'b1;
         end
     endtask
 
@@ -165,6 +203,8 @@ module testbench;
     endtask
 
     initial begin
+        int wr_way;
+
         reset_dut();
 
         // ------------------------------------------------------------
@@ -173,26 +213,30 @@ module testbench;
         $display("\nCase 1: Return one load miss into empty cache");
 
         return_miss(
-            32'h0000_0040,   // addr
-            1'b1,            // req_is_load
-            WORD,            // size
-            1'b0,            // unsigned
-            '0,              // req_data
-            6'd3,            // lq index
+            32'h0000_0040,
+            1'b1,
+            WORD,
+            1'b0,
+            '0,
+            6'd3,
             64'h1122_3344_AABB_CCDD
         );
         #1;
 
-        assert(dut.data_we == 1'b1) else begin
-            $error("Case 1 Fail: Expected refill write enable.");
+        wr_way = first_write_way();
+
+        assert(count_data_writes() == 1) else begin
+            $error("Case 1 Fail: Expected exactly one refill write enable.");
             test_failed = 1;
         end
 
-        assert(dut.data_waddr == dut.flat_idx(3'b000, 0) ||
-            dut.data_waddr == dut.flat_idx(3'b000, 1) ||
-            dut.data_waddr == dut.flat_idx(3'b000, 2) ||
-            dut.data_waddr == dut.flat_idx(3'b000, 3)) else begin
-            $error("Case 1 Fail: Refill did not target a way in correct set.");
+        assert(wr_way >= 0 && dut.data_waddr[wr_way] == addr_set(32'h0000_0040)) else begin
+            $error("Case 1 Fail: Refill did not target correct set.");
+            test_failed = 1;
+        end
+
+        assert(wr_way >= 0 && dut.data_wdata[wr_way] == 64'h1122_3344_AABB_CCDD) else begin
+            $error("Case 1 Fail: Refill data incorrect.");
             test_failed = 1;
         end
 
@@ -214,21 +258,20 @@ module testbench;
         // ------------------------------------------------------------
         $display("\nCase 2: Load hit on resident line");
 
-        send_load(32'h0000_0040, WORD, 1'b0, 2'd3);
+        send_load(32'h0000_0040, WORD, 1'b0, 6'd3);
         #1;
+
         $display("DEBUG Case2 @ %0t:", $time);
         $display("  load_valid        = %0b", load_req_pack.valid);
         $display("  load_addr         = 0x%08h", load_req_pack.addr);
-
         $display("  curr_req_addr     = 0x%08h", dut.curr_req_addr);
         $display("  req_valid         = %0b", dut.req_valid);
         $display("  cache_ready       = %0b", dut.cache_ready);
-
         $display("  d_request_set     = %0d", dut.d_request_set);
         $display("  d_request_tag     = 0x%0h", dut.d_request_tag);
         $display("  d_request_offset  = %0d", dut.d_request_offset);
 
-        for (int i = 0; i < 4; i++) begin
+        for (int i = 0; i < WAYS; i++) begin
             $display("  WAY %0d: valid=%0b tag=0x%0h lru=%0d",
                 i,
                 dut.cache_tags[dut.d_request_set][i].valid,
@@ -239,31 +282,23 @@ module testbench;
 
         $display("  hit               = %0b", dut.hit);
         $display("  hit_way           = %0d", dut.hit_way);
-
-        $display("  data_re           = %0b", dut.data_re[0]);
-        $display("  data_raddr        = %0d", dut.data_raddr[0]);
-        $display("  data_rdata        = 0x%016h", dut.data_rdata[0]);
-
+        $display("  data_re_way0      = %0b", dut.data_re[0][0]);
+        $display("  data_raddr_way0   = %0d", dut.data_raddr[0][0]);
+        $display("  data_rdata_way0   = 0x%016h", dut.data_rdata[0][0]);
         $display("  selected_read     = 0x%016h", dut.selected_read_data);
-
         $display("  resp_valid        = %0b", cache_resp_data.valid);
         $display("  resp_data         = 0x%08h", cache_resp_data.data);
-
         $display("  resp_lq_index     = %0d", cache_resp_data.lq_index);
         $display("  load_lq_index     = %0d", load_req_pack.lq_index);
-
-      
 
         assert(dut.hit == 1'b1) else begin
             $error("Case 2 Fail: Expected cache hit.");
             test_failed = 1;
         end
 
-        // If this assert fails, it likely means the memDP read timing
-        // and the Dcache same-cycle use of data_rdata need to be pipelined.
-       assert(cache_resp_data.valid == 1'b1 &&
-            cache_resp_data.lq_index == 2'd3 &&
-            cache_resp_data.data == 32'hAABB_CCDD) else begin
+        assert(cache_resp_data.valid == 1'b1 &&
+               cache_resp_data.lq_index == 6'd3 &&
+               cache_resp_data.data == 32'hAABB_CCDD) else begin
             $error("Case 2 Fail: Hit response incorrect.");
             test_failed = 1;
         end
@@ -277,7 +312,7 @@ module testbench;
         // ------------------------------------------------------------
         $display("\nCase 3: Load miss generates miss_request");
 
-        send_load(32'h0000_0080, WORD, 1'b0, 2'd3);
+        send_load(32'h0000_0080, WORD, 1'b0, 6'd3);
         @(posedge clock);
         #1;
 
@@ -287,9 +322,9 @@ module testbench;
         end
 
         assert(miss_request.miss_req_address == 32'h0000_0080 &&
-            miss_request.req_is_load == 1'b1 &&
-            miss_request.miss_req_size == WORD &&
-            miss_request.lq_index == 2'd3) else begin
+               miss_request.req_is_load == 1'b1 &&
+               miss_request.miss_req_size == WORD &&
+               miss_request.lq_index == 6'd3) else begin
             $error("Case 3 Fail: miss_request contents incorrect.");
             test_failed = 1;
         end
@@ -303,14 +338,13 @@ module testbench;
         // ------------------------------------------------------------
         $display("\nCase 4: Hit-under-miss should still succeed");
 
-        // First create an outstanding miss request
-        send_load(32'h0000_00C0, WORD, 1'b0, 2'd0);
+        send_load(32'h0000_00C0, WORD, 1'b0, 6'd0);
         @(posedge clock);
         #1;
 
         assert(miss_request.valid == 1'b1 &&
-            miss_request.miss_req_address == 32'h0000_00C0 &&
-            miss_request.lq_index == 2'd0) else begin
+               miss_request.miss_req_address == 32'h0000_00C0 &&
+               miss_request.lq_index == 6'd0) else begin
             $error("Case 4 Fail: Initial miss request not generated.");
             test_failed = 1;
         end
@@ -318,8 +352,7 @@ module testbench;
         @(negedge clock);
         clear_req();
 
-        // While that miss is logically outstanding, hit old resident line
-        send_load(32'h0000_0040, WORD, 1'b0, 2'd1);
+        send_load(32'h0000_0040, WORD, 1'b0, 6'd1);
         #1;
 
         assert(dut.hit == 1'b1) else begin
@@ -328,8 +361,8 @@ module testbench;
         end
 
         assert(cache_resp_data.valid == 1'b1 &&
-            cache_resp_data.lq_index == 2'd1 &&
-            cache_resp_data.data == 32'hAABB_CCDD) else begin
+               cache_resp_data.lq_index == 6'd1 &&
+               cache_resp_data.data == 32'hAABB_CCDD) else begin
             $error("Case 4 Fail: Cache behaved blocking on hit-under-miss.");
             test_failed = 1;
         end
@@ -338,7 +371,7 @@ module testbench;
         clear_req();
         @(negedge clock);
 
-                // ------------------------------------------------------------
+        // ------------------------------------------------------------
         // Case 5: Store hit updates resident line
         // ------------------------------------------------------------
         $display("\nCase 5: Store hit merges data into cache line");
@@ -351,8 +384,8 @@ module testbench;
             test_failed = 1;
         end
 
-        assert(dut.data_we == 1'b1) else begin
-            $error("Case 5 Fail: Store hit did not write memDP.");
+        assert(count_data_writes() == 1) else begin
+            $error("Case 5 Fail: Store hit did not write exactly one way.");
             test_failed = 1;
         end
 
@@ -360,11 +393,11 @@ module testbench;
         clear_req();
         @(negedge clock);
 
-        send_load(32'h0000_0040, WORD, 1'b0, 2'd2);
+        send_load(32'h0000_0040, WORD, 1'b0, 6'd2);
         #1;
 
         assert(cache_resp_data.valid == 1'b1 &&
-               cache_resp_data.lq_index == 2'd2 &&
+               cache_resp_data.lq_index == 6'd2 &&
                cache_resp_data.data == 32'hDEAD_BEEF) else begin
             $error("Case 5 Fail: Store hit data not preserved.");
             test_failed = 1;
@@ -380,18 +413,25 @@ module testbench;
         $display("\nCase 6: Store miss merges store data into refill block");
 
         return_miss(
-            32'h0000_0144,       // byte offset 4
-            1'b0,                // store miss
+            32'h0000_0144,
+            1'b0,
             BYTE,
             1'b0,
             32'h0000_00AB,
-            2'd0,
+            6'd0,
             64'h1111_2222_3333_4444
         );
         #1;
 
-        assert(dut.data_we == 1'b1) else begin
-            $error("Case 6 Fail: Store miss refill did not write cache.");
+        wr_way = first_write_way();
+
+        assert(count_data_writes() == 1) else begin
+            $error("Case 6 Fail: Store miss refill did not write exactly one way.");
+            test_failed = 1;
+        end
+
+        assert(wr_way >= 0 && dut.data_waddr[wr_way] == addr_set(32'h0000_0144)) else begin
+            $error("Case 6 Fail: Store miss refill wrote wrong set.");
             test_failed = 1;
         end
 
@@ -399,11 +439,11 @@ module testbench;
         clear_return();
         @(negedge clock);
 
-        send_load(32'h0000_0144, BYTE, 1'b1, 2'd3);
+        send_load(32'h0000_0144, BYTE, 1'b1, 6'd3);
         #1;
 
         assert(cache_resp_data.valid == 1'b1 &&
-               cache_resp_data.lq_index == 2'd3 &&
+               cache_resp_data.lq_index == 6'd3 &&
                cache_resp_data.data == 32'h0000_00AB) else begin
             $error("Case 6 Fail: Store miss merge result incorrect.");
             test_failed = 1;
@@ -419,7 +459,7 @@ module testbench;
         $display("\nCase 7: miss_queue_full blocks acceptance");
 
         miss_queue_full = 1'b1;
-        send_load(32'h0000_0200, WORD, 1'b0, 2'd1);
+        send_load(32'h0000_0200, WORD, 1'b0, 6'd1);
         @(posedge clock);
         #1;
 
@@ -438,21 +478,20 @@ module testbench;
         miss_queue_full = 1'b0;
         @(negedge clock);
 
-                // ------------------------------------------------------------
+        // ------------------------------------------------------------
         // Case 8: One miss, then two hits, then miss refill
         // ------------------------------------------------------------
         $display("\nCase 8: One miss, two hits, then miss fills later");
 
         reset_dut();
 
-        // Preload line at 0x40
         return_miss(
             32'h0000_0040,
             1'b1,
             WORD,
             1'b0,
             '0,
-            2'd0,
+            6'd0,
             64'h1122_3344_AABB_CCDD
         );
         #1;
@@ -460,14 +499,13 @@ module testbench;
         clear_return();
         @(negedge clock);
 
-        // Preload line at 0x48
         return_miss(
             32'h0000_0048,
             1'b1,
             WORD,
             1'b0,
             '0,
-            2'd1,
+            6'd1,
             64'h5566_7788_DEAD_BEEF
         );
         #1;
@@ -475,14 +513,13 @@ module testbench;
         clear_return();
         @(negedge clock);
 
-        // Step 1: issue miss to absent line 0x00C0
-        send_load(32'h0000_00C0, WORD, 1'b0, 2'd2);
+        send_load(32'h0000_00C0, WORD, 1'b0, 6'd2);
         @(posedge clock);
         #1;
 
         assert(miss_request.valid == 1'b1 &&
                miss_request.miss_req_address == 32'h0000_00C0 &&
-               miss_request.lq_index == 2'd2) else begin
+               miss_request.lq_index == 6'd2) else begin
             $error("Case 8 Fail: Initial miss request not generated.");
             test_failed = 1;
         end
@@ -490,8 +527,7 @@ module testbench;
         @(negedge clock);
         clear_req();
 
-        // Step 2: first hit while miss is pending
-        send_load(32'h0000_0040, WORD, 1'b0, 2'd0);
+        send_load(32'h0000_0040, WORD, 1'b0, 6'd0);
         #1;
 
         assert(dut.hit == 1'b1) else begin
@@ -500,7 +536,7 @@ module testbench;
         end
 
         assert(cache_resp_data.valid == 1'b1 &&
-               cache_resp_data.lq_index == 2'd0 &&
+               cache_resp_data.lq_index == 6'd0 &&
                cache_resp_data.data == 32'hAABB_CCDD) else begin
             $error("Case 8 Fail: First hit-under-miss response incorrect.");
             test_failed = 1;
@@ -509,8 +545,7 @@ module testbench;
         @(negedge clock);
         clear_req();
 
-        // Step 3: second hit while same miss is still pending
-        send_load(32'h0000_0048, WORD, 1'b0, 2'd1);
+        send_load(32'h0000_0048, WORD, 1'b0, 6'd1);
         #1;
 
         assert(dut.hit == 1'b1) else begin
@@ -519,7 +554,7 @@ module testbench;
         end
 
         assert(cache_resp_data.valid == 1'b1 &&
-               cache_resp_data.lq_index == 2'd1 &&
+               cache_resp_data.lq_index == 6'd1 &&
                cache_resp_data.data == 32'hDEAD_BEEF) else begin
             $error("Case 8 Fail: Second hit-under-miss response incorrect.");
             test_failed = 1;
@@ -528,20 +563,19 @@ module testbench;
         @(negedge clock);
         clear_req();
 
-        // Step 4: now finally return the pending miss
         return_miss(
             32'h0000_00C0,
             1'b1,
             WORD,
             1'b0,
             '0,
-            2'd2,
+            6'd2,
             64'h9999_AAAA_BBBB_CCCC
         );
         #1;
 
         assert(cache_resp_data.valid == 1'b1 &&
-               cache_resp_data.lq_index == 2'd2 &&
+               cache_resp_data.lq_index == 6'd2 &&
                cache_resp_data.data == 32'hBBBB_CCCC) else begin
             $error("Case 8 Fail: Miss refill response incorrect.");
             test_failed = 1;
@@ -550,6 +584,133 @@ module testbench;
         @(negedge clock);
         clear_return();
         @(negedge clock);
+
+        // ------------------------------------------------------------
+        // Case 9: Eviction picks correct victim and installs new line
+        // ------------------------------------------------------------
+        $display("\nCase 9: Eviction should remove correct block and install new one");
+
+        reset_dut();
+
+        return_miss(
+            32'h0000_0000,
+            1'b1,
+            WORD,
+            1'b0,
+            '0,
+            6'd0,
+            64'hAAAA_0000_1111_2222
+        );
+        #1;
+        @(negedge clock);
+        clear_return();
+        @(negedge clock);
+
+        return_miss(
+            32'h0000_0040,
+            1'b1,
+            WORD,
+            1'b0,
+            '0,
+            6'd1,
+            64'hBBBB_0000_3333_4444
+        );
+        #1;
+        @(negedge clock);
+        clear_return();
+        @(negedge clock);
+
+        return_miss(
+            32'h0000_0080,
+            1'b1,
+            WORD,
+            1'b0,
+            '0,
+            6'd2,
+            64'hCCCC_0000_5555_6666
+        );
+        #1;
+        @(negedge clock);
+        clear_return();
+        @(negedge clock);
+
+        return_miss(
+            32'h0000_00C0,
+            1'b1,
+            WORD,
+            1'b0,
+            '0,
+            6'd3,
+            64'hDDDD_0000_7777_8888
+        );
+        #1;
+        @(negedge clock);
+        clear_return();
+        @(negedge clock);
+
+        dump_cache_set(3'd0);
+
+        return_miss(
+            32'h0000_0100,
+            1'b1,
+            WORD,
+            1'b0,
+            '0,
+            6'd4,
+            64'hEEEE_0000_9999_AAAA
+        );
+        #1;
+
+        assert(dut.dcache_evicted_valid == 1'b1) else begin
+            $error("Case 9 Fail: Expected eviction on 5th refill into full set.");
+            test_failed = 1;
+        end
+
+        assert(dut.dcache_evicted_set == addr_set(32'h0000_0000)) else begin
+            $error("Case 9 Fail: Evicted set incorrect.");
+            test_failed = 1;
+        end
+
+        assert(dut.dcache_evicted_tag == addr_tag(32'h0000_0000)) else begin
+            $error("Case 9 Fail: Wrong block was selected for eviction.");
+            test_failed = 1;
+        end
+
+        assert(dut.dcache_evicted_data == 64'hAAAA_0000_1111_2222) else begin
+            $error("Case 9 Fail: Evicted block data incorrect.");
+            test_failed = 1;
+        end
+
+        assert(dut.dcache_evicted_dirty == 1'b0) else begin
+            $error("Case 9 Fail: Expected clean eviction.");
+            test_failed = 1;
+        end
+
+        @(negedge clock);
+        clear_return();
+        @(negedge clock);
+
+        dump_cache_set(3'd0);
+
+        send_load(32'h0000_0100, WORD, 1'b0, 6'd2);
+        #1;
+
+        assert(dut.hit == 1'b1) else begin
+            $error("Case 9 Fail: New line not installed after eviction.");
+            test_failed = 1;
+        end
+
+        assert(cache_resp_data.valid == 1'b1 &&
+               cache_resp_data.lq_index == 6'd2 &&
+               cache_resp_data.data == 32'h9999_AAAA) else begin
+            $error("Case 9 Fail: New line returned incorrect data after install.");
+            test_failed = 1;
+        end
+
+        @(negedge clock);
+        clear_req();
+        @(negedge clock);
+
         // ------------------------------------------------------------
         // Final Result
         // ------------------------------------------------------------

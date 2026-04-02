@@ -5,7 +5,6 @@ module Dcache
 #(
     parameter int WAYS = 4,
     parameter int SETS = 8,
-    parameter int LINES = SETS * WAYS,
     parameter int LINE_BYTES = 8
 )(
     input   logic            clock,
@@ -63,38 +62,41 @@ module Dcache
     //////////////////////
     // MEMDP VARIABLES //
     //////////////////////
-
-    localparam int DATA_DEPTH      = LINES;
+    localparam int DATA_DEPTH      = SETS;
     localparam int DATA_WIDTH      = $bits(MEM_BLOCK);
     localparam int DATA_READ_PORTS = 1;
     localparam int DATA_ADDR_BITS  = $clog2(DATA_DEPTH);
 
-    logic [DATA_READ_PORTS-1:0]                    data_re;
-    logic [DATA_READ_PORTS-1:0][DATA_ADDR_BITS-1:0] data_raddr;
-    logic [DATA_READ_PORTS-1:0][DATA_WIDTH-1:0]     data_rdata;
+    logic [WAYS-1:0][DATA_READ_PORTS-1:0]                   data_re;
+    logic [WAYS-1:0][DATA_READ_PORTS-1:0][DATA_ADDR_BITS-1:0] data_raddr;
+    logic [WAYS-1:0][DATA_READ_PORTS-1:0][DATA_WIDTH-1:0]     data_rdata;
 
-    logic                       data_we;
-    logic [DATA_ADDR_BITS-1:0]  data_waddr;
-    logic [DATA_WIDTH-1:0]      data_wdata;
+    logic [WAYS-1:0]                      data_we;
+    logic [WAYS-1:0][DATA_ADDR_BITS-1:0]  data_waddr;
+    logic [WAYS-1:0][DATA_WIDTH-1:0]      data_wdata;
 
-    memDP #(
-        .WIDTH(DATA_WIDTH),
-        .DEPTH(DATA_DEPTH),
-        .READ_PORTS(DATA_READ_PORTS),
-        .BYPASS_EN(0)
-    ) cache_structure (
-        .clock(clock),
-        .reset(reset),
+    genvar w;
+    generate
+        for (w = 0; w < WAYS; w++) begin : gen_way_mem
+            memDP #(
+                .WIDTH(DATA_WIDTH),
+                .DEPTH(DATA_DEPTH),
+                .READ_PORTS(DATA_READ_PORTS),
+                .BYPASS_EN(0)
+            ) way_data_array (
+                .clock(clock),
+                .reset(reset),
+                .re(data_re[w]),
+                .raddr(data_raddr[w]),
+                .rdata(data_rdata[w]),
+                .we(data_we[w]),
+                .waddr(data_waddr[w]),
+                .wdata(data_wdata[w])
+            );
+        end
+    endgenerate
 
-        .re(data_re),
-        .raddr(data_raddr),
-        .rdata(data_rdata),
 
-        .we(data_we),
-        .waddr(data_waddr),
-        .wdata(data_wdata)
-    );
-    
     assign d_request_size   = load_req_pack.valid ? MEM_SIZE'(load_req_pack.funct3) : store_req_pack.valid ? MEM_SIZE'(store_req_pack.funct3) : '0;
     assign d_req_unsigned   = load_req_pack.valid ? load_req_pack.funct3[2] : store_req_pack.valid ? store_req_pack.funct3[2] : '0;
     ADDR   curr_req_addr;
@@ -144,30 +146,28 @@ module Dcache
     MEM_BLOCK selected_read_data;
     MEM_BLOCK merged_store_data;
     
-    assign selected_read_data = hit ? MEM_BLOCK'(data_rdata[0]) : '0;
-
-    function automatic logic [$clog2(SETS*WAYS)-1:0] flat_idx(
-        input logic [SET_BITS-1:0] set_idx,
-        input logic [$clog2(WAYS)-1:0] way_idx
-    );
-        flat_idx = set_idx * WAYS + way_idx;
-    endfunction
+    always_comb begin
+        selected_read_data = '0;
+        if (hit) begin
+            selected_read_data = MEM_BLOCK'(data_rdata[hit_way][0]);
+        end
+    end
 
     always_comb begin 
         next_cache_tags   = cache_tags;
-
         next_miss_request = '0;
-
+        cache_resp_data = '0;
         hit     = 1'b0;
         hit_way = '0;
         old_lru_index_hit = '0;
-        
-       
-        data_re[0]    = 1'b0;
-        data_raddr[0] = '0;
-        data_we    = 1'b0;
-        data_waddr = '0;
-        data_wdata = '0;
+
+        for (int i = 0; i < WAYS; i++) begin
+            data_re[i][0]    = (cache_ready && req_valid) ? 1'b1 : 1'b0;
+            data_raddr[i][0] = (cache_ready && req_valid) ? d_request_set : '0;
+            data_we[i]       = 1'b0;
+            data_waddr[i]    = '0;
+            data_wdata[i]    = '0;
+        end
     
         dcache_evicted_valid = 1'b0;
         dcache_evicted_tag   = '0;
@@ -175,9 +175,6 @@ module Dcache
         dcache_evicted_data  = '0;
         dcache_evicted_dirty = '0;
 
-        cache_resp_data = '0;
-
-        //data_re    = req_valid;
         /////////////////
         // Miss logic  //
         /////////////////
@@ -202,9 +199,9 @@ module Dcache
             if (found_way_miss) begin
                 // If overwriting a valid dcache line, send it to VC
                 
-                data_we = 1'b1;
-                data_waddr = flat_idx(com_miss_req.miss_req_set, way_index_miss); // is this the correct address if we are filling up an entire 64 bit block
-                data_wdata = com_miss_req.refill_data;
+                data_we[way_index_miss] = 1'b1;
+                data_waddr[way_index_miss] = com_miss_req.miss_req_set;
+                data_wdata[way_index_miss] = com_miss_req.refill_data;
 
                 if (com_miss_req.req_is_load) begin
                     cache_resp_data.valid   = 1'b1;
@@ -239,27 +236,27 @@ module Dcache
 
                 if(!com_miss_req.req_is_load) begin
                     merged_store_data = com_miss_req.refill_data;
-                    data_we = 1'b1;
-                    data_waddr = flat_idx(com_miss_req.miss_req_set, way_index_miss);
+                    data_we[way_index_miss] = 1'b1;
+                    data_waddr[way_index_miss] = com_miss_req.miss_req_set;
                     case (com_miss_req.miss_req_size)
                         BYTE: merged_store_data.byte_level[com_miss_req.miss_req_offset] = com_miss_req.miss_req_data[7:0];
                         HALF: merged_store_data.half_level[com_miss_req.miss_req_offset[2:1]] = com_miss_req.miss_req_data[15:0];
                         WORD: merged_store_data.word_level[com_miss_req.miss_req_offset[2]] = com_miss_req.miss_req_data;
                     endcase
 
-                    data_wdata = merged_store_data;
+                    data_wdata[way_index_miss] = merged_store_data;
                     next_cache_tags[com_miss_req.miss_req_set][way_index_miss].dirty = 1'b1;
 
                 end
     
                 if (cache_tags[com_miss_req.miss_req_set][way_index_miss].valid) begin
-                    data_re[0] = 1'b1;
-                    data_raddr[0] = flat_idx(com_miss_req.miss_req_set, way_index_miss);
+                    data_re[way_index_miss][0] = 1'b1;
+                    data_raddr[way_index_miss][ 0] = com_miss_req.miss_req_set;
 
                     dcache_evicted_valid = 1'b1;
                     dcache_evicted_tag   = cache_tags[com_miss_req.miss_req_set][way_index_miss].tag;
                     dcache_evicted_set   = com_miss_req.miss_req_set;
-                    dcache_evicted_data  = data_rdata[0]; 
+                    dcache_evicted_data  = MEM_BLOCK'(data_rdata[way_index_miss][0]); //should this change as well?
                     dcache_evicted_dirty = cache_tags[com_miss_req.miss_req_set][way_index_miss].dirty;
                 end
 
@@ -287,11 +284,10 @@ module Dcache
             for (int i = 0; i < WAYS; i++) begin
                 if (cache_ready && req_valid && cache_tags[d_request_set][i].valid &&
                     cache_tags[d_request_set][i].tag == d_request_tag && !hit) begin
-                    data_re[0] = 1'b1;
+                    //data_re[i][0] = 1'b1;
+                    //data_raddr[i][0] = d_request_set; // request for memDP
                     hit     = 1'b1;
                     hit_way = i[$clog2(WAYS)-1:0];
-
-                    data_raddr[0] = flat_idx(d_request_set, i[$clog2(WAYS)-1:0]); // request for memDP
 
                     old_lru_index_hit = cache_tags[d_request_set][i].lru_val;// should be 0 if not valid
 
@@ -343,8 +339,8 @@ module Dcache
             end
             if(hit && is_valid_store)begin
                 merged_store_data = selected_read_data;
-                data_we    = 1'b1;
-                data_waddr = flat_idx(d_request_set, hit_way);
+                data_we[hit_way]    = 1'b1;
+                data_waddr[hit_way] = d_request_set;
                 next_cache_tags[d_request_set][hit_way].dirty = 1'b1;
                 case (d_request_size)
                     BYTE: begin
@@ -360,7 +356,7 @@ module Dcache
                         merged_store_data = '0;
                     end
                 endcase
-                data_wdata = merged_store_data;
+                data_wdata[hit_way] = merged_store_data;
             end
             // Vc Load hit
             if (vc_hit && load_req_pack.valid) begin
@@ -371,18 +367,15 @@ module Dcache
                             {{24{vc_hit_data.byte_level[d_request_offset][7]}},
                             vc_hit_data.byte_level[d_request_offset]};
                     end
-
                     HALF: begin
                         cache_resp_data.data = d_req_unsigned ?
                             {{16{1'b0}}, vc_hit_data.half_level[d_request_offset[2:1]]} :
                             {{16{vc_hit_data.half_level[d_request_offset[2:1]][15]}},
                             vc_hit_data.half_level[d_request_offset[2:1]]};
                     end
-
                     WORD: begin
                         cache_resp_data.data = vc_hit_data.word_level[d_request_offset[2]];
                     end
-
                     default: begin
                         cache_resp_data.data = '0;
                     end
