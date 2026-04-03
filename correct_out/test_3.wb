@@ -8,5 +8,5 @@ PC 0014:addi    | r06=20
 PC 0018:add     | r08=20      
 PC 001c:lw      | r04=18      
 PC 0020:beq     | ---
-PC 0030:nop     | ---
-PC 0034:wfi     | ---
+PC 0034:nop     | ---
+PC 0038:wfi     | ---

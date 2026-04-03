@@ -1,0 +1,7 @@
+Register writeback output (hexadecimal)
+PC 0000:jal     | r01=4       
+PC 000c:jalr    | ---
+PC 0004:jal     | r01=8       
+PC 0010:jalr    | ---
+PC 0008:jal     | ---
+PC 0014:wfi     | ---

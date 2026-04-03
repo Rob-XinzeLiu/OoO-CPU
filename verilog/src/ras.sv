@@ -130,7 +130,7 @@ module ras (
             if(count + num_push < num_pop) begin
                 count <= 3'd0;
             end else if(count + num_push - num_pop > 3'd4) begin
-                count <= '0;
+                count <= RAS_SIZE;
             end else begin
                 count <= count + num_push - num_pop;
             end

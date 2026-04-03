@@ -78,7 +78,7 @@ module icache (
 
     assign changed_addr = (current_index != last_index) || (current_tag != last_tag);
     assign unanswered_miss = changed_addr ? !Icache_valid_out :
-                                        miss_outstanding && (Imem2proc_transaction_tag == 0);
+                                        miss_outstanding && (current_mem_tag == 0);
     assign got_mem_data = (current_mem_tag == Imem2proc_data_tag) && (current_mem_tag != 0);
 
     // Prefetch tracking
