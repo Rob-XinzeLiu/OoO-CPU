@@ -63,9 +63,10 @@ module load_queue(
 
     LQ_ENTRY    lq          [`LQ_SZ-1:0];
     LQ_ENTRY    lq_n        [`LQ_SZ-1:0];
+    logic full, full_n;
     LQ_IDX      head, head_next;
     LQ_IDX      tail, tail_next;
-    LQ_CNT      entry_cnt;
+    LQ_CNT      free_slots;
 
     // forwarding 
     logic [`SQ_SZ-1:0]      addr_match_mask[`LQ_SZ-1:0];
@@ -93,9 +94,9 @@ module load_queue(
         //default
         head_next = head;
         tail_next = tail;
+        full_n   = full;
         lq_n = lq;
         load_packet = '0;
-        entry_cnt = '0;
         lq_out_next = '0;
         cdb_req_load = '0;
         lq_index = '{default: '0};
@@ -302,6 +303,7 @@ module load_queue(
                     lq_n[tail_next].old_sq_valid_mask = sq_valid_in_mask[i];
                     lq_n[tail_next].sq_tail_position = sq_tail_in[i];
                     lq_n[tail_next].rob_index = rob_index[i];
+                    lq_index [i] = tail_next;
                     tail_next = tail_next + 1;
                 end
                 if(is_branch[i])begin
@@ -311,14 +313,18 @@ module load_queue(
         end
 
          //calculate available space
-        entry_cnt = LQ_CNT'(tail_next - head_next);
+        free_slots = (full_n)? 0 : 
+                        (head_next == tail_next) ? `LQ_SZ :
+                        (head_next > tail_next) ? LQ_IDX'(head_next - tail_next) : 
+                        LQ_IDX'(`LQ_SZ - (tail_next - head_next));
 
-        lq_space_available = (entry_cnt <= (`LQ_SZ - 2)) ? 2 :
-                             (entry_cnt == (`LQ_SZ - 1)) ? 1 : 0;
-
-
+        full_n = full? (head_next == tail_next) :
+                         ((tail_next == head_next) && (tail_next != tail)); 
     
-
+        lq_space_available = full_n             ? 0 :
+                            (head_next == tail_next) ? 2 : // empty
+                            (free_slots >= 2)  ? 2 :
+                            (free_slots == 1)  ? 1 : 0;
     end
 
     always_ff @(posedge clock)begin
@@ -327,11 +333,13 @@ module load_queue(
             tail <= '0;
             lq <= '{default:'0};
             lq_out_r <= '0;
+            full <= '0;
         end else begin
             head <= head_next;
             tail <= tail_next;
             lq <= lq_n;
             lq_out_r <= lq_out_next;
+            full <= full_n;
         end
     end
 

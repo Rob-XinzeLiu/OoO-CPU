@@ -145,6 +145,10 @@ module Dcache
 
     MEM_BLOCK selected_read_data;
     MEM_BLOCK merged_store_data;
+
+    logic currently_storing;
+    assign currently_storing = store_req_pack.valid;
+    
     
     always_comb begin
         selected_read_data = '0;

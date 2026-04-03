@@ -60,9 +60,10 @@ module store_queue (
     SQ_ENTRY sq         [`SQ_SZ-1:0];
     SQ_ENTRY sq_n       [`SQ_SZ-1:0];
 
+    logic   full, full_n;
     SQ_IDX head, head_next;
     SQ_IDX tail, tail_next;
-    SQ_CNT entry_cnt;
+    SQ_CNT free_slots;
     logic [`SQ_SZ-1:0] sq_valid_snapshot; // internal signal，update when dispatch
 
 
@@ -71,7 +72,7 @@ module store_queue (
         sq_n = sq;
         head_next = head;
         tail_next = tail;
-        entry_cnt = 0;
+        full_n = full;
         sq_addr_ready_mask = '0;
         sq_out = '{default:'0};
         sq_index = '{default: '0};
@@ -171,9 +172,18 @@ module store_queue (
 
 
         //calculate available space
-        entry_cnt = SQ_CNT'(tail_next - head_next);
-        sq_space_available = (`SQ_SZ - entry_cnt) >= 2 ? 2 :
-                             (`SQ_SZ - entry_cnt) == 1 ? 1 : 0;
+        free_slots = (full_n)? 0 : 
+                        (head_next == tail_next) ? `SQ_SZ :
+                        (head_next > tail_next) ? SQ_IDX'(head_next - tail_next) : 
+                        SQ_IDX'(`SQ_SZ - (tail_next - head_next));
+
+        full_n = full? (head_next == tail_next) :
+                         ((tail_next == head_next) && (tail_next != tail)); 
+    
+        sq_space_available = full_n             ? 0 :
+                            (head_next == tail_next) ? 2 : // empty
+                            (free_slots >= 2)  ? 2 :
+                            (free_slots == 1)  ? 1 : 0;
 
 
 
@@ -184,10 +194,12 @@ module store_queue (
             head <= 0;
             tail <= 0;
             sq <= '{default:'0};
+            full <= '0;
         end else begin
             head <= head_next;
             tail <= tail_next;
             sq <= sq_n;
+            full <= full_n;
         end
     end
 

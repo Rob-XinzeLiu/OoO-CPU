@@ -241,23 +241,23 @@ module cpu (
         icache_gnt = 1'b0;
         mshr_gnt   = 1'b0;
         dcache_store_gnt = 1'b0;
-        proc2mem_command = MEM_NONE;
+        //proc2mem_command = MEM_NONE;
 
 
-        if(mshr2mem_command == MEM_LOAD && (!unanswered_miss && !vc_requesting)) begin
+        if(mshr2mem_command == MEM_LOAD && (!(unanswered_miss || vc_requesting) || mshr_wait_for_trans)) begin
             mshr_gnt = 1'b1;
             proc2mem_command = mshr2mem_command;
             proc2mem_size    = mshr2mem_size;
             proc2mem_addr    = mshr2mem_addr;
             proc2mem_data    = '0;
         end
-        else if(vc2mem_command == MEM_STORE && (!unanswered_miss && !mshr_wait_for_trans))begin 
+        else if(vc2mem_command == MEM_STORE && (!(unanswered_miss || mshr_wait_for_trans) || vc_requesting) )begin 
             dcache_store_gnt = 1'b1;
             proc2mem_command = vc2mem_command;
             proc2mem_size    = vc2mem_size;
             proc2mem_addr    = vc2mem_addr;
             proc2mem_data    = vc2mem_data;
-        end else begin
+        end else if (!(vc_requesting || mshr_wait_for_trans)) begin
             icache_gnt       = (Imem_command != MEM_NONE);
             proc2mem_command = Imem_command;
             proc2mem_size    = DOUBLE;

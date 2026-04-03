@@ -16,14 +16,11 @@ cd /home/xinzeliu/eecs472/pfinal_472-w26.group8
 
 for source_file in programs/*.s programs/*c; do
     program=$(echo "$source_file" | cut -d '.' -f1 | cut -d '/' -f 2)
-    if [ "$program" = "simple" ] || [ "$program" = "mult_no_lsq" ] || [ "$program" = "btest2" ]; then
+    
         make $program.out
         echo "Comparing writeback output for $program"
         diff correct_out/$program.wb output/$program.wb
         wb_result=$?
-    else
-        continue
-    fi
 
     if [ $wb_result -eq 0 ] 
     then

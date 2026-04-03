@@ -72,11 +72,11 @@ module freelist(
 
             // take snapshot 
             if(is_branch[0]) begin
-                BS_tail[0] = tail; 
+                BS_tail[0] = dispatch_valid[0]? FLIST_IDX'(tail+1) : tail; 
             end
             if(is_branch[1]) begin
                 //need to consider if dispatch pack 0 has dest reg
-                BS_tail[1] = dispatch_valid[0] ? tail + 1 : tail;
+                BS_tail[1] = tail_n;
             end
             //calculate free slots
             free_slots = (head_n >= tail_n) ? FLIST_IDX'(head_n - tail_n) :
