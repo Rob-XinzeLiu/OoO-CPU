@@ -203,8 +203,10 @@ typedef struct packed {
     LQ_IDX                                    lq_index;
 } miss_fifo_entry_t;
 
+`define MSHR_ENTRIES 16
 typedef struct packed {
     logic                                     valid;
+    logic                                     dep_miss;
     MEM_TAG                                   trans_tag;
     ADDR                                      miss_req_address;
     logic [`DCACHE_TAG_BITS-1:0]              miss_req_tag;
@@ -221,6 +223,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic                                     valid;
+    logic                                     dep_miss;
     ADDR                                      miss_req_address;
     logic [`DCACHE_TAG_BITS-1:0]              miss_req_tag;
     logic [`DCACHE_SET_BITS-1:0]              miss_req_set;
