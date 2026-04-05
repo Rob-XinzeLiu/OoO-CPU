@@ -97,15 +97,18 @@ module Dcache
     endgenerate
 
 
-    assign d_request_size   = load_req_pack.valid ? MEM_SIZE'(load_req_pack.funct3) : store_req_pack.valid ? MEM_SIZE'(store_req_pack.funct3) : '0;
-    assign d_req_unsigned   = load_req_pack.valid ? load_req_pack.funct3[2] : store_req_pack.valid ? store_req_pack.funct3[2] : '0;
+    assign d_request_size   = load_req_pack.valid ? MEM_SIZE'(load_req_pack.funct3) : store_req_pack.valid ? MEM_SIZE'(store_req_pack.funct3)
+                            : com_miss_req.dep_miss ? com_miss_req.miss_req_size : '0;
+    assign d_req_unsigned   = load_req_pack.valid ? load_req_pack.funct3[2] : store_req_pack.valid ? store_req_pack.funct3[2] : 
+                               com_miss_req.dep_miss ? com_miss_req.miss_req_unsigned : '0;
     ADDR   curr_req_addr;
-    assign curr_req_addr = load_req_pack.valid ? load_req_pack.addr : store_req_pack.valid ? store_req_pack.addr : '0;
+    assign curr_req_addr = load_req_pack.valid ? load_req_pack.addr : store_req_pack.valid ? store_req_pack.addr : 
+                            com_miss_req.dep_miss ? com_miss_req.miss_req_address : '0;
     assign d_request_tag    = curr_req_addr[ADDR_BITS-1 : OFFSET_BITS + SET_BITS];
     assign d_request_set    = curr_req_addr[OFFSET_BITS + SET_BITS - 1 : OFFSET_BITS];
     assign d_request_offset = curr_req_addr[OFFSET_BITS-1:0];
 
-    assign cache_ready  = !miss_returned && !miss_queue_full ; // && mshr is not full // TODO: PLEASE ENSURE THAT THIS CHANGES. for now cache ready
+    assign cache_ready = !miss_queue_full && !(miss_returned && !com_miss_req.dep_miss);
     
     logic load_req_active;
     assign load_req_active         = load_req_pack.valid;
@@ -113,7 +116,7 @@ module Dcache
     assign dcache_can_accept_load  = cache_ready;
 
     logic req_valid;
-    assign req_valid = load_req_pack.valid || store_req_pack.valid;
+    assign req_valid = load_req_pack.valid || store_req_pack.valid || (com_miss_req.valid && com_miss_req.dep_miss); // only consider miss request if it's dependent on another miss, otherwise it will be handled in the same way as a new request from the core
     // VC signals
     logic                    vc_hit;
     MEM_BLOCK                vc_hit_data;
@@ -140,8 +143,8 @@ module Dcache
     logic is_valid_load;
     logic is_valid_store;
 
-    assign is_valid_load = load_req_pack.valid;
-    assign is_valid_store = store_req_pack.valid;
+    assign is_valid_load = load_req_pack.valid || (com_miss_req.valid && com_miss_req.dep_miss && com_miss_req.req_is_load); // consider a load request valid if it's from the core or if it's a miss request that is a load
+    assign is_valid_store = store_req_pack.valid || (com_miss_req.valid && com_miss_req.dep_miss && !com_miss_req.req_is_load); // consider a store request valid if it's from the core or if it's a miss request that is a store
 
     MEM_BLOCK selected_read_data;
     MEM_BLOCK merged_store_data;
@@ -187,7 +190,7 @@ module Dcache
         way_index_miss      = '0;
         old_lru_index_miss  = '0;
 
-        if (miss_returned) begin
+        if (miss_returned && !com_miss_req.dep_miss) begin
             // STEP 1. CHECK IF THERE IS AN INVALID WAY IN THE SET.
             for (int i = 0; i < WAYS; ++i) begin
                 if (!cache_tags[com_miss_req.miss_req_set][i].valid && !found_way_miss) begin
@@ -357,7 +360,7 @@ module Dcache
                         merged_store_data.word_level[d_request_offset[2]] = store_req_pack.data;
                     end
                     default: begin
-                        merged_store_data = '0;
+                        //merged_store_data = '0;
                     end
                 endcase
                 data_wdata[hit_way] = merged_store_data;

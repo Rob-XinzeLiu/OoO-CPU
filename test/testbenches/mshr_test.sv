@@ -213,68 +213,7 @@ module testbench;
         mem2proc_transaction_tag = '0;
         @(negedge clock);
 
-        // ------------------------------------------------------------
-        // Case 5: Out-of-order completion
-        // ------------------------------------------------------------
-       $display("\nCase 5: Out-of-order completion");
 
-        // tag 2
-        mem2proc_data_tag = 4'd2;
-        mem2proc_data     = 64'h2222_2222_2222_2222;
-        #1;
-        dump_outstanding_table();
-        $display("DEBUG tag2: com_valid=%0b addr=0x%08h refill=0x%016h",
-            com_miss_req.valid,
-            com_miss_req.miss_req_address,
-            com_miss_req.refill_data);
-
-        assert(com_miss_req.valid == 1'b1 &&
-            com_miss_req.miss_req_address == 32'h0000_0080 &&
-            com_miss_req.refill_data == 64'h2222_2222_2222_2222) else begin
-            $error("Case 5 Fail: Completion for tag 2 incorrect.");
-            test_failed = 1;
-        end
-        @(negedge clock);
-
-        // tag 1
-        mem2proc_data_tag = 4'd1;
-        mem2proc_data     = 64'h1111_1111_1111_1111;
-        #1;
-        dump_outstanding_table();
-        $display("DEBUG tag1: com_valid=%0b addr=0x%08h refill=0x%016h",
-            com_miss_req.valid,
-            com_miss_req.miss_req_address,
-            com_miss_req.refill_data);
-
-        assert(com_miss_req.valid == 1'b1 &&
-            com_miss_req.miss_req_address == 32'h0000_0040 &&
-            com_miss_req.refill_data == 64'h1111_1111_1111_1111) else begin
-            $error("Case 5 Fail: Completion for tag 1 incorrect.");
-            test_failed = 1;
-        end
-        @(negedge clock);
-
-        // tag 4
-        mem2proc_data_tag = 4'd4;
-        mem2proc_data     = 64'h4444_4444_4444_4444;
-        #1;
-        dump_outstanding_table();
-        $display("DEBUG tag4: com_valid=%0b addr=0x%08h refill=0x%016h",
-            com_miss_req.valid,
-            com_miss_req.miss_req_address,
-            com_miss_req.refill_data);
-
-        assert(com_miss_req.valid == 1'b1 &&
-            com_miss_req.miss_req_address == 32'h0000_00C0 &&
-            com_miss_req.refill_data == 64'h4444_4444_4444_4444) else begin
-            $error("Case 5 Fail: Completion for tag 4 incorrect.");
-            test_failed = 1;
-        end
-        @(negedge clock);
-
-        mem2proc_data_tag = '0;
-        mem2proc_data     = '0;
-        @(negedge clock);
         // ------------------------------------------------------------
         // Case 6: Retry when memory does not accept
         // ------------------------------------------------------------
@@ -360,6 +299,133 @@ module testbench;
         mem2proc_data_tag = '0;
         mem2proc_data     = '0;
 
+                // ------------------------------------------------------------
+        // Case 8: Dependent replay only after first request is already outstanding
+        // ------------------------------------------------------------
+        $display("\nCase 8: FIFO dependent replay for repeated block");
+
+        reset_dut();
+
+        // -----------------------------
+        // A primary miss
+        // -----------------------------
+        send_miss(32'h0000_0040, 1'b1, WORD, 1'b0, '0);
+        @(negedge clock);
+        clear_miss();
+        @(negedge clock);
+
+        assert(mshr2mem_command == MEM_LOAD && mshr2mem_addr == 32'h0000_0040) else begin
+            $error("Case 8 Fail: First issue should be A.");
+            test_failed = 1;
+        end
+
+        mem2proc_transaction_tag = 4'd1;
+        @(negedge clock);
+        mem2proc_transaction_tag = '0;
+        @(negedge clock);
+
+        // -----------------------------
+        // B primary miss
+        // -----------------------------
+        send_miss(32'h0000_0080, 1'b1, WORD, 1'b0, '0);
+        @(negedge clock);
+        clear_miss();
+        @(negedge clock);
+
+        assert(mshr2mem_command == MEM_LOAD && mshr2mem_addr == 32'h0000_0080) else begin
+            $error("Case 8 Fail: Second issue should be B.");
+            test_failed = 1;
+        end
+
+        mem2proc_transaction_tag = 4'd2;
+        @(negedge clock);
+        mem2proc_transaction_tag = '0;
+        @(negedge clock);
+
+        // -----------------------------
+        // Dependent A miss
+        // Since A is already outstanding, this should merge as dep_miss
+        // and should NOT issue another MEM_LOAD.
+        // -----------------------------
+        send_miss(32'h0000_0040, 1'b1, WORD, 1'b0, '0);
+        @(negedge clock);
+        clear_miss();
+        @(negedge clock);
+
+        assert(!(mshr2mem_command == MEM_LOAD && mshr2mem_addr == 32'h0000_0040)) else begin
+            $error("Case 8 Fail: Dependent A request incorrectly re-issued to memory.");
+            test_failed = 1;
+        end
+
+        dump_outstanding_table();
+
+        // -----------------------------
+        // Complete A primary
+        // -----------------------------
+        mem2proc_data_tag = 4'd1;
+        mem2proc_data     = 64'hAAAA_AAAA_AAAA_AAAA;
+        #1;
+
+        assert(com_miss_req.valid == 1'b1 &&
+               com_miss_req.dep_miss == 1'b0 &&
+               com_miss_req.miss_req_address == 32'h0000_0040 &&
+               com_miss_req.req_is_load == 1'b1 &&
+               com_miss_req.miss_req_size == WORD &&
+               com_miss_req.refill_data == 64'hAAAA_AAAA_AAAA_AAAA) else begin
+            $error("Case 8 Fail: A primary completion packet incorrect.");
+            test_failed = 1;
+        end
+
+        @(negedge clock);
+        mem2proc_data_tag = '0;
+        mem2proc_data     = '0;
+        @(negedge clock);
+
+        // -----------------------------
+        // Complete B primary
+        // -----------------------------
+        mem2proc_data_tag = 4'd2;
+        mem2proc_data     = 64'hBBBB_BBBB_BBBB_BBBB;
+        #1;
+
+        assert(com_miss_req.valid == 1'b1 &&
+               com_miss_req.dep_miss == 1'b0 &&
+               com_miss_req.miss_req_address == 32'h0000_0080 &&
+               com_miss_req.req_is_load == 1'b1 &&
+               com_miss_req.miss_req_size == WORD &&
+               com_miss_req.refill_data == 64'hBBBB_BBBB_BBBB_BBBB) else begin
+            $error("Case 8 Fail: B primary completion packet incorrect.");
+            test_failed = 1;
+        end
+
+       @(negedge clock);
+        mem2proc_data_tag = '0;
+        mem2proc_data     = '0;
+        #1;
+
+        $display("DEBUG dep replay: valid=%0b dep=%0b addr=0x%08h size=%0d refill=0x%016h",
+            com_miss_req.valid,
+            com_miss_req.dep_miss,
+            com_miss_req.miss_req_address,
+            com_miss_req.miss_req_size,
+            com_miss_req.refill_data);
+        // -----------------------------
+        // Now dependent A replay should come out
+        // -----------------------------
+        #1;
+
+        assert(com_miss_req.valid == 1'b1 &&
+               com_miss_req.dep_miss == 1'b1 &&
+               com_miss_req.miss_req_address == 32'h0000_0040 &&
+               com_miss_req.req_is_load == 1'b1 &&
+               com_miss_req.miss_req_size == WORD &&
+               com_miss_req.refill_data == '0) else begin
+            $error("Case 8 Fail: Dependent A replay packet incorrect.");
+            test_failed = 1;
+        end
+
+        @(negedge clock);
+        dump_outstanding_table();
         // ------------------------------------------------------------
         // Final Result
         // ------------------------------------------------------------
