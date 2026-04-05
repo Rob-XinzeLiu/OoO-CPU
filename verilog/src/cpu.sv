@@ -119,12 +119,13 @@ module cpu (
     // ROB
     logic [1:0]         rob_space_avail;
     ROB_IDX         rob_index [`N-1:0];
+    ROB_IDX         rob_tail_out [`N-1:0];
     RETIRE_PACKET   [`N-1:0] rob_commit_pack;
 
     // Branch Stack
     logic [`MT_SIZE-1:0]    mt_BS_out;
     FLIST_IDX       tail_ptr_out;
-    ROB_IDX         rob_index_out;
+    ROB_IDX         BS_rob_tail_out;
     logic [1:0]     branch_stack_space_avail;
     ADDR            pc_BS_out;
     LQ_IDX          BS_lq_tail_out;
@@ -652,8 +653,9 @@ module cpu (
         .clock(clock),
         .reset(reset),
         .dispatch_pack(dispatch_out_pack),
+        .is_branch(is_branch),
         .mispredicted(global_mispredict),
-        .mispredicted_index(rob_index_out), 
+        .rob_tail_in(BS_rob_tail_out), 
         .cdb(cdb),
         .cond_branch_in(cond_pack_reg),
         .sq_in(store_pack_reg),
@@ -661,7 +663,8 @@ module cpu (
         // Output
         .rob_commit(rob_commit_pack),
         .rob_space_avail(rob_space_avail),
-        .rob_index(rob_index)
+        .rob_index(rob_index),
+        .rob_tail_out(rob_tail_out)
     );
 
     //////////////////////////////////////////////////
@@ -748,14 +751,14 @@ module cpu (
         .pc_snapshot_in(pc_snapshot_out),
         .resolved(global_resolve),
         .resolved_bmask_index(global_resolve_index),
-        .rob_index_in(rob_index),
+        .rob_tail_in(rob_tail_out),
         .lq_tail_in(BS_lq_tail),
         .sq_tail_in(BS_sq_tail),
 
         // Output
         .mt_snapshot_out(mt_BS_out),
         .tail_ptr_out(tail_ptr_out),
-        .rob_index_out(rob_index_out),
+        .rob_tail_out(BS_rob_tail_out),
         .branch_stack_space_avail(branch_stack_space_avail),
         .pc_snapshot_out(pc_BS_out),
         .lq_tail_out(BS_lq_tail_out),

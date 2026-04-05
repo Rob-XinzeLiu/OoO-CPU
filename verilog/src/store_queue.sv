@@ -170,15 +170,15 @@ module store_queue (
             end
         end
 
-
+        full_n = full? (head_next == tail_next) :
+                         ((tail_next == head_next) && (tail_next != tail)); 
         //calculate available space
         free_slots = (full_n)? 0 : 
                         (head_next == tail_next) ? `SQ_SZ :
                         (head_next > tail_next) ? SQ_IDX'(head_next - tail_next) : 
                         SQ_IDX'(`SQ_SZ - (tail_next - head_next));
 
-        full_n = full? (head_next == tail_next) :
-                         ((tail_next == head_next) && (tail_next != tail)); 
+
     
         sq_space_available = full_n             ? 0 :
                             (head_next == tail_next) ? 2 : // empty

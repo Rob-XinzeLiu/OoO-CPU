@@ -12,13 +12,13 @@ module branch_stack (
     input logic                                         branch_encountered       [`N-1:0],   //from dispatch stage
     input B_MASK                                        branch_idx               [`N-1:0],   //from dispatch stage
     input ADDR                                          pc_snapshot_in           [`N-1:0],   //from dispatch stage     
-    input ROB_IDX                                       rob_index_in             [`N-1:0],   //from rob  
+    input ROB_IDX                                       rob_tail_in             [`N-1:0],   //from rob  
     input LQ_IDX                                        lq_tail_in              [`N-1:0],   //from lq
     input SQ_IDX                                        sq_tail_in              [`N-1:0],   //from sq                  
     
     output logic [`MT_SIZE-1:0]                         mt_snapshot_out                  ,   //to maptable
     output FLIST_IDX                                    tail_ptr_out                     ,   //to freelist
-    output ROB_IDX                                      rob_index_out                    ,   //to rob
+    output ROB_IDX                                      rob_tail_out                    ,   //to rob
     output logic [1:0]                                  branch_stack_space_avail         ,   //to dispatch stage
     output ADDR                                         pc_snapshot_out                  ,   //to fetch stage
     output LQ_IDX                                       lq_tail_out                     ,   //to lq
@@ -31,7 +31,7 @@ module branch_stack (
         FLIST_IDX              freelist_tail_idx;
         logic                          resolved;
         ADDR                           pc;
-        ROB_IDX                        rob_index;
+        ROB_IDX                        rob_tail;
         LQ_IDX                          lq_tail;
         SQ_IDX                          sq_tail;
     } checkpoint_t;
@@ -56,7 +56,7 @@ module branch_stack (
         stack_next = stack; 
         mt_snapshot_out = '0;
         tail_ptr_out     = '0;
-        rob_index_out = '0;
+        rob_tail_out = '0;
         pc_snapshot_out = '0;
         sq_tail_out = '0;
         lq_tail_out = '0;
@@ -77,7 +77,7 @@ module branch_stack (
                 if(stack_next[i].branch_idx == mispredicted_idx) begin
                     mt_snapshot_out = stack[i].maptable;
                     tail_ptr_out    = stack[i].freelist_tail_idx;
-                    rob_index_out   = stack[i].rob_index;
+                    rob_tail_out   = stack[i].rob_tail;
                     pc_snapshot_out = stack[i].pc;
                     lq_tail_out    = stack[i].lq_tail;
                     sq_tail_out    = stack[i].sq_tail;
@@ -120,7 +120,7 @@ module branch_stack (
                 stack_next[stack_ptr_temp2].maptable = mt_snapshot_in[i];
                 stack_next[stack_ptr_temp2].freelist_tail_idx = tail_ptr_in[i];
                 stack_next[stack_ptr_temp2].pc = pc_snapshot_in[i];
-                stack_next[stack_ptr_temp2].rob_index = rob_index_in[i];
+                stack_next[stack_ptr_temp2].rob_tail = rob_tail_in[i];
                 stack_next[stack_ptr_temp2].lq_tail = lq_tail_in[i];
                 stack_next[stack_ptr_temp2].sq_tail = sq_tail_in[i];
                 stack_ptr_temp2 = stack_ptr_temp2 + 1;

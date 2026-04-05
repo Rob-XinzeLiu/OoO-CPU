@@ -3,18 +3,21 @@ module rob(
     input logic                 clock                           ,
     input logic                 reset                           ,
     input D_S_PACKET            dispatch_pack           [`N-1:0],
+    input logic [`N-1:0]        is_branch                       ,//from dispatch
     input logic                 mispredicted                    ,//from execute
-    input ROB_IDX               mispredicted_index              ,//from branch stack
+    input ROB_IDX               rob_tail_in                     ,//from branch stack
     input X_C_PACKET            [`N-1:0]   cdb                  ,//set complete bit
     input COND_BRANCH_PACKET    cond_branch_in                  ,//from execute  
     input SQ_PACKET             sq_in                           ,//from execute       
 
     output RETIRE_PACKET        [`N-1:0] rob_commit             ,//to retire stage
     output logic [1:0]          rob_space_avail                 ,//to dispatch stage
-    output ROB_IDX              rob_index               [`N-1:0] //to rs & branch stack
+    output ROB_IDX              rob_index               [`N-1:0],//to rs 
+    output ROB_IDX              rob_tail_out            [`N-1:0] //to branch stack
 );
 
     typedef struct packed {
+        logic           valid;
         PRF_IDX         t;
         PRF_IDX         told;
         logic           ready_retire;//how many inst can we retire per cycle?
@@ -35,9 +38,9 @@ module rob(
     ROB_ENTRY       next_rob_array      [`ROB_SZ-1:0];
     ROB_IDX         head_ptr, next_head_ptr;
     ROB_IDX         tail_ptr, next_tail_ptr;//tail pointer point to next free slot
-    ROB_CNT         rob_count, next_rob_count;//how many entries used
+    logic           full, full_n;
+    ROB_CNT         free_slots;
     logic [1:0]   retire_num; //how many instructions can we retire in this cycle
-    logic           a, b;
 
     //output current head ptr to execute stage
     assign          rob_head_ptr_out = head_ptr;
@@ -65,19 +68,26 @@ module rob(
         //default
         next_head_ptr = head_ptr;
         next_tail_ptr = tail_ptr;
-        next_rob_count = rob_count;
+        full_n = full;
         next_rob_array = rob_array;
         rob_commit = '0;
         rob_index = '{default: '0};
+        rob_tail_out = '{default: '0};
+        free_slots = 0;
 ///////////////////////////////////////////////////////////////////////
 //////////////////////                         ////////////////////////
 //////////////////////      Commit(Retire)     ////////////////////////
 //////////////////////                         ////////////////////////
 ///////////////////////////////////////////////////////////////////////
-        a = (rob_count > 0) && rob_array[(head_ptr) % `ROB_SZ].ready_retire;
-        b = (rob_count > 1) && rob_array[(head_ptr + 1) % `ROB_SZ].ready_retire;
-        retire_num = (a && b)? 2'b10 : 
-                     (a && !b)? 2'b01 : 2'b00;
+
+        retire_num = (head_ptr != tail_ptr || full) &&
+                        rob_array[head_ptr].valid && rob_array[head_ptr].ready_retire &&
+                        (ROB_IDX'(head_ptr+1) != tail_ptr) &&   
+                        rob_array[ROB_IDX'(head_ptr+1)].valid && 
+                        rob_array[ROB_IDX'(head_ptr+1)].ready_retire ? 2 :
+                        (head_ptr != tail_ptr || full) &&
+                        rob_array[head_ptr].valid && 
+                        rob_array[head_ptr].ready_retire ? 1 : 0;
         
 
         if(retire_num == 2)begin
@@ -93,9 +103,9 @@ module rob(
                 rob_commit[i].data = rob_array[(head_ptr+i) % `ROB_SZ].data;
                 rob_commit[i].is_store = rob_array[(head_ptr+i) % `ROB_SZ].is_store;
                 rob_commit[i].sq_index = rob_array[(head_ptr+i) % `ROB_SZ].sq_index;
+                next_rob_array[(head_ptr+i) % `ROB_SZ].valid = 0;
             end
             next_head_ptr = head_ptr + 2;
-            next_rob_count = rob_count - 2;
 
         end else if(retire_num == 1)begin
             rob_commit[0].valid = 1'b1;
@@ -109,8 +119,8 @@ module rob(
             rob_commit[0].data = rob_array[head_ptr].data;
             rob_commit[0].is_store = rob_array[head_ptr].is_store;
             rob_commit[0].sq_index = rob_array[head_ptr].sq_index;
+            next_rob_array[head_ptr].valid = 0;
             next_head_ptr = head_ptr + 1;
-            next_rob_count = rob_count - 1;
 
 
         end 
@@ -143,68 +153,91 @@ module rob(
 //////////////////////                         ////////////////////////
 ///////////////////////////////////////////////////////////////////////
         if(mispredicted) begin
-            next_tail_ptr = mispredicted_index + 1;
-            next_rob_count = ROB_CNT'(ROB_IDX'(mispredicted_index - next_head_ptr) + 1'b1) ;
+            next_tail_ptr = rob_tail_in;
+        end else begin
+
+
+    ///////////////////////////////////////////////////////////////////////
+    //////////////////////                         ////////////////////////
+    //////////////////////  Enqueue(Dispatch)      ////////////////////////
+    //////////////////////                         ////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+            if(dispatch_1 ) begin   
+                next_rob_array[tail_ptr].valid = 1;          
+                next_rob_array[tail_ptr].t = dispatch_pack[0].T;
+                next_rob_array[tail_ptr].told = dispatch_pack[0].Told;
+                next_rob_array[tail_ptr].ready_retire = 1'b0;
+                next_rob_array[tail_ptr].halt = dispatch_pack[0].halt;
+                next_rob_array[tail_ptr].illegal = dispatch_pack[0].illegal;
+                next_rob_array[tail_ptr].PC = dispatch_pack[0].PC;
+                next_rob_array[tail_ptr].NPC = dispatch_pack[0].NPC;
+                next_rob_array[tail_ptr].has_dest = dispatch_pack[0].has_dest;
+                next_rob_array[tail_ptr].dest_reg_idx = dispatch_pack[0].dest_reg_idx;
+                next_rob_array[tail_ptr].lq_index = dispatch_pack[0].lq_index;
+                next_rob_array[tail_ptr].sq_index = dispatch_pack[0].sq_index;
+                next_rob_array[tail_ptr].is_store = dispatch_pack[0].wr_mem;
+                next_tail_ptr = tail_ptr + 1;  
+
+                rob_index[0] = tail_ptr;          
+
+                if(is_branch[0]) begin
+                    rob_tail_out[0] = next_tail_ptr;
+                end
+            end else if (dispatch_2 ) begin
+                next_rob_array[tail_ptr].valid = 1;  
+                next_rob_array[tail_ptr].t = dispatch_pack[0].T;
+                next_rob_array[tail_ptr].told = dispatch_pack[0].Told;
+                next_rob_array[tail_ptr].ready_retire = 1'b0;
+                next_rob_array[tail_ptr].halt = dispatch_pack[0].halt;
+                next_rob_array[tail_ptr].illegal = dispatch_pack[0].illegal;
+                next_rob_array[tail_ptr].PC = dispatch_pack[0].PC;
+                next_rob_array[tail_ptr].NPC = dispatch_pack[0].NPC;
+                next_rob_array[tail_ptr].has_dest = dispatch_pack[0].has_dest;
+                next_rob_array[tail_ptr].dest_reg_idx = dispatch_pack[0].dest_reg_idx; 
+                next_rob_array[tail_ptr].lq_index = dispatch_pack[0].lq_index;
+                next_rob_array[tail_ptr].sq_index = dispatch_pack[0].sq_index;   
+                next_rob_array[tail_ptr].is_store = dispatch_pack[0].wr_mem;        
+
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].valid = 1;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].t = dispatch_pack[1].T;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].told = dispatch_pack[1].Told;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].ready_retire = 1'b0;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].halt = dispatch_pack[1].halt;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].illegal = dispatch_pack[1].illegal;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].PC = dispatch_pack[1].PC;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].NPC = dispatch_pack[1].NPC;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].has_dest = dispatch_pack[1].has_dest;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].dest_reg_idx = dispatch_pack[1].dest_reg_idx;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].lq_index = dispatch_pack[1].lq_index;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].sq_index = dispatch_pack[1].sq_index;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].is_store = dispatch_pack[1].wr_mem;
+
+                rob_index[0] = tail_ptr;
+                rob_index[1] = tail_ptr + 1;
+
+                next_tail_ptr = tail_ptr + 2;  
+                for(int i = 0; i < `N; i++)begin
+                    if(is_branch[i])begin
+                        rob_tail_out[i] = tail_ptr + i + 1;
+                    end
+                end
+            end
         end
 
-        rob_index[0] = next_tail_ptr;
-        rob_index[1] = next_tail_ptr + 1'b1;
-
-///////////////////////////////////////////////////////////////////////
-//////////////////////                         ////////////////////////
-//////////////////////  Enqueue(Dispatch)      ////////////////////////
-//////////////////////                         ////////////////////////
-///////////////////////////////////////////////////////////////////////
-        if(dispatch_1 && !mispredicted) begin              // Just in case that we dispatch when it's mispredicted
-            next_rob_array[tail_ptr].t = dispatch_pack[0].T;
-            next_rob_array[tail_ptr].told = dispatch_pack[0].Told;
-            next_rob_array[tail_ptr].ready_retire = 1'b0;
-            next_rob_array[tail_ptr].halt = dispatch_pack[0].halt;
-            next_rob_array[tail_ptr].illegal = dispatch_pack[0].illegal;
-            next_rob_array[tail_ptr].PC = dispatch_pack[0].PC;
-            next_rob_array[tail_ptr].NPC = dispatch_pack[0].NPC;
-            next_rob_array[tail_ptr].has_dest = dispatch_pack[0].has_dest;
-            next_rob_array[tail_ptr].dest_reg_idx = dispatch_pack[0].dest_reg_idx;
-            next_rob_array[tail_ptr].lq_index = dispatch_pack[0].lq_index;
-            next_rob_array[tail_ptr].sq_index = dispatch_pack[0].sq_index;
-            next_rob_array[tail_ptr].is_store = dispatch_pack[0].wr_mem;
+        full_n = full? (next_head_ptr == next_tail_ptr) :
+                         ((next_tail_ptr == next_head_ptr) && (next_tail_ptr != tail_ptr)); 
+        //calculate available space
+        free_slots = (full_n)? 0 : 
+                        (next_head_ptr == next_tail_ptr) ? `ROB_SZ :
+                        (next_head_ptr > next_tail_ptr) ? ROB_IDX'(next_head_ptr - next_tail_ptr) : 
+                        ROB_IDX'(`ROB_SZ - (next_tail_ptr - next_head_ptr));
 
 
-            next_tail_ptr = tail_ptr + 1;            
-            next_rob_count = next_rob_count + 1;
-        end else if (dispatch_2 && !mispredicted) begin
-            next_rob_array[tail_ptr].t = dispatch_pack[0].T;
-            next_rob_array[tail_ptr].told = dispatch_pack[0].Told;
-            next_rob_array[tail_ptr].ready_retire = 1'b0;
-            next_rob_array[tail_ptr].halt = dispatch_pack[0].halt;
-            next_rob_array[tail_ptr].illegal = dispatch_pack[0].illegal;
-            next_rob_array[tail_ptr].PC = dispatch_pack[0].PC;
-            next_rob_array[tail_ptr].NPC = dispatch_pack[0].NPC;
-            next_rob_array[tail_ptr].has_dest = dispatch_pack[0].has_dest;
-            next_rob_array[tail_ptr].dest_reg_idx = dispatch_pack[0].dest_reg_idx; 
-            next_rob_array[tail_ptr].lq_index = dispatch_pack[0].lq_index;
-            next_rob_array[tail_ptr].sq_index = dispatch_pack[0].sq_index;   
-            next_rob_array[tail_ptr].is_store = dispatch_pack[0].wr_mem;        
-
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].t = dispatch_pack[1].T;
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].told = dispatch_pack[1].Told;
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].ready_retire = 1'b0;
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].halt = dispatch_pack[1].halt;
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].illegal = dispatch_pack[1].illegal;
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].PC = dispatch_pack[1].PC;
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].NPC = dispatch_pack[1].NPC;
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].has_dest = dispatch_pack[1].has_dest;
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].dest_reg_idx = dispatch_pack[1].dest_reg_idx;
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].lq_index = dispatch_pack[1].lq_index;
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].sq_index = dispatch_pack[1].sq_index;
-            next_rob_array[ROB_IDX'(tail_ptr + 1)].is_store = dispatch_pack[1].wr_mem;
-
-            next_tail_ptr = tail_ptr + 2;            
-            next_rob_count = next_rob_count + 2;
-        end
-
-        rob_space_avail = ((`ROB_SZ - next_rob_count) >= 2)? 2 :
-                          ((`ROB_SZ - next_rob_count) == 1)? 1 : 0;
+    
+        rob_space_avail = full_n             ? 0 :
+                            (next_head_ptr == next_tail_ptr) ? 2 : // empty
+                            (free_slots >= 2)  ? 2 :
+                            (free_slots == 1)  ? 1 : 0;
     end
     
 ///////////////////////////////////////////////////////////////////////
@@ -216,13 +249,13 @@ module rob(
         if (reset) begin
            head_ptr <= '0;
            tail_ptr <= '0;
-           rob_count <= '0;
            rob_array <= '{default: '0};
+           full <= '0;
         end
         else begin
            head_ptr <= next_head_ptr;
            tail_ptr <= next_tail_ptr;
-           rob_count <= next_rob_count;
+           full<= full_n;
            rob_array <= next_rob_array;
         end
     end
