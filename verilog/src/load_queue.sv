@@ -285,11 +285,11 @@ module load_queue(
             for(int i = 0; i < `LQ_SZ; i++) begin
                 if(tail >= BS_lq_tail_in) begin
                     // no wrap around
-                    if(i > BS_lq_tail_in && i < tail)
+                    if(i >= BS_lq_tail_in && i < tail)
                         lq_n[i] = '{default:'0};
                 end else begin
                     // wrap around
-                    if(i > BS_lq_tail_in || i < tail)
+                    if(i >= BS_lq_tail_in || i < tail)
                         lq_n[i] = '{default:'0};
                 end
             end
@@ -316,13 +316,16 @@ module load_queue(
         end
 
          //calculate available space
+        full_n = mispredicted ? (head_next == tail_next && full) :  
+                                full ? (head_next == tail_next) :
+                                ((tail_next == head_next) && (tail_next != tail));       
+                                
         free_slots = (full_n)? 0 : 
                         (head_next == tail_next) ? `LQ_SZ :
                         (head_next > tail_next) ? LQ_IDX'(head_next - tail_next) : 
                         LQ_IDX'(`LQ_SZ - (tail_next - head_next));
 
-        full_n = full? (head_next == tail_next) :
-                         ((tail_next == head_next) && (tail_next != tail)); 
+
     
         lq_space_available = full_n             ? 0 :
                             (head_next == tail_next) ? 2 : // empty

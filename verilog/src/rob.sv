@@ -223,8 +223,9 @@ module rob(
             end
         end
 
-        full_n = full? (next_head_ptr == next_tail_ptr) :
-                         ((next_tail_ptr == next_head_ptr) && (next_tail_ptr != tail_ptr)); 
+        full_n = mispredicted ? (next_head_ptr == next_tail_ptr && full) :  
+                                full ? (next_head_ptr == next_tail_ptr) :
+                                ((next_tail_ptr == next_head_ptr) && (next_tail_ptr != tail_ptr));
         //calculate available space
         free_slots = (full_n)? 0 : 
                         (next_head_ptr == next_tail_ptr) ? `ROB_SZ :

@@ -92,8 +92,7 @@ module store_queue (
                 sq_out.addr = sq[head].addr;
                 sq_out.data = sq[head].data;
                 sq_out.funct3 = sq[head].funct3;
-                sq_n[head].valid = 0;
-                sq_n[head].ready_retire = 0;
+                sq_n[head] = 0;
                 head_next = head_next + 1;
             end
         end    
@@ -139,11 +138,11 @@ module store_queue (
         for(int i = 0; i < `SQ_SZ; i++) begin
             if(tail >= BS_sq_tail_in) begin
                 // no wrap around
-                if(i > BS_sq_tail_in && i < tail)
+                if(i >=BS_sq_tail_in && i < tail)
                     sq_n[i] = '{default:'0};
             end else begin
                 // wrap around
-                if(i > BS_sq_tail_in || i < tail)
+                if(i >= BS_sq_tail_in || i < tail)
                     sq_n[i] = '{default:'0};
             end
         end

@@ -151,6 +151,13 @@ module stage_dispatch (
 
         actual_valid[1] = f_d_pack[1].valid && actual_valid[0] && !mistarget1;
 
+        for(int i = 0; i < `N; i++) begin
+            is_load_out[i]  = is_load[i]  && actual_valid[i];
+            is_store_out[i] = is_store[i] && actual_valid[i];
+            take_snapshot_out[i] = take_snapshot[i] && actual_valid[i];
+            inst_out[i] =  actual_valid[i] ? f_d_pack[i].inst : 0;
+        end
+
         early_mistarget_pack.valid = mistarget1 || mistarget2;
 
         early_mistarget_pack.correct_next_pc = mistarget1? 
@@ -180,18 +187,7 @@ module stage_dispatch (
     end
 
     //for lsq
-    assign take_snapshot_out = take_snapshot;
-    assign is_load_out = is_load;
-    assign is_store_out = is_store;
     assign dest_tag_out = t_new;
-    always_comb begin
-        for(int i = 0; i < `N; i++) begin
-            inst_out[i] = '0;
-            if(actual_valid[i]) begin
-                inst_out[i] =  f_d_pack[i].inst;
-            end
-        end
-    end
 
 
     always_comb begin
@@ -307,6 +303,7 @@ module stage_dispatch (
                     dispatch_pack[0].mult = decode_pack[0].mult;
                     dispatch_pack[0].rd_mem = decode_pack[0].rd_mem;
                     dispatch_pack[0].wr_mem = decode_pack[0].wr_mem;
+                    dispatch_pack[0].jal = jal[0];
                     dispatch_pack[0].csr_op = decode_pack[0].csr_op;
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;

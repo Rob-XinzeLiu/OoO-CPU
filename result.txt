@@ -1,2 +1,74 @@
 branch_test passed
 
+btest1 passed
+
+btest2 passed
+
+copy_long passed
+
+copy passed
+
+evens_long passed
+
+evens passed
+
+fib_long passed
+
+fib_rec failed
+
+fib passed
+
+haha passed
+
+halt passed
+
+insertion passed
+
+jalr_test passed
+
+load passed
+
+mult_no_lsq passed
+
+mult_orig passed
+
+no_hazard passed
+
+parallel passed
+
+sampler failed
+
+saxpy passed
+
+simple passed
+
+alexnet failed
+
+backtrack failed
+
+basic_malloc failed
+
+bfs failed
+
+dft failed
+
+fc_forward failed
+
+graph failed
+
+insertionsort failed
+
+matrix_mult_rec failed
+
+mergesort failed
+
+omegalul failed
+
+outer_product failed
+
+priority_queue failed
+
+quicksort failed
+
+sort_search failed
+
