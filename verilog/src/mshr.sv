@@ -6,6 +6,7 @@ module mshr #(
 )(
     input logic                 clock,
     input logic                 reset,
+    input logic                 grant,
 
     input miss_request_t        dcache_miss_req,
 
@@ -35,6 +36,8 @@ module mshr #(
     req_state_t req_state, next_req_state;
     miss_fifo_entry_t active_req, next_active_req;
 
+    completed_mshr_t     next_com_miss_req;
+
     outstanding_entry_t outstanding_table      [ENTRIES-1:0];
     outstanding_entry_t next_outstanding_table [ENTRIES-1:0];
     logic [$clog2(ENTRIES)-1:0] out_head, out_tail;
@@ -42,6 +45,7 @@ module mshr #(
     logic [$clog2(ENTRIES):0]   out_count, next_out_count;
 
     logic outstanding_full;
+    logic next_miss_returned;
 
     assign outstanding_full  = (out_count == ENTRIES);
 
@@ -50,7 +54,7 @@ module mshr #(
 
     assign miss_queue_full = (miss_count == ENTRIES) || (out_count == ENTRIES);
     logic sending_to_dcache;
-    //assign miss_returned   = found_completed;
+    //assign next_miss_returned   = found_completed;
 
     logic miss_merged;
     always_comb begin: MISS_QUEUE_LOGIC
@@ -66,7 +70,7 @@ module mshr #(
 
         mshr2mem_command = MEM_NONE;
         mshr2mem_addr    = '0;
-        com_miss_req     = '0;
+        next_com_miss_req     = '0;
         mshr2mem_size    = DOUBLE;
         mshr2mem_data    = '0;
         mshr_wait_for_trans = 1'b0;
@@ -78,7 +82,7 @@ module mshr #(
         
         //found_completed = 1'b0;
         completed_idx   = '0;
-        miss_returned   = 1'b0;
+        next_miss_returned   = 1'b0;
 
         miss_merged = 1'b0;
         sending_to_dcache = 1'b0;
@@ -144,7 +148,7 @@ module mshr #(
                     mshr2mem_addr    = active_req.miss_req_address;  
                     mshr_wait_for_trans = 1'b1;
                     
-                    if(mem2proc_transaction_tag != '0) begin 
+                    if(mem2proc_transaction_tag != '0 && grant ) begin 
                         next_outstanding_table[out_tail].valid             = 1'b1;
                         next_outstanding_table[out_tail].trans_tag         = mem2proc_transaction_tag;
                         next_outstanding_table[out_tail].dep_miss           = 1'b0;
@@ -165,54 +169,6 @@ module mshr #(
                 end
             end
         endcase
-
-        // if (mem2proc_data_tag != '0) begin
-        //     //for (int i = 0; i < ENTRIES; i++) begin
-        //         if (outstanding_table[out_head].trans_tag == mem2proc_data_tag) begin
-        //         //IT IS 1000% SAFE TO ASSUME THE COMPLETED TRANSACTION IS AT THE HEAD OF OUTSTANDING TABLE B
-        //             //found_completed = 1'b1;
-        //             miss_returned = 1'b1;
-        //             sending_to_dcache = 1'b1;
-        //             com_miss_req.valid             = 1'b1;
-        //             com_miss_req.dep_miss            = outstanding_table[out_head].dep_miss;
-        //             com_miss_req.miss_req_address  = outstanding_table[out_head].miss_req_address;
-        //             com_miss_req.miss_req_tag      = outstanding_table[out_head].miss_req_tag;
-        //             com_miss_req.miss_req_set      = outstanding_table[out_head].miss_req_set;
-        //             com_miss_req.miss_req_offset   = outstanding_table[out_head].miss_req_offset;
-        //             com_miss_req.req_is_load       = outstanding_table[out_head].req_is_load;
-        //             com_miss_req.miss_req_size     = outstanding_table[out_head].miss_req_size;
-        //             com_miss_req.miss_req_unsigned = outstanding_table[out_head].miss_req_unsigned;
-        //             com_miss_req.miss_req_data     = outstanding_table[out_head].miss_req_data;
-        //             com_miss_req.refill_data       = mem2proc_data;
-        //             com_miss_req.lq_index          = outstanding_table[out_head].lq_index;
-        //             next_outstanding_table[out_head] = '0;
-        //             next_out_count = next_out_count - 1'd1;
-        //             next_out_head  = out_head + 1'd1;
-        //         end
-        //     //end
-        // end
-        // else begin
-        //     //for (int i = 0; i < ENTRIES; i++) begin
-        //         if(outstanding_table[out_head].valid && outstanding_table[out_head].dep_miss && !sending_to_dcache ) begin
-        //             miss_returned = 1'b1;
-        //             com_miss_req.valid             = 1'b1;
-        //             com_miss_req.dep_miss            = outstanding_table[out_head].dep_miss;
-        //             com_miss_req.miss_req_address  = outstanding_table[out_head].miss_req_address;
-        //             com_miss_req.miss_req_tag      = outstanding_table[out_head].miss_req_tag;
-        //             com_miss_req.miss_req_set      = outstanding_table[out_head].miss_req_set;
-        //             com_miss_req.miss_req_offset   = outstanding_table[out_head].miss_req_offset;
-        //             com_miss_req.req_is_load       = outstanding_table[out_head].req_is_load;
-        //             com_miss_req.miss_req_size     = outstanding_table[out_head].miss_req_size;
-        //             com_miss_req.miss_req_unsigned = outstanding_table[out_head].miss_req_unsigned;
-        //             com_miss_req.miss_req_data     = outstanding_table[out_head].miss_req_data;
-        //             com_miss_req.refill_data       = '0;
-        //             com_miss_req.lq_index          = outstanding_table[out_head].lq_index;
-        //             next_outstanding_table[out_head] = '0;
-        //             next_out_count = next_out_count - 1'd1;
-        //             next_out_head  = out_head + 1'd1;
-        //         end
-        //     //end
-        // end
         
         if (outstanding_table[out_head].valid) begin
             // 1. PRIMARY completion (memory return)
@@ -220,19 +176,19 @@ module mshr #(
                 mem2proc_data_tag != 0 &&
                 outstanding_table[out_head].trans_tag == mem2proc_data_tag) begin
 
-                miss_returned = 1'b1;
-                com_miss_req.valid             = 1'b1;
-                com_miss_req.dep_miss          = 1'b0;
-                com_miss_req.miss_req_address  = outstanding_table[out_head].miss_req_address;
-                com_miss_req.miss_req_tag      = outstanding_table[out_head].miss_req_tag;
-                com_miss_req.miss_req_set      = outstanding_table[out_head].miss_req_set;
-                com_miss_req.miss_req_offset   = outstanding_table[out_head].miss_req_offset;
-                com_miss_req.req_is_load       = outstanding_table[out_head].req_is_load;
-                com_miss_req.miss_req_size     = outstanding_table[out_head].miss_req_size;
-                com_miss_req.miss_req_unsigned = outstanding_table[out_head].miss_req_unsigned;
-                com_miss_req.miss_req_data     = outstanding_table[out_head].miss_req_data;
-                com_miss_req.refill_data       = mem2proc_data;
-                com_miss_req.lq_index          = outstanding_table[out_head].lq_index;
+                next_miss_returned = 1'b1;
+                next_com_miss_req.valid             = 1'b1;
+                next_com_miss_req.dep_miss          = 1'b0;
+                next_com_miss_req.miss_req_address  = outstanding_table[out_head].miss_req_address;
+                next_com_miss_req.miss_req_tag      = outstanding_table[out_head].miss_req_tag;
+                next_com_miss_req.miss_req_set      = outstanding_table[out_head].miss_req_set;
+                next_com_miss_req.miss_req_offset   = outstanding_table[out_head].miss_req_offset;
+                next_com_miss_req.req_is_load       = outstanding_table[out_head].req_is_load;
+                next_com_miss_req.miss_req_size     = outstanding_table[out_head].miss_req_size;
+                next_com_miss_req.miss_req_unsigned = outstanding_table[out_head].miss_req_unsigned;
+                next_com_miss_req.miss_req_data     = outstanding_table[out_head].miss_req_data;
+                next_com_miss_req.refill_data       = mem2proc_data;
+                next_com_miss_req.lq_index          = outstanding_table[out_head].lq_index;
 
                 next_outstanding_table[out_head] = '0;
                 next_out_head  = out_head + 1'd1;
@@ -241,19 +197,19 @@ module mshr #(
 
             // 2. DEP replay (no memory return)
             else if (outstanding_table[out_head].dep_miss) begin
-                miss_returned = 1'b1;
-                com_miss_req.valid             = 1'b1;
-                com_miss_req.dep_miss          = 1'b1;
-                com_miss_req.miss_req_address  = outstanding_table[out_head].miss_req_address;
-                com_miss_req.miss_req_tag      = outstanding_table[out_head].miss_req_tag;
-                com_miss_req.miss_req_set      = outstanding_table[out_head].miss_req_set;
-                com_miss_req.miss_req_offset   = outstanding_table[out_head].miss_req_offset;
-                com_miss_req.req_is_load       = outstanding_table[out_head].req_is_load;
-                com_miss_req.miss_req_size     = outstanding_table[out_head].miss_req_size;
-                com_miss_req.miss_req_unsigned = outstanding_table[out_head].miss_req_unsigned;
-                com_miss_req.miss_req_data     = outstanding_table[out_head].miss_req_data;
-                com_miss_req.refill_data       = '0;
-                com_miss_req.lq_index          = outstanding_table[out_head].lq_index;
+                next_miss_returned = 1'b1;
+                next_com_miss_req.valid             = 1'b1;
+                next_com_miss_req.dep_miss          = 1'b1;
+                next_com_miss_req.miss_req_address  = outstanding_table[out_head].miss_req_address;
+                next_com_miss_req.miss_req_tag      = outstanding_table[out_head].miss_req_tag;
+                next_com_miss_req.miss_req_set      = outstanding_table[out_head].miss_req_set;
+                next_com_miss_req.miss_req_offset   = outstanding_table[out_head].miss_req_offset;
+                next_com_miss_req.req_is_load       = outstanding_table[out_head].req_is_load;
+                next_com_miss_req.miss_req_size     = outstanding_table[out_head].miss_req_size;
+                next_com_miss_req.miss_req_unsigned = outstanding_table[out_head].miss_req_unsigned;
+                next_com_miss_req.miss_req_data     = outstanding_table[out_head].miss_req_data;
+                next_com_miss_req.refill_data       = '0;
+                next_com_miss_req.lq_index          = outstanding_table[out_head].lq_index;
 
                 next_outstanding_table[out_head] = '0;
                 next_out_head  = out_head + 1'd1;
@@ -272,12 +228,15 @@ module mshr #(
             out_head  <= '0;
             out_tail  <= '0;
             out_count <= '0;
+            com_miss_req <= '0;
+            miss_returned <= '0;
             for (int i = 0; i < ENTRIES; i++) begin
                 miss_fifo[i] <= '0;
                 outstanding_table[i] <= '0;
             end
 
         end else begin
+            miss_returned <= next_miss_returned;
             miss_head <= next_miss_head;
             miss_tail <= next_miss_tail;
             miss_count <= next_miss_count;
@@ -286,6 +245,7 @@ module mshr #(
             out_head  <= next_out_head;
             out_tail  <= next_out_tail;
             out_count <= next_out_count;
+            com_miss_req <= next_com_miss_req;
             for (int i = 0; i < ENTRIES; i++) begin
                 miss_fifo[i] <= next_miss_fifo[i];
                 outstanding_table[i] <= next_outstanding_table[i];

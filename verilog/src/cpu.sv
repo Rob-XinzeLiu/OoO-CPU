@@ -835,6 +835,7 @@ module cpu (
         .miss_returned(miss_returned),//missing
         .miss_queue_full(miss_queue_full),
         .mem2proc_transaction_tag(mem2proc_transaction_tag),
+        .grant(dcache_store_gnt),
         .cache_resp_data(cache_resp_data),
         .miss_request(miss_request),
         .vc2mem_command(vc2mem_command),
@@ -851,6 +852,7 @@ module cpu (
     mshr mshr (
         .clock(clock),
         .reset(reset),
+        .grant(mshr_gnt),
         .dcache_miss_req(miss_request),
         .mem2proc_transaction_tag(mem2proc_transaction_tag),
         .mem2proc_data_tag(mem2proc_data_tag),

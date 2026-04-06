@@ -13,9 +13,11 @@ module victim_cache #(
     input  logic [`DCACHE_TAG_BITS-1:0]   dcache_miss_req_tag,
     input  logic [`DCACHE_SET_BITS-1:0]   dcache_miss_req_set,
     input  LQ_IDX                         lq_index,
+    input  logic                          grant,
     output logic                          vc_hit,
     output MEM_BLOCK                      vc_hit_data,
     output logic                          vc_hit_dirty,
+
 
     // store update from dcache
     input  logic [$clog2(LINE_BYTES)-1:0] vc_store_offset, //req addr
@@ -69,6 +71,7 @@ module victim_cache #(
     logic                   overwrite_dirty_valid;
 
     MEM_BLOCK               store_updated_block;
+    logic cant_insert;
 
     // store helper
     function automatic MEM_BLOCK store_into_block( //takes a full line and updates it with account to size
@@ -112,6 +115,7 @@ module victim_cache #(
 
     ADDR      wb_addr, next_wb_addr;
     MEM_BLOCK wb_data, next_wb_data;
+    logic need_request, next_need_request;
 
     always_comb begin
         next_vc_entries = vc_entries;
@@ -119,6 +123,9 @@ module victim_cache #(
         found_hit = 1'b0;
         hit_idx   = '0;
         old_lru   = '0;
+
+        next_need_request ='0;
+        
 
         found_evict_way = 1'b0;
         evict_idx       = '0;
@@ -145,65 +152,61 @@ module victim_cache #(
 
         // lookup
         for (int i = 0; i < VC_LINES; i++) begin
-            if (!found_hit &&
+            if (dcache_miss_req_valid && !found_hit &&
                 vc_entries[i].valid &&
                 vc_entries[i].tag == dcache_miss_req_tag &&
                 vc_entries[i].set == dcache_miss_req_set) begin
                 found_hit = 1'b1;
-                hit_idx   = VC_WAY_BITS'(i);
-            end
-        end
-        // hit
-        if (dcache_miss_req_valid && found_hit) begin
-            vc_hit       = 1'b1;
-            vc_hit_data  = vc_entries[hit_idx].data;
-            vc_hit_dirty = vc_entries[hit_idx].dirty;
-        end
+                //hit_idx   = VC_WAY_BITS'(i);
+                vc_hit       = 1'b1;
+                vc_hit_data  = vc_entries[i].data;
+                vc_hit_dirty = vc_entries[i].dirty;
+                if (!req_is_load )begin
+                    vc_store_ready = 1'b1;
+                    store_updated_block = store_into_block( //store block if the hit is a store 
+                        vc_entries[i].data,
+                        vc_store_offset,
+                        vc_store_size,
+                        vc_store_data
+                    );
 
-        // store hit in VC
-        if (dcache_miss_req_valid && !req_is_load && found_hit) begin
-            vc_store_ready = 1'b1;
+                    next_vc_entries[i].data  = store_updated_block; //store completion
+                    next_vc_entries[i].dirty = 1'b1;
 
-            store_updated_block = store_into_block( //store block if the hit is a store 
-                vc_entries[hit_idx].data,
-                vc_store_offset,
-                vc_store_size,
-                vc_store_data
-            );
+                    old_lru = vc_entries[i].valid ? vc_entries[i].lru_val : 'd0;
+                    next_vc_entries[i].lru_val = VC_LINES - 1;
 
-            next_vc_entries[hit_idx].data  = store_updated_block; //store completion
-            next_vc_entries[hit_idx].dirty = 1'b1;
+                    for (int j = 0; j < VC_LINES; j++) begin
+                        if (j != i) begin
+                            next_vc_entries[j].lru_val =
+                                (vc_entries[j].valid &&
+                                vc_entries[j].lru_val > old_lru) ?
+                                vc_entries[j].lru_val - 1 :
+                                vc_entries[j].lru_val;
+                        end
+                    end     
+                end
+                if (req_is_load) begin
+                    old_lru = vc_entries[i].valid ? vc_entries[i].lru_val : 'd0;
+                    next_vc_entries[i].lru_val = VC_LINES - 1;
 
-            old_lru = vc_entries[hit_idx].valid ? vc_entries[hit_idx].lru_val : 'd0;
-            next_vc_entries[hit_idx].lru_val = VC_LINES - 1;
-
-            for (int j = 0; j < VC_LINES; j++) begin
-                if (j != hit_idx) begin
-                    next_vc_entries[j].lru_val =
-                        (vc_entries[j].valid &&
-                         vc_entries[j].lru_val > old_lru) ?
-                        vc_entries[j].lru_val - 1 :
-                        vc_entries[j].lru_val;
+                    for (int j = 0; j < VC_LINES; j++) begin
+                        if (j != i) begin
+                            next_vc_entries[j].lru_val =
+                                (vc_entries[j].valid &&
+                                vc_entries[j].lru_val > old_lru) ?
+                                vc_entries[j].lru_val - 1 :
+                                vc_entries[j].lru_val;
+                        end
+                    end
                 end
             end
+            
         end
-        //load hit
-        else if (dcache_miss_req_valid && req_is_load && found_hit) begin
-            old_lru = vc_entries[hit_idx].valid ? vc_entries[hit_idx].lru_val : 'd0;
-            next_vc_entries[hit_idx].lru_val = VC_LINES - 1;
-
-            for (int j = 0; j < VC_LINES; j++) begin
-                if (j != hit_idx) begin
-                    next_vc_entries[j].lru_val =
-                        (vc_entries[j].valid &&
-                         vc_entries[j].lru_val > old_lru) ?
-                        vc_entries[j].lru_val - 1 :
-                        vc_entries[j].lru_val;
-                end
-            end
-        end
-        else begin
-            // choose eviction slot
+       ////////////////
+       ///INPUT
+       /////////////////
+        if(dcache_evicted_valid)begin
             for (int i = 0; i < VC_LINES; i++) begin
                 if (!found_evict_way && !vc_entries[i].valid) begin
                     found_evict_way = 1'b1;
@@ -215,85 +218,55 @@ module victim_cache #(
                 end
             end
 
-            overwrite_dirty_valid =        
-                vc_entries[evict_idx].valid &&
-                vc_entries[evict_idx].dirty; //if 0 we can overwrite and discard old if 1 we need to put in wb 
+            if( found_evict_way && vc_entries[evict_idx].valid && vc_entries[evict_idx].dirty) begin
+                next_need_request = 1'b1;
+                next_wb_addr = {
+                    vc_entries[evict_idx].tag,
+                    vc_entries[evict_idx].set,
+                    {OFFSET_BITS{1'b0}}
+                };
+                next_wb_data = vc_entries[evict_idx].data;
+                next_req_state = REQ_WAIT_ACCEPT;
+            end
+            next_vc_entries[evict_idx].valid = 1'b1;
+            next_vc_entries[evict_idx].dirty = dcache_evicted_dirty;
+            next_vc_entries[evict_idx].tag   = dcache_evicted_tag;
+            next_vc_entries[evict_idx].set   = dcache_evicted_set;
+            next_vc_entries[evict_idx].data  = dcache_evicted_data;
+            next_vc_entries[evict_idx].lq_index = lq_index;
 
-            dcache_evicted_ready =
-                !overwrite_dirty_valid; //in case we need to evict vc lru make sure we can evict to wb 
+            old_lru = vc_entries[evict_idx].valid ? vc_entries[evict_idx].lru_val : 'd0;
+            next_vc_entries[evict_idx].lru_val = VC_LINES - 1;
 
-            case (req_state)
-                REQ_IDLE: begin
-                    if (dcache_evicted_valid && overwrite_dirty_valid) begin
-                        dcache_evicted_ready = 1'b0;
-
-                        next_wb_addr = {
-                            vc_entries[evict_idx].tag,
-                            vc_entries[evict_idx].set,
-                            {OFFSET_BITS{1'b0}}
-                        };
-                        next_wb_data = vc_entries[evict_idx].data;
-
-                        vc_requesting  = 1'b1;
-                        vc2mem_command = MEM_STORE;
-                        vc2mem_addr    = {
-                            vc_entries[evict_idx].tag,
-                            vc_entries[evict_idx].set,
-                            {OFFSET_BITS{1'b0}}
-                        };
-                        vc2mem_data    = vc_entries[evict_idx].data;
-                        vc2mem_size    = DOUBLE;
-
-                        if (mem2proc_transaction_tag != '0)
-                            next_req_state = REQ_IDLE;
-                        else
-                            next_req_state = REQ_WAIT_ACCEPT;
-                    end
-                end
-
-                REQ_WAIT_ACCEPT: begin
-                    dcache_evicted_ready = 1'b0;
-
-                    vc_requesting  = 1'b1;
-                    vc2mem_command = MEM_STORE;
-                    vc2mem_addr    = wb_addr;
-                    vc2mem_data    = wb_data;
-                    vc2mem_size    = DOUBLE;
-
-                    if (mem2proc_transaction_tag != '0)
-                        next_req_state = REQ_IDLE;
-                end
-            endcase
-
-            // insert new line
-            if (dcache_evicted_valid && dcache_evicted_ready) begin
-                next_vc_entries[evict_idx].valid = 1'b1;
-                next_vc_entries[evict_idx].dirty = dcache_evicted_dirty;
-                next_vc_entries[evict_idx].tag   = dcache_evicted_tag;
-                next_vc_entries[evict_idx].set   = dcache_evicted_set;
-                next_vc_entries[evict_idx].data  = dcache_evicted_data;
-                next_vc_entries[evict_idx].lq_index = lq_index;
-
-                old_lru = vc_entries[evict_idx].valid ? vc_entries[evict_idx].lru_val : 'd0;
-                next_vc_entries[evict_idx].lru_val = VC_LINES - 1;
-
-                for (int j = 0; j < VC_LINES; j++) begin
-                    if (j != evict_idx) begin
-                        next_vc_entries[j].lru_val =
-                            (vc_entries[j].valid &&
-                             vc_entries[j].lru_val > old_lru) ?
-                            vc_entries[j].lru_val - 1 :
-                            vc_entries[j].lru_val;
-                    end
+            for (int j = 0; j < VC_LINES; j++) begin
+                if (j != evict_idx) begin
+                    next_vc_entries[j].lru_val =
+                        (vc_entries[j].valid &&
+                            vc_entries[j].lru_val > old_lru) ?
+                        vc_entries[j].lru_val - 1 :
+                        vc_entries[j].lru_val;
                 end
             end
         end
+
+        if(need_request) begin
+            vc2mem_command = MEM_STORE;
+            vc2mem_addr = wb_addr;
+            vc2mem_data = write_data;
+            vc_requesting = 1'b1;
+            if(grant && mem2proc_transaction_tag != 'd0) begin
+                next_need_request = 1'b0;
+            end
+        end   
+            
     end
+        
     always_ff @(posedge clock) begin
         if (reset) begin
             req_state <= REQ_IDLE;
             wb_addr   <= '0;
             wb_data   <= '0;
+            need_request <= '0;
 
             for (int i = 0; i < VC_LINES; i++) begin
                 vc_entries[i] <= '0;
@@ -303,6 +276,7 @@ module victim_cache #(
             req_state <= next_req_state;
             wb_addr   <= next_wb_addr;
             wb_data   <= next_wb_data;
+            need_request <=next_need_request;
 
             for (int i = 0; i < VC_LINES; i++) begin
                 vc_entries[i] <= next_vc_entries[i];

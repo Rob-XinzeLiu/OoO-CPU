@@ -22,6 +22,8 @@ module Dcache
     input   logic            miss_queue_full,
     input   MEM_TAG          mem2proc_transaction_tag,
 
+    input   logic            grant,
+
 
     output  dcache_data_t    cache_resp_data, // slot 2 will be for cache miss loads
     //output  logic            cache_ready, // it is ready while the miss queue is not full
@@ -439,6 +441,7 @@ module Dcache
         .dcache_miss_req_tag  (d_request_tag),
         .dcache_miss_req_set  (d_request_set),
         .lq_index             (load_req_pack.lq_index),
+        .grant(grant),
         .vc_hit               (vc_hit),
         .vc_hit_data          (vc_hit_data),
         .vc_hit_dirty         (vc_hit_dirty),
@@ -465,5 +468,11 @@ module Dcache
         .vc2mem_size          (vc2mem_size),
         .vc_requesting        (vc_requesting)
     );
+
+
+    /// write buffer
+    //clock
+    //reset
+    //tag, set, if it is a load or store 
 
 endmodule
