@@ -303,6 +303,9 @@ module load_queue(
                     lq_n[tail_next].old_sq_valid_mask = sq_valid_in_mask[i];
                     lq_n[tail_next].sq_tail_position = sq_tail_in[i];
                     lq_n[tail_next].rob_index = rob_index[i];
+                    lq_n[tail_next].addr_ready = '0;
+                    lq_n[tail_next].data_ready = '0;
+                    lq_n[tail_next].issued = '0;
                     lq_index [i] = tail_next;
                     tail_next = tail_next + 1;
                 end

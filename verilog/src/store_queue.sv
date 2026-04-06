@@ -93,6 +93,7 @@ module store_queue (
                 sq_out.data = sq[head].data;
                 sq_out.funct3 = sq[head].funct3;
                 sq_n[head].valid = 0;
+                sq_n[head].ready_retire = 0;
                 head_next = head_next + 1;
             end
         end    
@@ -170,8 +171,9 @@ module store_queue (
             end
         end
 
-        full_n = full? (head_next == tail_next) :
-                         ((tail_next == head_next) && (tail_next != tail)); 
+        full_n = mispredicted ? (head_next == tail_next && full) :  
+                                full ? (head_next == tail_next) :
+                                ((tail_next == head_next) && (tail_next != tail));
         //calculate available space
         free_slots = (full_n)? 0 : 
                         (head_next == tail_next) ? `SQ_SZ :

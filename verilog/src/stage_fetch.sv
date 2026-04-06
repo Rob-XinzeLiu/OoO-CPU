@@ -17,6 +17,8 @@ module stage_if (
     input logic                     stop_fetch, // from retire stage, stop fetching new instructions     
     input MISPREDICT_PACKET         mispredict_pack, // mispredict packet from execute stage
     input logic [1:0]               fetch_req,//from fetch buffer
+    //from dispatch
+    input MISPREDICT_PACKET          early_mistarget_pack,
     // From icache
     input MEM_BLOCK                 icache_data,      // data coming back from Instruction memory
     input logic                     icache_valid,
@@ -34,7 +36,9 @@ module stage_if (
     ADDR next_PC;
     ADDR PC_increase;
     logic two_valid_insts; // if pc is aligned for a 2 wide fetch
-    assign proc2icache_addr = mispredict_pack.valid ? mispredict_pack.correct_next_pc : PC_reg;
+    assign proc2icache_addr = mispredict_pack.valid          ? mispredict_pack.correct_next_pc :
+                             early_mistarget_pack.valid      ? early_mistarget_pack.correct_next_pc :
+                            PC_reg;
     assign two_valid_insts = (proc2icache_addr[2] == 1'b0 && fetch_req == 2); // the pc is 8 byte algined 
 
     logic slot0_taken, slot1_taken;
@@ -42,8 +46,8 @@ module stage_if (
 
     assign btb_hit_actual_slot0 = ((proc2icache_addr[2] == 1'b0 && btb_slot == 1'b0) || (proc2icache_addr[2] == 1'b1 && btb_slot == 1'b1)); //  slot 0 of this cycle predicted taken
 
-    assign slot0_taken = taken && btb_hit_actual_slot0 && icache_valid && !mispredict_pack.valid;
-    assign slot1_taken = taken && (btb_slot == 1) && icache_valid && !mispredict_pack.valid && two_valid_insts;
+    assign slot0_taken = taken && btb_hit_actual_slot0 && icache_valid && !mispredict_pack.valid && !early_mistarget_pack.valid;
+    assign slot1_taken = taken && (btb_slot == 1) && icache_valid && !mispredict_pack.valid && !early_mistarget_pack.valid && two_valid_insts;
 
     // ras
     ADDR            return_addr0, return_addr1;
@@ -77,22 +81,25 @@ module stage_if (
 
     always_comb begin
         if (mispredict_pack.valid) begin
-            next_PC = mispredict_pack.correct_next_pc; 
-        end 
+            next_PC = mispredict_pack.correct_next_pc;
+        end
+        else if (early_mistarget_pack.valid) begin
+            next_PC = early_mistarget_pack.correct_next_pc;        
+        end
         else if (return_valid0 && if_packet[0].valid) begin
-            next_PC = return_addr0; 
+            next_PC = return_addr0;
         end
         else if (slot0_taken && if_packet[0].valid) begin
-            next_PC = predicted_addr; 
+            next_PC = predicted_addr;
         end
         else if (return_valid1 && if_packet[1].valid) begin
-            next_PC = return_addr1; 
+            next_PC = return_addr1;
         end
         else if (slot1_taken && if_packet[1].valid) begin
-            next_PC = predicted_addr; 
+            next_PC = predicted_addr;
         end
         else begin
-            next_PC = proc2icache_addr + PC_increase; 
+            next_PC = proc2icache_addr + PC_increase;
         end
     end
 
@@ -133,7 +140,7 @@ module stage_if (
         // Input
         .inst({icache_data.word_level[1], icache_data.word_level[proc2icache_addr[2]]}),
         .npc({proc2icache_addr + 8, proc2icache_addr + 4}),
-        .input_valid({if_packet[1].valid && !mispredict_pack.valid, if_packet[0].valid && !mispredict_pack.valid}),
+        .input_valid({if_packet[1].valid && !mispredict_pack.valid && !early_mistarget_pack.valid, if_packet[0].valid && !mispredict_pack.valid && !early_mistarget_pack.valid}),
         .mispredict(mispredict_pack.valid),
         .recovered_head(mispredict_pack.current_head),
         .recovered_count(mispredict_pack.current_count),

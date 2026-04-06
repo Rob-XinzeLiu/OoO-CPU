@@ -42,8 +42,7 @@ module rob(
     ROB_CNT         free_slots;
     logic [1:0]   retire_num; //how many instructions can we retire in this cycle
 
-    //output current head ptr to execute stage
-    assign          rob_head_ptr_out = head_ptr;
+
 
     //dispatch
     logic           dispatch_1, dispatch_2;

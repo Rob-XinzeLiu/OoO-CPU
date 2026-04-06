@@ -3,8 +3,8 @@
 
 module Dcache 
 #(
-    parameter int WAYS = 4,
-    parameter int SETS = 8,
+    parameter int WAYS = `DCACHE_WAYS,
+    parameter int SETS = `DCACHE_SETS ,
     parameter int LINE_BYTES = 8
 )(
     input   logic            clock,
@@ -34,7 +34,11 @@ module Dcache
 
     output logic           dcache_can_accept_store,
     output logic           dcache_can_accept_load,
-    output logic           vc_requesting
+    output logic           vc_requesting,
+
+    //for memory unified file
+    output logic [WAYS-1:0][SETS-1:0][$bits(MEM_BLOCK)-1:0] dcache_debug_data,
+    output cache_tag_t [SETS-1:0][WAYS-1:0] dcache_debug_tags
 );
 
     localparam int ADDR_BITS   = $bits(ADDR);
@@ -50,6 +54,13 @@ module Dcache
     cache_tag_t cache_tags [SETS-1:0][WAYS-1:0];
     cache_tag_t next_cache_tags [SETS-1:0][WAYS-1:0];
 
+    always_comb begin
+        for (int s = 0; s < SETS; s++) begin
+            for (int w = 0; w < WAYS; w++) begin
+                dcache_debug_tags[s][w] = cache_tags[s][w];
+            end
+        end
+    end
     logic [TAG_BITS-1:0]     d_request_tag;
     logic [SET_BITS-1:0]     d_request_set;
     logic [OFFSET_BITS-1:0]  d_request_offset;
@@ -75,6 +86,11 @@ module Dcache
     logic [WAYS-1:0][DATA_ADDR_BITS-1:0]  data_waddr;
     logic [WAYS-1:0][DATA_WIDTH-1:0]      data_wdata;
 
+    
+
+    logic [WAYS-1:0][SETS-1:0][$bits(MEM_BLOCK)-1:0] data_debug_mem;
+    assign dcache_debug_data = data_debug_mem;
+
     genvar w;
     generate
         for (w = 0; w < WAYS; w++) begin : gen_way_mem
@@ -92,6 +108,7 @@ module Dcache
                 .we(data_we[w]),
                 .waddr(data_waddr[w]),
                 .wdata(data_wdata[w])
+                // .debug_mem (data_debug_mem[w])
             );
         end
     endgenerate
@@ -322,7 +339,7 @@ module Dcache
             end
             if(hit && is_valid_load) begin
                 cache_resp_data.valid   = 1'b1;
-                cache_resp_data.lq_index = load_req_pack.lq_index;
+                cache_resp_data.lq_index = com_miss_req.dep_miss ? com_miss_req.lq_index : load_req_pack.lq_index;
                 case (d_request_size)
                     BYTE: begin
                         cache_resp_data.data = d_req_unsigned ?
@@ -393,6 +410,12 @@ module Dcache
 
     // logic record_miss;
     // assign record_miss = req_valid && cache_ready && !hit && !vc_hit;
+
+    always_comb begin
+
+
+
+    end
 
     always_ff @(posedge clock) begin
         if (reset) begin 

@@ -27,7 +27,11 @@ module cpu (
     output MEM_SIZE    proc2mem_size,    // Data size sent to memory
 
     // // Note: these are assigned at the very bottom of the module
-    output RETIRE_PACKET [`N-1:0] committed_insts
+    output RETIRE_PACKET [`N-1:0] committed_insts,
+
+    //for mem file:
+    output logic [`DCACHE_WAYS-1:0][`DCACHE_SETS-1:0][$bits(MEM_BLOCK)-1:0] dcache_debug_data,
+    output cache_tag_t [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0] dcache_debug_tags
 
     // // Debug outputs: these signals are solely used for debugging in testbenches
     // // You should definitely change these for the final project
@@ -60,8 +64,7 @@ module cpu (
     //////////////////////////////////////////////////
 
 
-    // From IF stage to memory
-    MEM_COMMAND Imem_command; // Command sent to memory
+
 
     // Outputs from IF-Stage and IF/ID Pipeline Register
     F_D_PACKET  f_pack [`N-1:0];
@@ -77,18 +80,17 @@ module cpu (
     // Outputs from Dispatch stage
     D_S_PACKET  dispatch_out_pack [`N-1:0];
     logic           dispatch_valid [`N-1:0];
-    logic           branch_encountered [`N-1:0];
     B_MASK          branch_index [`N-1:0];
     INST        [`N-1:0] inst;
     logic       [`N-1:0] is_load;
     logic       [`N-1:0] is_store;
-    logic       [`N-1:0] is_branch;
+    logic       [`N-1:0] take_snapshot_out;
     PRF_IDX     [`N-1:0] dest_tag;
 
     logic [`N-1:0][`MT_SIZE-1:0] maptable_snapshot_out ;
-    ADDR            pc_snapshot_out [`N-1:0];
     logic [1:0]     dispatch_num;
     PRF_IDX  [`N-1:0] t_new ;
+    MISPREDICT_PACKET    early_mistarget_pack;
 
     // Outputs from RS and D/S Pipeline Register
     D_S_PACKET  d_s_pack [5:0];
@@ -127,7 +129,6 @@ module cpu (
     FLIST_IDX       tail_ptr_out;
     ROB_IDX         BS_rob_tail_out;
     logic [1:0]     branch_stack_space_avail;
-    ADDR            pc_BS_out;
     LQ_IDX          BS_lq_tail_out;
     SQ_IDX          BS_sq_tail_out;
 
@@ -288,22 +289,9 @@ module cpu (
 
     // valid bit will cycle through the pipeline and come back from the wb stage
     //make sure it goes low on mispredict
-    assign if_valid = ! global_mispredict;
+    assign if_valid = ! global_mispredict && !early_mistarget_pack.valid;
 
 
-    //for milestone
-    assign fetch_accepted = f_pack[0].valid + f_pack[1].valid;
-    //////////////////////////////////////////////////
-    //                                              //
-    //   Step 8: expose branch redirect signals     //
-    //                                              //
-    //////////////////////////////////////////////////
- 
-    // mispredict_pack_reg is registered one cycle after the execute stage
-    // detects a misprediction.  It carries correct_next_pc.
-    assign branch_taken  = mispredict_pack_out.valid ? mispredict_pack_out.take_branch : 0;
-    assign branch_target = mispredict_pack_out.valid? mispredict_pack_out.correct_next_pc : 0;
-    assign mispredicted  = global_mispredict;
 
     //////////////////////////////////////////////////
     //                                              //
@@ -311,7 +299,7 @@ module cpu (
     //                                              //
     //////////////////////////////////////////////////
     always_ff @(posedge clock) begin
-        if(reset || global_mispredict) begin
+        if(reset || global_mispredict || early_mistarget_pack.valid) begin
             can_fetch_num_reg <= 2;
         end else begin
             can_fetch_num_reg <= can_fetch_num;
@@ -328,6 +316,8 @@ module cpu (
         .stop_fetch(stall_fetch),
         .mispredict_pack(mispredict_pack_out),
         .fetch_req(can_fetch_num_reg),
+        //early target mispredict
+        .early_mistarget_pack(early_mistarget_pack),
         // icache
         .icache_data(Icache_data_out),
         .icache_valid(Icache_valid_out),
@@ -347,7 +337,7 @@ module cpu (
     //////////////////////////////////////////////////
 
     always_ff @(posedge clock) begin
-        if(reset || global_mispredict) begin
+        if(reset || global_mispredict || early_mistarget_pack.valid) begin
             dispatch_num_reg <= '0;
         end else begin
             dispatch_num_reg <= dispatch_num;
@@ -365,6 +355,7 @@ module cpu (
         .clock(clock),
         .reset(reset),
         .mispredicted(global_mispredict),
+        .dispatch_target_mispredict(early_mistarget_pack.valid),
         .dispatch_num_req(dispatch_num_reg),
         .fetch_pack(f_pack),
 
@@ -406,15 +397,14 @@ module cpu (
         // Output
         .dispatch_valid(dispatch_valid),
         .dispatch_pack(dispatch_out_pack),
-        .branch_encountered(branch_encountered),
         .branch_index(branch_index),
         .inst_out(inst),
         .is_load_out(is_load),
         .is_store_out(is_store),
-        .is_branch_out(is_branch),
+        .take_snapshot_out(take_snapshot_out),
         .dest_tag_out(dest_tag),
+        .early_mistarget_pack(early_mistarget_pack),
         .maptable_snapshot_out(maptable_snapshot_out),
-        .pc_snapshot_out(pc_snapshot_out),
         .dispatch_num(dispatch_num)
     );
     
@@ -653,7 +643,7 @@ module cpu (
         .clock(clock),
         .reset(reset),
         .dispatch_pack(dispatch_out_pack),
-        .is_branch(is_branch),
+        .is_branch(take_snapshot_out),
         .mispredicted(global_mispredict),
         .rob_tail_in(BS_rob_tail_out), 
         .cdb(cdb),
@@ -680,7 +670,7 @@ module cpu (
         .freelist_pack(freelist_pack),
         .Branch_stack_T(tail_ptr_out),
         .dispatch_valid(dispatch_valid),
-        .is_branch(branch_encountered),
+        .is_branch(take_snapshot_out),
         .mispredicted(global_mispredict),
         
         // Output 
@@ -725,6 +715,7 @@ module cpu (
         .proc2icache_addr(proc2icache_addr),
         .conditional_branch_out(cond_pack_reg),
         .mispredict_pack(mispredict_pack_out),
+        .early_mistarget_pack(early_mistarget_pack),
         // Output
         .taken(taken),
         .PC_taken_addr(PC_taken_addr),
@@ -746,9 +737,8 @@ module cpu (
         .mispredicted(global_mispredict),
         .mispredicted_idx(global_mispredict_index),
         .tail_ptr_in(BS_tail),
-        .branch_encountered(branch_encountered),
+        .branch_encountered(take_snapshot_out),
         .branch_idx(branch_index),
-        .pc_snapshot_in(pc_snapshot_out),
         .resolved(global_resolve),
         .resolved_bmask_index(global_resolve_index),
         .rob_tail_in(rob_tail_out),
@@ -760,7 +750,6 @@ module cpu (
         .tail_ptr_out(tail_ptr_out),
         .rob_tail_out(BS_rob_tail_out),
         .branch_stack_space_avail(branch_stack_space_avail),
-        .pc_snapshot_out(pc_BS_out),
         .lq_tail_out(BS_lq_tail_out),
         .sq_tail_out(BS_sq_tail_out)
     );
@@ -805,7 +794,7 @@ module cpu (
         .reset(reset),
         .inst_in(inst),
         .is_load(is_load),
-        .is_branch(is_branch),
+        .is_branch(take_snapshot_out),
         .dest_tag_in(dest_tag),
         .rob_index(rob_index),
         .mispredicted(global_mispredict),
@@ -854,7 +843,9 @@ module cpu (
         .vc2mem_size(vc2mem_size),
         .dcache_can_accept_store(dcache_can_accept_store),
         .dcache_can_accept_load(dcache_can_accept_load),
-        .vc_requesting(vc_requesting)
+        .vc_requesting(vc_requesting),
+        .dcache_debug_data(dcache_debug_data),
+        .dcache_debug_tags(dcache_debug_tags)
     );
 
     mshr mshr (
@@ -887,7 +878,7 @@ module cpu (
         .inst_in(inst),
         .is_load(is_load),
         .is_store(is_store),
-        .is_branch(is_branch),
+        .is_branch(take_snapshot_out),
         .rob_index(rob_index),
         .store_execute_pack(store_pack),
         .store_retire_pack(store_retire_pack),

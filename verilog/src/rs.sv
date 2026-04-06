@@ -40,7 +40,8 @@ module rs(
         logic               rd_mem;
         logic               wr_mem;
         logic               cond_branch;
-        logic               uncond_branch;
+        logic               jalr;
+        logic               jal;
         logic               csr_op;
         logic               halt;
         logic               illegal;
@@ -183,7 +184,8 @@ module rs(
                     next_rs_entry[i].rd_mem= dispatch_pack[0].rd_mem;
                     next_rs_entry[i].wr_mem= dispatch_pack[0].wr_mem;
                     next_rs_entry[i].cond_branch= dispatch_pack[0].cond_branch;
-                    next_rs_entry[i].uncond_branch= dispatch_pack[0].uncond_branch;
+                    next_rs_entry[i].jalr= dispatch_pack[0].jalr;
+                    next_rs_entry[i].jal= dispatch_pack[0].jal;
                     next_rs_entry[i].csr_op= dispatch_pack[0].csr_op;
                     next_rs_entry[i].halt= dispatch_pack[0].halt;
                     next_rs_entry[i].illegal= dispatch_pack[0].illegal;
@@ -225,7 +227,8 @@ module rs(
                     next_rs_entry[i].rd_mem= dispatch_pack[0].rd_mem;
                     next_rs_entry[i].wr_mem= dispatch_pack[0].wr_mem;
                     next_rs_entry[i].cond_branch= dispatch_pack[0].cond_branch;
-                    next_rs_entry[i].uncond_branch= dispatch_pack[0].uncond_branch;
+                    next_rs_entry[i].jalr= dispatch_pack[0].jalr;
+                    next_rs_entry[i].jal= dispatch_pack[0].jal;
                     next_rs_entry[i].csr_op= dispatch_pack[0].csr_op;
                     next_rs_entry[i].halt= dispatch_pack[0].halt;
                     next_rs_entry[i].illegal= dispatch_pack[0].illegal;
@@ -264,7 +267,8 @@ module rs(
                     next_rs_entry[i].rd_mem= dispatch_pack[1].rd_mem;
                     next_rs_entry[i].wr_mem= dispatch_pack[1].wr_mem;
                     next_rs_entry[i].cond_branch= dispatch_pack[1].cond_branch;
-                    next_rs_entry[i].uncond_branch= dispatch_pack[1].uncond_branch;
+                    next_rs_entry[i].jalr= dispatch_pack[1].jalr;
+                    next_rs_entry[i].jal= dispatch_pack[1].jal;
                     next_rs_entry[i].csr_op= dispatch_pack[1].csr_op;
                     next_rs_entry[i].halt= dispatch_pack[1].halt;
                     next_rs_entry[i].illegal= dispatch_pack[1].illegal;
@@ -418,21 +422,13 @@ module rs(
                         issue_pack[0].opa_select= internal_rs_entry[i].opa_select;
                         issue_pack[0].opb_select= internal_rs_entry[i].opb_select;
                         issue_pack[0].has_dest= internal_rs_entry[i].has_dest;
-                        issue_pack[0].alu_func= internal_rs_entry[i].alu_func;
                         issue_pack[0].mult= internal_rs_entry[i].mult;
-                        issue_pack[0].cond_branch= internal_rs_entry[i].cond_branch;
-                        issue_pack[0].uncond_branch= internal_rs_entry[i].uncond_branch;
                         issue_pack[0].csr_op= internal_rs_entry[i].csr_op;
-                        issue_pack[0].bmask_index= internal_rs_entry[i].bmask_index;
                         issue_pack[0].bmask= internal_rs_entry[i].bmask;
                         issue_pack[0].T= internal_rs_entry[i].T;
                         issue_pack[0].t1= internal_rs_entry[i].t1;
                         issue_pack[0].t2= internal_rs_entry[i].t2;
                         issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
-                        issue_pack[0].predict_taken = internal_rs_entry[i].predict_taken;
-                        issue_pack[0].predict_addr = internal_rs_entry[i].predict_addr;
-                        issue_pack[0].lq_index = internal_rs_entry[i].lq_index;
-                        issue_pack[0].sq_index = internal_rs_entry[i].sq_index;
 
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -446,16 +442,10 @@ module rs(
                         issue_pack[1].opa_select= internal_rs_entry[i].opa_select;
                         issue_pack[1].opb_select= internal_rs_entry[i].opb_select;
                         issue_pack[1].has_dest= internal_rs_entry[i].has_dest;
-                        issue_pack[1].alu_func= internal_rs_entry[i].alu_func;
-                        issue_pack[1].mult= internal_rs_entry[i].mult;
                         issue_pack[1].rd_mem= internal_rs_entry[i].rd_mem;
-                        issue_pack[1].wr_mem= internal_rs_entry[i].wr_mem;
-                        issue_pack[1].cond_branch= internal_rs_entry[i].cond_branch;
-                        issue_pack[1].uncond_branch= internal_rs_entry[i].uncond_branch;
                         issue_pack[1].csr_op= internal_rs_entry[i].csr_op;
                         issue_pack[1].halt= internal_rs_entry[i].halt;
                         issue_pack[1].illegal= internal_rs_entry[i].illegal;
-                        issue_pack[1].bmask_index= internal_rs_entry[i].bmask_index;
                         issue_pack[1].bmask= internal_rs_entry[i].bmask;
                         issue_pack[1].T= internal_rs_entry[i].T;
                         issue_pack[1].t1= internal_rs_entry[i].t1;
@@ -487,9 +477,6 @@ module rs(
                         issue_pack[0].t1= internal_rs_entry[i].t1;
                         issue_pack[0].t2= internal_rs_entry[i].t2;
                         issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
-                        issue_pack[0].c_type = internal_rs_entry[i].c_type;
-                        issue_pack[0].current_count = internal_rs_entry[i].current_count;
-                        issue_pack[0].current_head = internal_rs_entry[i].current_head;
 
                         //mark as not busy
                         next_rs_entry[i] = '0;
@@ -504,7 +491,8 @@ module rs(
                         issue_pack[2].opb_select= internal_rs_entry[i].opb_select;
                         issue_pack[2].has_dest= internal_rs_entry[i].has_dest;
                         issue_pack[2].alu_func= internal_rs_entry[i].alu_func;
-                        issue_pack[2].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[2].jalr= internal_rs_entry[i].jalr;
+                        issue_pack[2].jal= internal_rs_entry[i].jal;
                         issue_pack[2].csr_op= internal_rs_entry[i].csr_op;
                         issue_pack[2].halt= internal_rs_entry[i].halt;
                         issue_pack[2].illegal= internal_rs_entry[i].illegal;
@@ -544,8 +532,7 @@ module rs(
                         issue_pack[0].t2= internal_rs_entry[i].t2;
                         issue_pack[0].rob_index = internal_rs_entry[i].rob_index;
                         issue_pack[0].c_type = internal_rs_entry[i].c_type;
-                        issue_pack[0].current_count = internal_rs_entry[i].current_count;
-                        issue_pack[0].current_head = internal_rs_entry[i].current_head;
+
                         //mark as not busy
                         next_rs_entry[i] = '0;
                     end
@@ -585,7 +572,8 @@ module rs(
                         issue_pack[2].opb_select= internal_rs_entry[i].opb_select;
                         issue_pack[2].has_dest= internal_rs_entry[i].has_dest;
                         issue_pack[2].alu_func= internal_rs_entry[i].alu_func;
-                        issue_pack[2].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[2].jalr= internal_rs_entry[i].jalr;
+                        issue_pack[2].jal= internal_rs_entry[i].jal;
                         issue_pack[2].csr_op= internal_rs_entry[i].csr_op;
                         issue_pack[2].halt= internal_rs_entry[i].halt;
                         issue_pack[2].illegal= internal_rs_entry[i].illegal;
@@ -647,7 +635,8 @@ module rs(
                         issue_pack[2].opb_select= internal_rs_entry[i].opb_select;
                         issue_pack[2].has_dest= internal_rs_entry[i].has_dest;
                         issue_pack[2].alu_func= internal_rs_entry[i].alu_func;
-                        issue_pack[2].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[2].jalr= internal_rs_entry[i].jalr;
+                        issue_pack[2].jal= internal_rs_entry[i].jal;
                         issue_pack[2].csr_op= internal_rs_entry[i].csr_op;
                         issue_pack[2].halt= internal_rs_entry[i].halt;
                         issue_pack[2].illegal= internal_rs_entry[i].illegal;
@@ -677,7 +666,8 @@ module rs(
                         issue_pack[3].has_dest= internal_rs_entry[i].has_dest;
                         issue_pack[3].alu_func= internal_rs_entry[i].alu_func;
                         issue_pack[3].mult= internal_rs_entry[i].mult;
-                        issue_pack[3].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[3].jalr= internal_rs_entry[i].jalr;
+                        issue_pack[3].jal= internal_rs_entry[i].jal;
                         issue_pack[3].csr_op= internal_rs_entry[i].csr_op;
                         issue_pack[3].halt= internal_rs_entry[i].halt;
                         issue_pack[3].illegal= internal_rs_entry[i].illegal;
@@ -711,7 +701,8 @@ module rs(
                         issue_pack[2].opb_select= internal_rs_entry[i].opb_select;
                         issue_pack[2].has_dest= internal_rs_entry[i].has_dest;
                         issue_pack[2].alu_func= internal_rs_entry[i].alu_func;
-                        issue_pack[2].uncond_branch= internal_rs_entry[i].uncond_branch;
+                        issue_pack[2].jalr= internal_rs_entry[i].jalr;
+                        issue_pack[2].jal= internal_rs_entry[i].jal;
                         issue_pack[2].csr_op= internal_rs_entry[i].csr_op;
                         issue_pack[2].halt= internal_rs_entry[i].halt;
                         issue_pack[2].illegal= internal_rs_entry[i].illegal;

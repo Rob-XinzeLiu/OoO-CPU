@@ -29,7 +29,8 @@ module stage_issue(
             next_s_x_pack[i].rd_mem = issue_pack[i].rd_mem;
             next_s_x_pack[i].wr_mem = issue_pack[i].wr_mem;
             next_s_x_pack[i].cond_branch = issue_pack[i].cond_branch;
-            next_s_x_pack[i].uncond_branch = issue_pack[i].uncond_branch;
+            next_s_x_pack[i].jalr = issue_pack[i].jalr;
+            next_s_x_pack[i].jal = issue_pack[i].jal;
             next_s_x_pack[i].csr_op = issue_pack[i].csr_op;
             next_s_x_pack[i].halt = issue_pack[i].halt;
             next_s_x_pack[i].illegal = issue_pack[i].illegal;

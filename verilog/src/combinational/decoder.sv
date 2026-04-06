@@ -17,7 +17,7 @@ module decoder (
     output ALU_OPB_SELECT opb_select,
     output logic          has_dest, // if there is a destination register
     output ALU_FUNC       alu_func,
-    output logic          mult, rd_mem, wr_mem, cond_branch, uncond_branch,
+    output logic          mult, rd_mem, wr_mem, cond_branch, jal, jalr,
     output logic          csr_op, // used for CSR operations, we only use this as a cheap way to get the return code out
     output logic          halt,   // non-zero on a halt
     output logic          illegal // non-zero on an illegal instruction
@@ -36,7 +36,8 @@ module decoder (
         rd_mem        = `FALSE;
         wr_mem        = `FALSE;
         cond_branch   = `FALSE;
-        uncond_branch = `FALSE;
+        jal           = `FALSE;
+        jalr          = `FALSE;
         halt          = `FALSE;
         illegal       = `FALSE;
 
@@ -56,13 +57,13 @@ module decoder (
                     has_dest      = `TRUE;
                     opa_select    = OPA_IS_PC;
                     opb_select    = OPB_IS_J_IMM;
-                    uncond_branch = `TRUE;
+                    jal           = `TRUE;
                 end
                 `RV32_JALR: begin
                     has_dest      = `TRUE;
                     opa_select    = OPA_IS_RS1;
                     opb_select    = OPB_IS_I_IMM;
-                    uncond_branch = `TRUE;
+                    jalr          = `TRUE;
                 end
                 `RV32_BEQ, `RV32_BNE, `RV32_BLT, `RV32_BGE,
                 `RV32_BLTU, `RV32_BGEU: begin

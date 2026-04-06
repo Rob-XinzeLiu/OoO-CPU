@@ -8,7 +8,9 @@ module branch_predicotr(
     input     ADDR                   proc2icache_addr       ,
     //input from execute stage
     input COND_BRANCH_PACKET         conditional_branch_out , 
-    input MISPREDICT_PACKET          mispredict_pack    ,             
+    input MISPREDICT_PACKET          mispredict_pack    ,  
+    //from dispatch stage, early target mispredict
+    input MISPREDICT_PACKET          early_mistarget_pack,         
 
     //output 
     output logic                     taken                  ,
@@ -78,7 +80,11 @@ typedef enum logic [1:0] {
         .update_taken(mispredict_pack.take_branch),
         .update_pc(mispredict_pack.current_PC),
         .update_target(mispredict_pack.correct_next_pc),
-        .update_c_type(mispredict_pack.c_type)
+        .update_c_type(mispredict_pack.c_type),
+        .early_update_valid  (early_mistarget_pack.valid && early_mistarget_pack.c_type == C_JAL),//only update for jal
+        .early_update_pc     (early_mistarget_pack.current_PC),
+        .early_update_target (early_mistarget_pack.correct_next_pc),
+        .early_update_c_type (C_JAL)
     );
 
     //local PHT and BHT 

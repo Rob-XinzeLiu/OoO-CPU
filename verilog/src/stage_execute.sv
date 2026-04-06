@@ -63,16 +63,15 @@ module stage_execute(
     //////////////////////                         ////////////////////////
     ///////////////////////////////////////////////////////////////////////
     logic     mis_direction;
-    logic     mis_target  [2:0];
+    logic     mis_target  [1:0];
     ADDR actual_cond_target;
     assign actual_cond_target = s_x_pack[4].PC + `RV32_signext_Bimm(s_x_pack[4].inst);
+    
     always_comb begin
         //uncond branch
-        mis_target[0] = s_x_pack[2].valid && s_x_pack[2].uncond_branch  && (s_x_pack[2].predict_addr != result1_alu);
-        mis_target[1] = s_x_pack[3].valid && s_x_pack[3].uncond_branch  && (s_x_pack[3].predict_addr != result2_alu);
+        mis_target[0] = s_x_pack[2].valid && s_x_pack[2].jalr  && (s_x_pack[2].predict_addr != result1_alu);
+        mis_target[1] = s_x_pack[3].valid && s_x_pack[3].jalr  && (s_x_pack[3].predict_addr != result2_alu);
         //conditional branch
-        mis_target[2] = s_x_pack[4].valid && s_x_pack[4].cond_branch && 
-                        take && (s_x_pack[4].predict_addr != actual_cond_target);
         mis_direction = s_x_pack[4].valid && (s_x_pack[4].predict_taken != take);
     end
     
@@ -94,33 +93,32 @@ module stage_execute(
         mispredict_pack = '{default:'0};
 
         // set up mispredicted_mask：AND all the bmask of mispredict branch
-        if (s_x_pack[4].valid && (mis_direction || mis_target[2])) begin
+        if (s_x_pack[4].valid && mis_direction ) begin
             mispredicted_mask &= s_x_pack[4].bmask;//cond branch
         end
         for (int i = 2; i < 4; i++) begin
-            if (s_x_pack[i].valid && s_x_pack[i].uncond_branch && mis_target[i-2]) begin
+            if (s_x_pack[i].valid && s_x_pack[i].jalr && mis_target[i-2]) begin
                 mispredicted_mask &= s_x_pack[i].bmask;//uncond branch
             end
         end
 
         // resolve
-        if (s_x_pack[4].valid && !mis_direction && !mis_target[2]) begin
+        if (s_x_pack[4].valid && !mis_direction ) begin
             resolved_bmask_index |= s_x_pack[4].bmask_index;
         end
         for (int i = 2; i < 4; i++) begin
-            if (s_x_pack[i].valid && s_x_pack[i].uncond_branch && !mis_target[i-2]) begin
+            if (s_x_pack[i].valid && s_x_pack[i].jalr && !mis_target[i-2]) begin
                 resolved_bmask_index |= s_x_pack[i].bmask_index;
             end
         end
 
         // find the oldest mispredict
         if (s_x_pack[4].valid && s_x_pack[4].cond_branch && 
-            (mis_direction || mis_target[2]) && 
-            (s_x_pack[4].bmask == mispredicted_mask)) begin
+            mis_direction  && (s_x_pack[4].bmask == mispredicted_mask)) begin
             mispredicted             = 1'b1;
             mispredicted_bmask_index = s_x_pack[4].bmask_index;
             mispredict_pack.valid          = 1'b1;
-            mispredict_pack.is_cond_branch = 1'b1;
+
             mispredict_pack.take_branch    = take;
             mispredict_pack.correct_next_pc = take ? actual_cond_target : s_x_pack[4].NPC;
             mispredict_pack.c_type          = s_x_pack[4].c_type;
@@ -129,13 +127,12 @@ module stage_execute(
             mispredict_pack.current_count   = s_x_pack[4].current_count;
         end else begin
             for (int i = 2; i < 4; i++) begin
-                if (s_x_pack[i].valid && s_x_pack[i].uncond_branch && 
+                if (s_x_pack[i].valid && s_x_pack[i].jalr && 
                     mis_target[i-2] && 
                     (s_x_pack[i].bmask == mispredicted_mask)) begin
                     mispredicted             = 1'b1;
                     mispredicted_bmask_index = s_x_pack[i].bmask_index;
                     mispredict_pack.valid            = 1'b1;
-                    mispredict_pack.is_uncond_branch = 1'b1;
                     mispredict_pack.take_branch      = 1'b1;
                     mispredict_pack.correct_next_pc  = (i==2) ? result1_alu : result2_alu;
                     mispredict_pack.c_type          = s_x_pack[i].c_type;
@@ -365,7 +362,7 @@ module stage_execute(
                 x_c_pack[1].valid          = 1;
                 x_c_pack[1].complete_index = s_x_pack[2].rob_index;
                 x_c_pack[1].complete_tag   = s_x_pack[2].T;
-                x_c_pack[1].result         = s_x_pack[2].uncond_branch? s_x_pack[2].NPC : result1_alu;
+                x_c_pack[1].result         = (s_x_pack[2].jalr || s_x_pack[2].jal)? s_x_pack[2].NPC : result1_alu;
 
                 //etb
                 early_tag_bus[0].valid = 'b1;
@@ -400,12 +397,12 @@ module stage_execute(
                 x_c_pack[0].valid          = 1;
                 x_c_pack[0].complete_index = s_x_pack[2].rob_index;
                 x_c_pack[0].complete_tag   = s_x_pack[2].T;
-                x_c_pack[0].result         = s_x_pack[2].uncond_branch? s_x_pack[2].NPC : result1_alu;
+                x_c_pack[0].result         = (s_x_pack[2].jalr || s_x_pack[2].jal)? s_x_pack[2].NPC : result1_alu;
 
                 x_c_pack[1].valid          = 1;
                 x_c_pack[1].complete_index = s_x_pack[3].rob_index;
                 x_c_pack[1].complete_tag   = s_x_pack[3].T;
-                x_c_pack[1].result         = s_x_pack[3].uncond_branch? s_x_pack[3].NPC : result2_alu;
+                x_c_pack[1].result         = (s_x_pack[3].jalr || s_x_pack[3].jal)? s_x_pack[3].NPC : result2_alu;
 
                 //etb
                 early_tag_bus[0].valid = 1;
@@ -423,7 +420,7 @@ module stage_execute(
                 x_c_pack[1].valid          = 1;
                 x_c_pack[1].complete_index = s_x_pack[2].rob_index;
                 x_c_pack[1].complete_tag   = s_x_pack[2].T;
-                x_c_pack[1].result         = s_x_pack[2].uncond_branch? s_x_pack[2].NPC :result1_alu;
+                x_c_pack[1].result         = (s_x_pack[2].jalr || s_x_pack[2].jal)? s_x_pack[2].NPC :result1_alu;
 
                 //etb
                 early_tag_bus[0].valid = 1;
@@ -436,7 +433,7 @@ module stage_execute(
                 x_c_pack[0].valid          = 1;
                 x_c_pack[0].complete_index = s_x_pack[2].rob_index;
                 x_c_pack[0].complete_tag   = s_x_pack[2].T;
-                x_c_pack[0].result         = s_x_pack[2].uncond_branch? s_x_pack[2].NPC : result1_alu;
+                x_c_pack[0].result         = (s_x_pack[2].jalr || s_x_pack[2].jal)? s_x_pack[2].NPC : result1_alu;
 
                 //etb
                 early_tag_bus[0].valid = 1;
@@ -447,7 +444,7 @@ module stage_execute(
                 x_c_pack[0].valid          = 1;
                 x_c_pack[0].complete_index = s_x_pack[3].rob_index;
                 x_c_pack[0].complete_tag   = s_x_pack[3].T;
-                x_c_pack[0].result         = s_x_pack[3].uncond_branch? s_x_pack[3].NPC : result2_alu;
+                x_c_pack[0].result         = (s_x_pack[3].jalr || s_x_pack[3].jal)? s_x_pack[3].NPC : result2_alu;
 
                 //etb
                 early_tag_bus[0].valid = 1;

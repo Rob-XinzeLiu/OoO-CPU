@@ -5,7 +5,7 @@ module freelist(
     input FL_RETIRE_PACKET [`N-1:0]         freelist_pack       , //from retire
     input FLIST_IDX                         Branch_stack_T      ,  // Head output from BS
     input logic                             dispatch_valid [`N-1:0],  // from dispatcher
-    input logic                             is_branch [`N-1:0],
+    input logic         [`N-1:0]                    is_branch ,
     input logic                             mispredicted        ,
 
     output FLIST_IDX                        BS_tail [`N-1:0]    ,  //to BS

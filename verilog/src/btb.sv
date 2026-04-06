@@ -12,12 +12,17 @@ module btb (
     output CTYPE    btb_c_type,
     output logic    btb_slot,
     
-    // Update
+    // Update from execute, for cond branch and jalr
     input logic     update_valid,   // Is this really a branch
     input logic     update_taken,   // Did it take the branch.
     input ADDR      update_pc,
     input ADDR      update_target,
-    input CTYPE     update_c_type
+    input CTYPE     update_c_type,
+    //update from dispatch, for jal
+    input logic     early_update_valid,
+    input ADDR      early_update_pc,
+    input ADDR      early_update_target,
+    input CTYPE     early_update_c_type
 );
     localparam SETS = 16;
     localparam ADDR_WIDTH = 32;
@@ -82,32 +87,58 @@ module btb (
     assign wr_tag = update_pc[ADDR_WIDTH-1 : ADDR_WIDTH-TAG_BITS];
     assign wr_index = update_pc[BYTE_OFFSET+INDEX_BITS-1 : BYTE_OFFSET];
 
+    logic [TAG_BITS-1:0]   early_wr_tag;
+    logic [INDEX_BITS-1:0] early_wr_index;
+
+    assign early_wr_tag   = early_update_pc[ADDR_WIDTH-1 : ADDR_WIDTH-TAG_BITS];
+    assign early_wr_index = early_update_pc[BYTE_OFFSET+INDEX_BITS-1 : BYTE_OFFSET];
+
 
     always_ff @(posedge clock) begin
         if(reset) begin
             btb_table <= '{default: '0};
-        end else if(update_valid) begin
-            if(update_taken) begin
-                if(btb_table[wr_index].tag != wr_tag) begin
-                    btb_table[wr_index].valid0 <= 1'b0;
-                    btb_table[wr_index].valid1 <= 1'b0;
+        end else begin
+
+            if (early_update_valid) begin
+                if (btb_table[early_wr_index].tag != early_wr_tag) begin
+                    btb_table[early_wr_index].valid0 <= 1'b0;
+                    btb_table[early_wr_index].valid1 <= 1'b0;
                 end
-                btb_table[wr_index].tag <= wr_tag;
-                if(update_pc[2] == 0) begin
-                    btb_table[wr_index].valid0 <= 1'b1;
-                    btb_table[wr_index].target0 <= update_target;
-                    btb_table[wr_index].c_type0 <= update_c_type;
+                btb_table[early_wr_index].tag <= early_wr_tag;
+                if (early_update_pc[2] == 0) begin
+                    btb_table[early_wr_index].valid0   <= 1'b1;
+                    btb_table[early_wr_index].target0  <= early_update_target;
+                    btb_table[early_wr_index].c_type0  <= early_update_c_type;
                 end else begin
-                    btb_table[wr_index].valid1 <= 1'b1;
-                    btb_table[wr_index].target1 <= update_target;
-                    btb_table[wr_index].c_type1 <= update_c_type;
+                    btb_table[early_wr_index].valid1   <= 1'b1;
+                    btb_table[early_wr_index].target1  <= early_update_target;
+                    btb_table[early_wr_index].c_type1  <= early_update_c_type;
                 end
-            end else begin          // Predict taken but actually not-taken
-                if(btb_table[wr_index].tag == wr_tag) begin
-                    if(update_pc[2] == 0 && btb_table[wr_index].valid0) 
+            end
+            
+            if(update_valid) begin
+                if(update_taken) begin
+                    if(btb_table[wr_index].tag != wr_tag) begin
                         btb_table[wr_index].valid0 <= 1'b0;
-                    else if(update_pc[2] == 1 && btb_table[wr_index].valid1)    
                         btb_table[wr_index].valid1 <= 1'b0;
+                    end
+                    btb_table[wr_index].tag <= wr_tag;
+                    if(update_pc[2] == 0) begin
+                        btb_table[wr_index].valid0 <= 1'b1;
+                        btb_table[wr_index].target0 <= update_target;
+                        btb_table[wr_index].c_type0 <= update_c_type;
+                    end else begin
+                        btb_table[wr_index].valid1 <= 1'b1;
+                        btb_table[wr_index].target1 <= update_target;
+                        btb_table[wr_index].c_type1 <= update_c_type;
+                    end
+                end else begin          // Predict taken but actually not-taken
+                    if(btb_table[wr_index].tag == wr_tag) begin
+                        if(update_pc[2] == 0 && btb_table[wr_index].valid0) 
+                            btb_table[wr_index].valid0 <= 1'b0;
+                        else if(update_pc[2] == 1 && btb_table[wr_index].valid1)    
+                            btb_table[wr_index].valid1 <= 1'b0;
+                    end
                 end
             end
         end

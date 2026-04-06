@@ -33,13 +33,13 @@ module stage_dispatch (
     output INST     [`N-1:0]                inst_out                            ,
     output logic    [`N-1:0]                is_load_out                         ,
     output logic    [`N-1:0]                is_store_out                        ,
-    output logic    [`N-1:0]                is_branch_out                       ,
+    output logic    [`N-1:0]                take_snapshot_out                   ,
     output PRF_IDX  [`N-1:0]                dest_tag_out                        ,
+    //early target mispredict detect
+    output MISPREDICT_PACKET                early_mistarget_pack                , 
     // maptable snapshot
     input  logic [`MT_SIZE-1:0]             maptable_snapshot_in                ,                         
     output logic  [`N-1:0][`MT_SIZE-1:0]    maptable_snapshot_out               ,
-
-    output ADDR                             pc_snapshot_out             [`N-1:0],
    
     output logic [1:0]                      dispatch_num             
 );
@@ -56,7 +56,7 @@ module stage_dispatch (
         ALU_OPB_SELECT opb_select;
         logic          has_dest; // if there is a destination register
         ALU_FUNC       alu_func;
-        logic          mult, rd_mem, wr_mem, cond_branch, uncond_branch;
+        logic          mult, rd_mem, wr_mem, cond_branch, jal, jalr;
         logic          csr_op; // used for CSR operations, we only use this as a cheap way to get the return code out
         logic          halt;   // non-zero on a halt
         logic          illegal;
@@ -69,7 +69,7 @@ module stage_dispatch (
     REG_IDX [`N-1:0] rd;
     ALU_OPA_SELECT [`N-1:0] opa_select;
     ALU_OPB_SELECT [`N-1:0] opb_select; 
-    logic [`N-1:0] has_dest, is_branch, halt, cond_branch, is_load, is_store;
+    logic [`N-1:0] has_dest, take_snapshot, halt, cond_branch, is_load, is_store, jalr, jal;
 
     PRF_IDX         [`N-1:0]    t1, t2, told;
     logic           [`N-1:0]    t1_ready, t2_ready;
@@ -81,18 +81,6 @@ module stage_dispatch (
     // Bmask
     B_MASK  bmask, next_bmask, bmask_idx_0, bmask_idx_1;
    
-    //for lsq
-    assign is_branch_out = is_branch;
-    assign is_load_out = is_load;
-    assign is_store_out = is_store;
-    assign dest_tag_out = t_new;
-    always_comb begin
-        for(int i = 0; i < `N; i++) begin
-            if(f_d_pack[i].valid) begin
-                inst_out[i] =  f_d_pack[i].inst;
-            end
-        end
-    end
 
 
     for (genvar i=0; i<`N; i++) begin : decoders
@@ -107,7 +95,8 @@ module stage_dispatch (
             .rd_mem             (decode_pack[i].rd_mem),
             .wr_mem             (decode_pack[i].wr_mem),
             .cond_branch        (decode_pack[i].cond_branch),
-            .uncond_branch      (decode_pack[i].uncond_branch),
+            .jal                (decode_pack[i].jal),
+            .jalr               (decode_pack[i].jalr),
             .csr_op             (decode_pack[i].csr_op),
             .halt               (decode_pack[i].halt),
             .illegal            (decode_pack[i].illegal)
@@ -126,42 +115,84 @@ module stage_dispatch (
     } case_t;
 
     case_t dispatch_case;
-    logic [1:0] f_dpack_valid;
+    logic [1:0] actual_valid;
+    logic mistarget1, mistarget2;
 
     always_comb begin
+        actual_valid = '0;
+        mistarget1 = '0;
+        mistarget2 = '0;
+        early_mistarget_pack = '0;
+
         for(int i = 0; i < `N; i++) begin
             r1[i] = f_d_pack[i].inst.r.rs1;
             r2[i] = f_d_pack[i].inst.r.rs2;
             rd[i] = f_d_pack[i].inst.r.rd;
-            f_dpack_valid[i] = f_d_pack[i].valid;
             opa_select[i] = decode_pack[i].opa_select;
             opb_select[i] = decode_pack[i].opb_select;
             has_dest[i] = decode_pack[i].has_dest;
-            is_branch[i] = decode_pack[i].cond_branch || decode_pack[i].uncond_branch;
+            take_snapshot[i] = decode_pack[i].cond_branch || decode_pack[i].jalr;
             cond_branch[i]= decode_pack[i].cond_branch;
+            jalr[i] = decode_pack[i].jalr;
+            jal[i] = decode_pack[i].jal;
             halt[i] = decode_pack[i].halt;
             is_load[i] = decode_pack[i].rd_mem;
             is_store[i] = decode_pack[i].wr_mem;
         end
-    end
 
-    always_comb begin
+       
+        mistarget1 = f_d_pack[0].valid && (decode_pack[0].jal && (f_d_pack[0].PC + `RV32_signext_Jimm(f_d_pack[0].inst)) != f_d_pack[0].predict_addr) || 
+                        (decode_pack[0].cond_branch && (f_d_pack[0].PC + `RV32_signext_Bimm(f_d_pack[0].inst)) == f_d_pack[0].predict_addr);
+
+        mistarget2 = f_d_pack[1].valid && (decode_pack[1].jal && (f_d_pack[1].PC + `RV32_signext_Jimm(f_d_pack[1].inst)) != f_d_pack[1].predict_addr) || 
+                        (decode_pack[1].cond_branch && (f_d_pack[1].PC + `RV32_signext_Bimm(f_d_pack[1].inst)) == f_d_pack[1].predict_addr);
+
+        actual_valid[0] = f_d_pack[0].valid ;
+
+        actual_valid[1] = f_d_pack[1].valid && actual_valid[0] && !mistarget1;
+
+        early_mistarget_pack.valid = mistarget1 || mistarget2;
+
+        early_mistarget_pack.correct_next_pc = mistarget1? 
+                            decode_pack[0].jal ? 
+                            (f_d_pack[0].PC + `RV32_signext_Jimm(f_d_pack[0].inst)) : 
+                            (f_d_pack[0].PC + `RV32_signext_Bimm(f_d_pack[0].inst)) :
+                        mistarget2? 
+                            decode_pack[1].jal ? 
+                            (f_d_pack[1].PC + `RV32_signext_Jimm(f_d_pack[1].inst)) : 
+                            (f_d_pack[1].PC + `RV32_signext_Bimm(f_d_pack[1].inst)) : 0;
+
+        early_mistarget_pack.current_PC = (mistarget1 || mistarget2) ? (mistarget1 ? f_d_pack[0].PC : f_d_pack[1].PC) : '0;
+        early_mistarget_pack.current_head = (mistarget1 || mistarget2)? (mistarget1 ? f_d_pack[0].current_head : f_d_pack[1].current_head) : '0;
+        early_mistarget_pack.current_count = (mistarget1 || mistarget2) ? (mistarget1 ? f_d_pack[0].current_count : f_d_pack[1].current_count) : '0;
+        early_mistarget_pack.c_type = (mistarget1 || mistarget2) ? (mistarget1 ? f_d_pack[0].c_type : f_d_pack[1].c_type) : '0;
+
         for(int i = 0; i < `N; i++) begin
-            dispatch_valid[i] = f_d_pack[i].valid && decode_pack[i].has_dest && (rd[i] != '0); // only request from freelist when we have a destination register to allocate
+            dispatch_valid[i] = actual_valid[i] && decode_pack[i].has_dest && (rd[i] != '0); // only request from freelist when we have a destination register to allocate
         end
     end
 
-    always_comb begin
-        for (int i = 0; i <`N; i++) begin
-            pc_snapshot_out[i]  = (is_branch[i] && f_d_pack[i].valid )? f_d_pack[i].PC : '0;
-        end
-    end
-
+    //take snapshot
     always_comb begin
         for (int i = 0; i < `N; i++) begin
             maptable_snapshot_out[i] = snapshot_out[i];
         end
     end
+
+    //for lsq
+    assign take_snapshot_out = take_snapshot;
+    assign is_load_out = is_load;
+    assign is_store_out = is_store;
+    assign dest_tag_out = t_new;
+    always_comb begin
+        for(int i = 0; i < `N; i++) begin
+            inst_out[i] = '0;
+            if(actual_valid[i]) begin
+                inst_out[i] =  f_d_pack[i].inst;
+            end
+        end
+    end
+
 
     always_comb begin
         dispatch_num = 0;
@@ -193,18 +224,18 @@ module stage_dispatch (
             //case define    
             dispatch_case = NONE;  // default
 
-            if (f_d_pack[0].valid && !f_d_pack[1].valid) begin
-                if (is_branch[0])
+            if (actual_valid[0] && !actual_valid[1]) begin
+                if (take_snapshot[0] )
                     dispatch_case = ONE_BRANCH;
                 else
                     dispatch_case = ONE_NON_BRANCH;
 
-            end else if (f_d_pack[0].valid && f_d_pack[1].valid) begin
-                if (is_branch[0] && is_branch[1])
+            end else if (actual_valid[0] && actual_valid[1]) begin
+                if (take_snapshot[0] && take_snapshot[1])
                     dispatch_case = TWO_BRANCH;
-                else if (!is_branch[0] && !is_branch[1])
+                else if (!take_snapshot[0] && !take_snapshot[1])
                     dispatch_case = TWO_NON_BRANCH;
-                else if (!is_branch[0] && is_branch[1])
+                else if (!take_snapshot[0] && take_snapshot[1])
                     dispatch_case = BRANCH_AFTER_NON_BRANCH;
                 else
                     dispatch_case = NON_BRANCH_AFTER_BRANCH;
@@ -221,7 +252,7 @@ module stage_dispatch (
                     end
                     next_bmask = next_bmask | bmask_idx_0;//update bmask first
                     dispatch_pack[0].inst = f_d_pack[0].inst;
-                    dispatch_pack[0].valid = f_d_pack[0].valid;
+                    dispatch_pack[0].valid = 1;
                     dispatch_pack[0].T    = decode_pack[0].has_dest ? t_new[0] : '0;
                     dispatch_pack[0].Told = decode_pack[0].has_dest ? told[0]  : '0;                 
                     dispatch_pack[0].t1 = t1[0];
@@ -236,11 +267,8 @@ module stage_dispatch (
                     dispatch_pack[0].opb_select = decode_pack[0].opb_select;
                     dispatch_pack[0].has_dest = decode_pack[0].has_dest && (rd[0] != '0);
                     dispatch_pack[0].alu_func = decode_pack[0].alu_func;
-                    dispatch_pack[0].mult = decode_pack[0].mult;
-                    dispatch_pack[0].rd_mem = decode_pack[0].rd_mem;
-                    dispatch_pack[0].wr_mem = decode_pack[0].wr_mem;
-                    dispatch_pack[0].cond_branch = decode_pack[0].cond_branch;
-                    dispatch_pack[0].uncond_branch = decode_pack[0].uncond_branch;
+                    dispatch_pack[0].cond_branch = cond_branch[0];
+                    dispatch_pack[0].jalr = jalr[0];
                     dispatch_pack[0].csr_op = decode_pack[0].csr_op;
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
@@ -254,7 +282,6 @@ module stage_dispatch (
                     dispatch_pack[0].dest_reg_idx = (has_dest[0])? rd[0]:'0;
                     //send to branch stack
                     branch_encountered[0] = 'd1;
-                    branch_encountered[1] = is_branch[1];
                     branch_index[0] = bmask_idx_0;
                     //update branch count
                     next_branch_count = next_branch_count + 1;
@@ -262,7 +289,7 @@ module stage_dispatch (
 
                 ONE_NON_BRANCH: begin
                     dispatch_pack[0].inst = f_d_pack[0].inst;
-                    dispatch_pack[0].valid = f_d_pack[0].valid;
+                    dispatch_pack[0].valid = 1;
                     dispatch_pack[0].T    = decode_pack[0].has_dest ? t_new[0] : '0;
                     dispatch_pack[0].Told = decode_pack[0].has_dest ? told[0]  : '0;
                     dispatch_pack[0].t1 = t1[0];
@@ -280,8 +307,6 @@ module stage_dispatch (
                     dispatch_pack[0].mult = decode_pack[0].mult;
                     dispatch_pack[0].rd_mem = decode_pack[0].rd_mem;
                     dispatch_pack[0].wr_mem = decode_pack[0].wr_mem;
-                    dispatch_pack[0].cond_branch = 'd0;
-                    dispatch_pack[0].uncond_branch = 'd0;
                     dispatch_pack[0].csr_op = decode_pack[0].csr_op;
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
@@ -322,11 +347,8 @@ module stage_dispatch (
                     dispatch_pack[0].opb_select = decode_pack[0].opb_select;
                     dispatch_pack[0].has_dest = decode_pack[0].has_dest && (rd[0] != '0) ;
                     dispatch_pack[0].alu_func = decode_pack[0].alu_func;
-                    dispatch_pack[0].mult = decode_pack[0].mult;
-                    dispatch_pack[0].rd_mem = decode_pack[0].rd_mem;
-                    dispatch_pack[0].wr_mem = decode_pack[0].wr_mem;
-                    dispatch_pack[0].cond_branch = decode_pack[0].cond_branch;
-                    dispatch_pack[0].uncond_branch = decode_pack[0].uncond_branch;
+                    dispatch_pack[0].cond_branch = cond_branch[0];
+                    dispatch_pack[0].jalr = jalr[0];
                     dispatch_pack[0].csr_op = decode_pack[0].csr_op;
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
@@ -349,7 +371,7 @@ module stage_dispatch (
                     end
                     next_bmask = next_bmask | bmask_idx_1;//update bmask first
                     dispatch_pack[1].inst = f_d_pack[1].inst;
-                    dispatch_pack[1].valid = f_d_pack[1].valid;
+                    dispatch_pack[1].valid = 1;
                     dispatch_pack[1].T    = decode_pack[1].has_dest ? t_new[1] : '0;
                     dispatch_pack[1].Told = decode_pack[1].has_dest ? told[1]  : '0;
                     dispatch_pack[1].t1 = t1[1];
@@ -364,11 +386,8 @@ module stage_dispatch (
                     dispatch_pack[1].opb_select = decode_pack[1].opb_select;
                     dispatch_pack[1].has_dest = decode_pack[1].has_dest && (rd[1] != '0) ;
                     dispatch_pack[1].alu_func = decode_pack[1].alu_func;
-                    dispatch_pack[1].mult = decode_pack[1].mult;
-                    dispatch_pack[1].rd_mem = decode_pack[1].rd_mem;
-                    dispatch_pack[1].wr_mem = decode_pack[1].wr_mem;
-                    dispatch_pack[1].cond_branch = decode_pack[1].cond_branch;
-                    dispatch_pack[1].uncond_branch = decode_pack[1].uncond_branch;
+                    dispatch_pack[1].cond_branch = cond_branch[1];
+                    dispatch_pack[1].jalr = jalr[1];
                     dispatch_pack[1].csr_op = decode_pack[1].csr_op;
                     dispatch_pack[1].halt = decode_pack[1].halt;
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
@@ -389,13 +408,12 @@ module stage_dispatch (
                 TWO_NON_BRANCH: begin
                     for(int i = 0; i < `N; i++) begin
                         dispatch_pack[i].inst = f_d_pack[i].inst;
-                        dispatch_pack[i].valid = f_d_pack[i].valid;
+                        dispatch_pack[i].valid = 1;
                         dispatch_pack[i].T    = decode_pack[i].has_dest ? t_new[i] : '0;
                         dispatch_pack[i].Told = decode_pack[i].has_dest ? told[i]  : '0;
                         dispatch_pack[i].t1 = t1[i];
                         dispatch_pack[i].t2 = t2[i];
                         dispatch_pack[i].bmask = next_bmask;
-                        dispatch_pack[i].bmask_index = '0;//bmask index only use for branch
                         dispatch_pack[i].t1_ready = t1_ready[i];
                         dispatch_pack[i].t2_ready = t2_ready[i];
                         dispatch_pack[i].PC = f_d_pack[i].PC;
@@ -407,8 +425,7 @@ module stage_dispatch (
                         dispatch_pack[i].mult = decode_pack[i].mult;
                         dispatch_pack[i].rd_mem = decode_pack[i].rd_mem;
                         dispatch_pack[i].wr_mem = decode_pack[i].wr_mem;
-                        dispatch_pack[i].cond_branch = 'd0;
-                        dispatch_pack[i].uncond_branch = 'd0;
+                        dispatch_pack[i].jal = jal[i];
                         dispatch_pack[i].csr_op = decode_pack[i].csr_op;
                         dispatch_pack[i].halt = decode_pack[i].halt;
                         dispatch_pack[i].illegal = decode_pack[i].illegal;
@@ -428,13 +445,12 @@ module stage_dispatch (
                 BRANCH_AFTER_NON_BRANCH: begin
                     //inst 0 is not branch
                     dispatch_pack[0].inst = f_d_pack[0].inst;
-                    dispatch_pack[0].valid = f_d_pack[0].valid;
+                    dispatch_pack[0].valid = 1;
                     dispatch_pack[0].T    = decode_pack[0].has_dest ? t_new[0] : '0;
                     dispatch_pack[0].Told = decode_pack[0].has_dest ? told[0]  : '0;
                     dispatch_pack[0].t1 = t1[0];
                     dispatch_pack[0].t2 = t2[0];
                     dispatch_pack[0].bmask = next_bmask;
-                    dispatch_pack[0].bmask_index = 'd0;
                     dispatch_pack[0].t1_ready = t1_ready[0];
                     dispatch_pack[0].t2_ready = t2_ready[0];
                     dispatch_pack[0].PC = f_d_pack[0].PC;
@@ -446,8 +462,7 @@ module stage_dispatch (
                     dispatch_pack[0].mult = decode_pack[0].mult;
                     dispatch_pack[0].rd_mem = decode_pack[0].rd_mem;
                     dispatch_pack[0].wr_mem = decode_pack[0].wr_mem;
-                    dispatch_pack[0].cond_branch = 'd0;
-                    dispatch_pack[0].uncond_branch = 'd0;
+                    dispatch_pack[0].jal = jal[0];
                     dispatch_pack[0].csr_op = decode_pack[0].csr_op;
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
@@ -470,7 +485,7 @@ module stage_dispatch (
                     end
                     next_bmask = next_bmask | bmask_idx_1;//update bmask first
                     dispatch_pack[1].inst = f_d_pack[1].inst;
-                    dispatch_pack[1].valid = f_d_pack[1].valid;
+                    dispatch_pack[1].valid = 1;
                     dispatch_pack[1].T    = decode_pack[1].has_dest ? t_new[1] : '0;
                     dispatch_pack[1].Told = decode_pack[1].has_dest ? told[1]  : '0;
                     dispatch_pack[1].t1 = t1[1];
@@ -485,11 +500,8 @@ module stage_dispatch (
                     dispatch_pack[1].opb_select = decode_pack[1].opb_select;
                     dispatch_pack[1].has_dest = decode_pack[1].has_dest && (rd[1] != '0);
                     dispatch_pack[1].alu_func = decode_pack[1].alu_func;
-                    dispatch_pack[1].mult = decode_pack[1].mult;
-                    dispatch_pack[1].rd_mem = decode_pack[1].rd_mem;
-                    dispatch_pack[1].wr_mem = decode_pack[1].wr_mem;
-                    dispatch_pack[1].cond_branch = decode_pack[1].cond_branch;
-                    dispatch_pack[1].uncond_branch = decode_pack[1].uncond_branch;
+                    dispatch_pack[1].cond_branch = cond_branch[1];
+                    dispatch_pack[1].jalr = jalr[1];
                     dispatch_pack[1].csr_op = decode_pack[1].csr_op;
                     dispatch_pack[1].halt = decode_pack[1].halt;
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
@@ -517,7 +529,7 @@ module stage_dispatch (
                     end
                     next_bmask = next_bmask | bmask_idx_0;//update bmask first
                     dispatch_pack[0].inst = f_d_pack[0].inst;
-                    dispatch_pack[0].valid = f_d_pack[0].valid;
+                    dispatch_pack[0].valid = 1;
                     dispatch_pack[0].T    = decode_pack[0].has_dest ? t_new[0] : '0;
                     dispatch_pack[0].Told = decode_pack[0].has_dest ? told[0]  : '0;
                     dispatch_pack[0].t1 = t1[0];
@@ -532,11 +544,8 @@ module stage_dispatch (
                     dispatch_pack[0].opb_select = decode_pack[0].opb_select;
                     dispatch_pack[0].has_dest = decode_pack[0].has_dest && (rd[0] != '0);
                     dispatch_pack[0].alu_func = decode_pack[0].alu_func;
-                    dispatch_pack[0].mult = decode_pack[0].mult;
-                    dispatch_pack[0].rd_mem = decode_pack[0].rd_mem;
-                    dispatch_pack[0].wr_mem = decode_pack[0].wr_mem;
-                    dispatch_pack[0].cond_branch = decode_pack[0].cond_branch;
-                    dispatch_pack[0].uncond_branch = decode_pack[0].uncond_branch;
+                    dispatch_pack[0].cond_branch = cond_branch[0];
+                    dispatch_pack[0].jalr = jalr[0];
                     dispatch_pack[0].csr_op = decode_pack[0].csr_op;
                     dispatch_pack[0].halt = decode_pack[0].halt;
                     dispatch_pack[0].illegal = decode_pack[0].illegal;
@@ -553,26 +562,24 @@ module stage_dispatch (
 
                     //inst 1 is not branch
                     dispatch_pack[1].inst = f_d_pack[1].inst;
-                    dispatch_pack[1].valid = f_d_pack[1].valid;
+                    dispatch_pack[1].valid = 1;
                     dispatch_pack[1].T    = decode_pack[1].has_dest ? t_new[1] : '0;
                     dispatch_pack[1].Told = decode_pack[1].has_dest ? told[1]  : '0;
                     dispatch_pack[1].t1 = t1[1];
                     dispatch_pack[1].t2 = t2[1];
                     dispatch_pack[1].bmask = next_bmask;
-                    dispatch_pack[1].bmask_index = 'd0;
                     dispatch_pack[1].t1_ready = t1_ready[1];
                     dispatch_pack[1].t2_ready = t2_ready[1];
                     dispatch_pack[1].PC = f_d_pack[1].PC;
                     dispatch_pack[1].NPC = f_d_pack[1].NPC;
                     dispatch_pack[1].opa_select = decode_pack[1].opa_select;
                     dispatch_pack[1].opb_select = decode_pack[1].opb_select;
-                    dispatch_pack[1].has_dest = decode_pack[1].has_dest && (rd[0] != '0);
+                    dispatch_pack[1].has_dest = decode_pack[1].has_dest && (rd[1] != '0);
                     dispatch_pack[1].alu_func = decode_pack[1].alu_func;
                     dispatch_pack[1].mult = decode_pack[1].mult;
                     dispatch_pack[1].rd_mem = decode_pack[1].rd_mem;
                     dispatch_pack[1].wr_mem = decode_pack[1].wr_mem;
-                    dispatch_pack[1].cond_branch = 'd0;
-                    dispatch_pack[1].uncond_branch = 'd0;
+                    dispatch_pack[1].jal = jal[1];
                     dispatch_pack[1].csr_op = decode_pack[1].csr_op;
                     dispatch_pack[1].halt = decode_pack[1].halt;
                     dispatch_pack[1].illegal = decode_pack[1].illegal;
@@ -636,8 +643,8 @@ module stage_dispatch (
         .r1                     (r1),
         .r2                     (r2),
         .snapshot_in            (maptable_snapshot_in),
-        .is_branch              (is_branch),
-        .valid                  (f_dpack_valid),
+        .is_branch              (take_snapshot),
+        .valid                  (actual_valid),
         .t1                     (t1),
         .t2                     (t2),
         .told                   (told),

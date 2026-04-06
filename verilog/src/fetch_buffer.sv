@@ -5,6 +5,7 @@ module fetch_buffer(
     input logic                reset,
     input logic                mispredicted,
     input logic [1:0]          dispatch_num_req,//from dispatch stage
+    input logic                 dispatch_target_mispredict, 
     input F_D_PACKET           fetch_pack [`N-1:0],          //from fetch stage
 
 
@@ -72,7 +73,7 @@ module fetch_buffer(
     end
 
     always_ff @(posedge clock) begin
-        if (reset || mispredicted) begin
+        if (reset || mispredicted || dispatch_target_mispredict) begin
             head  <= '0;
             tail  <= '0;
             full <= '0;

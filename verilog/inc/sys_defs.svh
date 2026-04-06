@@ -439,7 +439,8 @@ typedef struct packed{
     logic           rd_mem;
     logic           wr_mem;
     logic           cond_branch;
-    logic           uncond_branch;
+    logic           jal;
+    logic           jalr;
     logic           csr_op;
     logic           halt;
     logic           illegal;
@@ -472,7 +473,8 @@ typedef struct packed{
     logic           rd_mem;
     logic           wr_mem;
     logic           cond_branch;
-    logic           uncond_branch;
+    logic           jalr;
+    logic           jal;
     logic           csr_op;
     logic           halt;
     logic           illegal;
@@ -509,8 +511,6 @@ typedef struct packed{
     logic           valid;
     logic           take_branch;
     ADDR            correct_next_pc;
-    logic           is_cond_branch;
-    logic           is_uncond_branch;
     ADDR            current_PC;
     CTYPE           c_type;
     logic [1:0]     current_head;
