@@ -12,18 +12,21 @@ module victim_cache #(
     input  logic                          req_is_load,
     input  logic [`DCACHE_TAG_BITS-1:0]   dcache_miss_req_tag,
     input  logic [`DCACHE_SET_BITS-1:0]   dcache_miss_req_set,
+    input  logic [$clog2(LINE_BYTES)-1:0] d_request_offset,
+    input  MEM_SIZE                       d_request_size,
+    input  logic                          d_req_unsigned,
     input  LQ_IDX                         lq_index,
-    input  logic                          grant,
+    input logic                           wb_full,
+    
     output logic                          vc_hit,
-    output MEM_BLOCK                      vc_hit_data,
-    output logic                          vc_hit_dirty,
+
+    // formatted load-hit response back to dcache
+    output DATA                           vc_load_resp_data,
+    output LQ_IDX                         vc_load_resp_lq_index,
 
 
     // store update from dcache
-    input  logic [$clog2(LINE_BYTES)-1:0] vc_store_offset, //req addr
-    input  MEM_SIZE                       vc_store_size,
     input  DATA                           vc_store_data,
-    output logic                          vc_store_ready, //tells dcache we updated store block
 
     // dcache eviction into VC
     input  logic                          dcache_evicted_valid,
@@ -31,15 +34,11 @@ module victim_cache #(
     input  logic [`DCACHE_SET_BITS-1:0]   dcache_evicted_set,
     input  MEM_BLOCK                      dcache_evicted_data,
     input  logic                          dcache_evicted_dirty,
-    output logic                          dcache_evicted_ready, //in case we're evicting dirty from vc make sure it can go in wb
-
-    // MEM commands
-    input  MEM_TAG                        mem2proc_transaction_tag,
-    output MEM_COMMAND                    vc2mem_command,
-    output ADDR                           vc2mem_addr,
-    output MEM_BLOCK                      vc2mem_data,
-    output MEM_SIZE                       vc2mem_size,
-    output logic                          vc_requesting
+    //input  logic                          wb_ready,
+    output logic                          vc_wb_valid,
+    output logic [`DCACHE_TAG_BITS-1:0]   vc_wb_tag,
+    output logic [`DCACHE_SET_BITS-1:0]   vc_wb_set,
+    output MEM_BLOCK                      vc_wb_data
 );
 
     localparam int OFFSET_BITS = $clog2(LINE_BYTES);
@@ -52,7 +51,6 @@ module victim_cache #(
         logic [`DCACHE_SET_BITS-1:0] set;
         logic [VC_WAY_BITS-1:0]      lru_val;
         MEM_BLOCK                    data;
-        LQ_IDX                       lq_index;
     } vc_entry_t;
 
     vc_entry_t vc_entries      [VC_LINES-1:0];
@@ -111,21 +109,19 @@ module victim_cache #(
         end
     endfunction
 
-    req_state_t req_state, next_req_state;
-
-    ADDR      wb_addr, next_wb_addr;
-    MEM_BLOCK wb_data, next_wb_data;
-    logic need_request, next_need_request;
-
     always_comb begin
         next_vc_entries = vc_entries;
-
         found_hit = 1'b0;
         hit_idx   = '0;
         old_lru   = '0;
 
-        next_need_request ='0;
-        
+        vc_load_resp_data     = '0;
+        vc_load_resp_lq_index = '0;
+
+        vc_wb_valid = 1'b0;
+        vc_wb_tag   = '0;
+        vc_wb_set   = '0;
+        vc_wb_data  = '0;
 
         found_evict_way = 1'b0;
         evict_idx       = '0;
@@ -138,17 +134,6 @@ module victim_cache #(
         vc_hit_dirty   = '0;
         vc_store_ready = 1'b0;
 
-        dcache_evicted_ready = 1'b1;
-
-        vc2mem_command       = MEM_NONE;
-        vc2mem_addr          = '0;
-        vc2mem_data          = '0;
-        vc2mem_size          = DOUBLE;
-        vc_requesting        = 1'b0;
-
-        next_req_state       = req_state;
-        next_wb_addr         = wb_addr;
-        next_wb_data         = wb_data;
 
         // lookup
         for (int i = 0; i < VC_LINES; i++) begin
@@ -159,49 +144,59 @@ module victim_cache #(
                 found_hit = 1'b1;
                 //hit_idx   = VC_WAY_BITS'(i);
                 vc_hit       = 1'b1;
-                vc_hit_data  = vc_entries[i].data;
-                vc_hit_dirty = vc_entries[i].dirty;
+                // load hit: return already formatted data
+                if (req_is_load) begin
+                    vc_load_resp_lq_index = lq_index;
+                    unique case (d_request_size)
+                        BYTE: begin
+                            vc_load_resp_data = d_req_unsigned ?
+                                {{24{1'b0}}, vc_entries[i].data.byte_level[d_request_offset]} :
+                                {{24{vc_entries[i].data.byte_level[d_request_offset][7]}},
+                                 vc_entries[i].data.byte_level[d_request_offset]};
+                        end
+
+                        HALF: begin
+                            vc_load_resp_data = d_req_unsigned ?
+                                {{16{1'b0}}, vc_entries[i].data.half_level[d_request_offset[2:1]]} :
+                                {{16{vc_entries[i].data.half_level[d_request_offset[2:1]][15]}},
+                                 vc_entries[i].data.half_level[d_request_offset[2:1]]};
+                        end
+                        WORD: begin
+                            vc_load_resp_data =
+                                vc_entries[i].data.word_level[d_request_offset[2]];
+                        end
+                        default: begin
+                            vc_load_resp_data = '0;
+                        end
+                    endcase
+                end
                 if (!req_is_load )begin
                     vc_store_ready = 1'b1;
                     store_updated_block = store_into_block( //store block if the hit is a store 
                         vc_entries[i].data,
-                        vc_store_offset,
-                        vc_store_size,
+                        d_request_offset,
+                        d_request_size,
                         vc_store_data
                     );
 
                     next_vc_entries[i].data  = store_updated_block; //store completion
                     next_vc_entries[i].dirty = 1'b1;
-
-                    old_lru = vc_entries[i].valid ? vc_entries[i].lru_val : 'd0;
-                    next_vc_entries[i].lru_val = VC_LINES - 1;
-
-                    for (int j = 0; j < VC_LINES; j++) begin
-                        if (j != i) begin
-                            next_vc_entries[j].lru_val =
-                                (vc_entries[j].valid &&
-                                vc_entries[j].lru_val > old_lru) ?
-                                vc_entries[j].lru_val - 1 :
-                                vc_entries[j].lru_val;
-                        end
-                    end     
                 end
-                if (req_is_load) begin
-                    old_lru = vc_entries[i].valid ? vc_entries[i].lru_val : 'd0;
-                    next_vc_entries[i].lru_val = VC_LINES - 1;
+                // load hit lru update
+                
+                old_lru = vc_entries[i].valid ? vc_entries[i].lru_val : 'd0;
+                next_vc_entries[i].lru_val = VC_LINES - 1;
 
-                    for (int j = 0; j < VC_LINES; j++) begin
-                        if (j != i) begin
-                            next_vc_entries[j].lru_val =
-                                (vc_entries[j].valid &&
-                                vc_entries[j].lru_val > old_lru) ?
-                                vc_entries[j].lru_val - 1 :
-                                vc_entries[j].lru_val;
-                        end
+                for (int j = 0; j < VC_LINES; j++) begin
+                    if (j != i) begin
+                        next_vc_entries[j].lru_val =
+                            (vc_entries[j].valid &&
+                            vc_entries[j].lru_val > old_lru) ?
+                            vc_entries[j].lru_val - 1 :
+                            vc_entries[j].lru_val;
                     end
                 end
             end
-            
         end
        ////////////////
        ///INPUT
@@ -217,17 +212,14 @@ module victim_cache #(
                     evict_idx       = VC_WAY_BITS'(i);
                 end
             end
-
-            if( found_evict_way && vc_entries[evict_idx].valid && vc_entries[evict_idx].dirty) begin
-                next_need_request = 1'b1;
-                next_wb_addr = {
-                    vc_entries[evict_idx].tag,
-                    vc_entries[evict_idx].set,
-                    {OFFSET_BITS{1'b0}}
-                };
-                next_wb_data = vc_entries[evict_idx].data;
-                next_req_state = REQ_WAIT_ACCEPT;
+            //store eviction
+            if( found_evict_way && vc_entries[evict_idx].valid && vc_entries[evict_idx].dirty && !wb_full) begin
+                vc_wb_valid = 1'b1;
+                vc_wb_tag   = vc_entries[evict_idx].tag;
+                vc_wb_set   = vc_entries[evict_idx].set;
+                vc_wb_data  = vc_entries[evict_idx].data;
             end
+
             next_vc_entries[evict_idx].valid = 1'b1;
             next_vc_entries[evict_idx].dirty = dcache_evicted_dirty;
             next_vc_entries[evict_idx].tag   = dcache_evicted_tag;
@@ -248,36 +240,15 @@ module victim_cache #(
                 end
             end
         end
-
-        if(need_request) begin
-            vc2mem_command = MEM_STORE;
-            vc2mem_addr = wb_addr;
-            vc2mem_data = write_data;
-            vc_requesting = 1'b1;
-            if(grant && mem2proc_transaction_tag != 'd0) begin
-                next_need_request = 1'b0;
-            end
-        end   
-            
-    end
-        
+     
+    end  
     always_ff @(posedge clock) begin
         if (reset) begin
-            req_state <= REQ_IDLE;
-            wb_addr   <= '0;
-            wb_data   <= '0;
-            need_request <= '0;
-
             for (int i = 0; i < VC_LINES; i++) begin
                 vc_entries[i] <= '0;
             end
         end
         else begin
-            req_state <= next_req_state;
-            wb_addr   <= next_wb_addr;
-            wb_data   <= next_wb_data;
-            need_request <=next_need_request;
-
             for (int i = 0; i < VC_LINES; i++) begin
                 vc_entries[i] <= next_vc_entries[i];
             end

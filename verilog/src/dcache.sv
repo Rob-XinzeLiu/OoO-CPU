@@ -9,11 +9,6 @@ module Dcache
 )(
     input   logic            clock,
     input   logic            reset,
-    //input   INST             inst,
-    //in/put   ADDR            request_address,
-    //input   logic            req_is_load, 
-    //input   DATA             req_store_data,
-    //input   logic            req_valid,
     input   LQ_PACKET        load_req_pack,
     input   SQ_PACKET        store_req_pack,
     
@@ -24,19 +19,16 @@ module Dcache
 
     input   logic            grant,
 
-
     output  dcache_data_t    cache_resp_data, // slot 2 will be for cache miss loads
-    //output  logic            cache_ready, // it is ready while the miss queue is not full
     output  miss_request_t   miss_request,
 
-    output MEM_COMMAND      vc2mem_command,
-    output ADDR             vc2mem_addr,
-    output MEM_BLOCK        vc2mem_data,
-    output MEM_SIZE         vc2mem_size,
+    output MEM_COMMAND      wb2mem_command,
+    output ADDR             wb2mem_addr,
+    output MEM_BLOCK        wb2mem_data,
+    output MEM_SIZE         wb2mem_size,
 
     output logic           dcache_can_accept_store,
     output logic           dcache_can_accept_load,
-    output logic           vc_requesting,
 
     //for memory unified file
     output logic [WAYS-1:0][SETS-1:0][$bits(MEM_BLOCK)-1:0] dcache_debug_data,
@@ -49,7 +41,7 @@ module Dcache
     localparam int TAG_BITS    = ADDR_BITS - OFFSET_BITS - SET_BITS;
 
     MEM_SIZE d_request_size;
-    logic                    d_req_unsigned;
+    logic  d_req_unsigned;
 
     miss_request_t next_miss_request;
 
@@ -136,19 +128,32 @@ module Dcache
 
     logic req_valid;
     assign req_valid = load_req_pack.valid || store_req_pack.valid || (com_miss_req.valid && com_miss_req.dep_miss); // only consider miss request if it's dependent on another miss, otherwise it will be handled in the same way as a new request from the core
-    // VC signals
+    /////////////////
+    ////VC signals
+    //////////////////
     logic                    vc_hit;
-    MEM_BLOCK                vc_hit_data;
-    logic                    vc_hit_dirty;
-    logic                    vc_evicted_ready;
-    logic                    vc_lookup_valid;
+    DATA                     vc_load_resp_data;
+    LQ_IDX                         vc_load_resp_lq_index;
 
+    logic                          vc_wb_valid;
+    logic [`DCACHE_TAG_BITS-1:0]   vc_wb_tag;
+    logic [`DCACHE_SET_BITS-1:0]   vc_wb_set;
+    MEM_BLOCK                      vc_wb_data;
+    
     logic                    dcache_evicted_valid;
     logic [`DCACHE_TAG_BITS-1:0] dcache_evicted_tag;
     logic [`DCACHE_SET_BITS-1:0] dcache_evicted_set;
     MEM_BLOCK                dcache_evicted_data;
     logic                    dcache_evicted_dirty;
-    logic                    vc_store_ready;
+    //////////////////////////////
+    //    WRITE BUFFER SIGNALS ///
+    /////////////////////////////
+
+    logic wb_hit;
+    ADDR wb_hit_addr;
+    LQ_IDX wb_hit_lq_index;
+    DATA wb_load_data;
+    logic wb_full;
  
     //LRU LOGIC STUFF
     logic [$clog2(WAYS)-1:0] old_lru_index_hit;
@@ -156,8 +161,11 @@ module Dcache
     logic                    found_way_miss;
     logic [$clog2(WAYS)-1:0] way_index_miss;
     logic [$clog2(WAYS)-1:0] old_lru_index_miss;
-    
-    assign vc_lookup_valid = req_valid && !hit && cache_ready; // only look up when not refilling
+
+    logic wb_lookup_valid;
+
+    assign wb_lookup_valid = req_valid && cache_ready;
+    assign vc_lookup_valid = req_valid && cache_ready; // only look up when not refilling
 
     logic is_valid_load;
     logic is_valid_store;
@@ -272,7 +280,6 @@ module Dcache
 
                     data_wdata[way_index_miss] = merged_store_data;
                     next_cache_tags[com_miss_req.miss_req_set][way_index_miss].dirty = 1'b1;
-
                 end
     
                 if (cache_tags[com_miss_req.miss_req_set][way_index_miss].valid) begin
@@ -285,7 +292,6 @@ module Dcache
                     dcache_evicted_data  = MEM_BLOCK'(data_rdata[way_index_miss][0]); //should this change as well?
                     dcache_evicted_dirty = cache_tags[com_miss_req.miss_req_set][way_index_miss].dirty;
                 end
-
                 if (!dcache_evicted_valid || vc_evicted_ready) begin  // update lru logic here
                     old_lru_index_miss =
                         cache_tags[com_miss_req.miss_req_set][way_index_miss].valid ?
@@ -327,7 +333,7 @@ module Dcache
                     next_cache_tags[d_request_set][i].lru_val = WAYS - 'd1;
                 end
             end
-            if (!hit && !vc_hit && req_valid && cache_ready) begin
+            if (!hit && !vc_hit && !wb_hit &&req_valid && cache_ready) begin
                 next_miss_request.valid             = 1'b1;
                 next_miss_request.miss_req_address  = load_req_pack.valid ? load_req_pack.addr : store_req_pack.valid ? store_req_pack.addr : '0;
                 next_miss_request.miss_req_tag      = d_request_tag;
@@ -339,6 +345,7 @@ module Dcache
                 next_miss_request.miss_req_data     = !load_req_pack.valid ? store_req_pack.data : '0; 
                 next_miss_request.lq_index          = load_req_pack.lq_index;
             end
+
             if(hit && is_valid_load) begin
                 cache_resp_data.valid   = 1'b1;
                 cache_resp_data.lq_index = com_miss_req.dep_miss ? com_miss_req.lq_index : load_req_pack.lq_index;
@@ -386,37 +393,16 @@ module Dcache
             end
             // Vc Load hit
             if (vc_hit && load_req_pack.valid) begin
-                unique case (d_request_size)
-                    BYTE: begin
-                        cache_resp_data.data = d_req_unsigned ?
-                            {{24{1'b0}}, vc_hit_data.byte_level[d_request_offset]} :
-                            {{24{vc_hit_data.byte_level[d_request_offset][7]}},
-                            vc_hit_data.byte_level[d_request_offset]};
-                    end
-                    HALF: begin
-                        cache_resp_data.data = d_req_unsigned ?
-                            {{16{1'b0}}, vc_hit_data.half_level[d_request_offset[2:1]]} :
-                            {{16{vc_hit_data.half_level[d_request_offset[2:1]][15]}},
-                            vc_hit_data.half_level[d_request_offset[2:1]]};
-                    end
-                    WORD: begin
-                        cache_resp_data.data = vc_hit_data.word_level[d_request_offset[2]];
-                    end
-                    default: begin
-                        cache_resp_data.data = '0;
-                    end
-                endcase
+                cache_resp_data.valid   = 1'b1;
+                cache_resp_data.lq_index = vc_load_resp_lq_index;
+                cache_resp_data.data = vc_load_resp_data;
+            end
+            if(wb_hit && load_req_pack.valid) begin
+                cache_resp_data.valid   = 1'b1;
+                cache_resp_data.lq_index = wb_hit_lq_index;
+                cache_resp_data.data = wb_load_data;
             end
         end   
-    end
-
-    // logic record_miss;
-    // assign record_miss = req_valid && cache_ready && !hit && !vc_hit;
-
-    always_comb begin
-
-
-
     end
 
     always_ff @(posedge clock) begin
@@ -429,28 +415,27 @@ module Dcache
             miss_request <= next_miss_request; 
         end
     end
-
-
-    victim_cache #(.VC_LINES(4)) vc (
+ 
+    victim_cache vc (
         .clock                (clock),
         .reset                (reset),
 
         // dcache miss lookup
         .dcache_miss_req_valid(vc_lookup_valid), //valid request and not hit
-        .req_is_load          (load_req_pack.valid),     
+        .req_is_load          (is_valid_load),     
         .dcache_miss_req_tag  (d_request_tag),
         .dcache_miss_req_set  (d_request_set),
-        .lq_index             (load_req_pack.lq_index),
-        .grant(grant),
-        .vc_hit               (vc_hit),
-        .vc_hit_data          (vc_hit_data),
-        .vc_hit_dirty         (vc_hit_dirty),
+        .d_request_offset       (d_request_offset),
+        .d_request_size         (d_request_size),
+        .d_req_unsigned         (d_req_unsigned),
+        .lq_index             (load_req_pack.valid ? load_req_pack.lq_index : '0),
+        .wb_full                (wb_full),
 
-        // store update from dcache
-        .vc_store_offset      (d_request_offset),
-        .vc_store_size        (d_request_size),
-        .vc_store_data        (store_req_pack.data),
-        .vc_store_ready       (vc_store_ready),
+        .vc_hit                   (vc_hit),
+        .vc_load_resp_data       (vc_load_resp_data),
+        .vc_load_resp_lq_index   (vc_load_resp_lq_index),
+
+        .vc_store_data        (store_req_pack.valid ? store_req_pack.data : '0),
 
         // dcache eviction into VC
         .dcache_evicted_valid (dcache_evicted_valid),
@@ -458,21 +443,44 @@ module Dcache
         .dcache_evicted_set   (dcache_evicted_set),
         .dcache_evicted_data  (dcache_evicted_data),
         .dcache_evicted_dirty (dcache_evicted_dirty),
-        .dcache_evicted_ready (vc_evicted_ready),
 
-        // vc write to mem 
-        .mem2proc_transaction_tag(mem2proc_transaction_tag),
-        .vc2mem_command       (vc2mem_command),
-        .vc2mem_addr          (vc2mem_addr),
-        .vc2mem_data          (vc2mem_data),
-        .vc2mem_size          (vc2mem_size),
-        .vc_requesting        (vc_requesting)
+        .vc_wb_valid          (vc_wb_valid),
+        .vc_wb_tag            (vc_wb_tag),
+        .vc_wb_set            (vc_wb_set),
+        .vc_wb_data           (vc_wb_data)
     );
+ 
+    write_buffer wb(
+        .clock(clock),
+        .reset(reset),
+        // from dcache
+        .dcache_miss_req_valid(wb_lookup_valid),
+        .req_is_load(is_valid_load),
+        .dcache_miss_addr(curr_req_addr),
+        .dcache_miss_req_tag(d_request_tag),
+        .dcache_miss_req_set(d_request_set),
+        .dcache_miss_req_size(d_request_size),
+        .dcache_miss_req_unsigned(d_req_unsigned),
+        .dcache_miss_req_store_data(store_req_pack.valid ? store_req_pack.data : '0),
+        .lq_index(load_req_pack.valid ? load_req_pack.lq_index : '0),
 
+        //output
+        .wb_hit(wb_hit),
+        .wb_hit_addr(wb_hit_addr),
+        .wb_hit_lq_index(wb_hit_lq_index),
+        .wb_load_data(wb_load_data),
+        // to mem
+        .vcache_data_valid(vc_wb_valid),
+        .vcache_data(vc_wb_data),
+        .vcache_evicted_tag(vc_wb_tag),
+        .vcache_evicted_set(vc_wb_set),  
 
-    /// write buffer
-    //clock
-    //reset
-    //tag, set, if it is a load or store 
-
+        .grant(grant),
+        .wb_full(wb_full),
+        .mem2proc_transaction_tag(mem2proc_transaction_tag),
+        .wb2mem_command(wb2mem_command),
+        .wb2mem_addr(wb2mem_addr),
+        .wb2mem_data(wb2mem_data),
+        .wb2mem_size(wb2mem_size)
+    );
 endmodule

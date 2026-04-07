@@ -174,10 +174,10 @@ module cpu (
 
     dcache_data_t         cache_resp_data; 
     miss_request_t        miss_request;
-    MEM_COMMAND           vc2mem_command;
-    ADDR                  vc2mem_addr;
-    MEM_BLOCK             vc2mem_data;
-    MEM_SIZE              vc2mem_size;
+    MEM_COMMAND           wb2mem_command;
+    ADDR                  wb2mem_addr;
+    MEM_BLOCK             wb2mem_data;
+    MEM_SIZE              wb2mem_size;
     logic                 dcache_can_accept_store;
     logic                 dcache_can_accept_load;
 
@@ -236,30 +236,32 @@ module cpu (
     //                Memory Outputs                //
     //                                              //
     //////////////////////////////////////////////////
-    logic icache_gnt, mshr_gnt, dcache_store_gnt;
+    logic icache_gnt, mshr_gnt, wb_gnt;
     logic unanswered_miss, mshr_wait_for_trans, vc_requesting;
 
     always_comb begin
         icache_gnt = 1'b0;
         mshr_gnt   = 1'b0;
-        dcache_store_gnt = 1'b0;
+        wb_gnt = 1'b0;
         //proc2mem_command = MEM_NONE;
 
 
-        if(mshr2mem_command == MEM_LOAD && (!(unanswered_miss || vc_requesting) || mshr_wait_for_trans)) begin
+        if(mshr2mem_command == MEM_LOAD) begin
             mshr_gnt = 1'b1;
             proc2mem_command = mshr2mem_command;
             proc2mem_size    = mshr2mem_size;
             proc2mem_addr    = mshr2mem_addr;
             proc2mem_data    = '0;
         end
-        else if(vc2mem_command == MEM_STORE && (!(unanswered_miss || mshr_wait_for_trans) || vc_requesting) )begin 
-            dcache_store_gnt = 1'b1;
-            proc2mem_command = vc2mem_command;
-            proc2mem_size    = vc2mem_size;
-            proc2mem_addr    = vc2mem_addr;
-            proc2mem_data    = vc2mem_data;
-        end else if (!(vc_requesting || mshr_wait_for_trans)) begin
+        ///TODO: CHANGE COMMANDS
+        else if(wb2mem_command == MEM_STORE)begin 
+            wb_gnt = 1'b1;
+            proc2mem_command = wb2mem_command;
+            proc2mem_size    = wb2mem_size;
+            proc2mem_addr    = wb2mem_addr;
+            proc2mem_data    = wb2mem_data;
+
+        end else if begin
             icache_gnt       = (Imem_command != MEM_NONE);
             proc2mem_command = Imem_command;
             proc2mem_size    = DOUBLE;
@@ -835,16 +837,15 @@ module cpu (
         .miss_returned(miss_returned),//missing
         .miss_queue_full(miss_queue_full),
         .mem2proc_transaction_tag(mem2proc_transaction_tag),
-        .grant(dcache_store_gnt),
+        .grant(wb_gnt),
         .cache_resp_data(cache_resp_data),
         .miss_request(miss_request),
-        .vc2mem_command(vc2mem_command),
-        .vc2mem_addr(vc2mem_addr),
-        .vc2mem_data(vc2mem_data),
-        .vc2mem_size(vc2mem_size),
+        .wb2mem_command(wb2mem_command),
+        .wb2mem_addr(wb2mem_addr),
+        .wb2mem_data(wb2mem_data),
+        .wb2mem_size(wb2mem_size),
         .dcache_can_accept_store(dcache_can_accept_store),
         .dcache_can_accept_load(dcache_can_accept_load),
-        .vc_requesting(vc_requesting),
         .dcache_debug_data(dcache_debug_data),
         .dcache_debug_tags(dcache_debug_tags)
     );
