@@ -20,7 +20,7 @@ module Dcache
     input   logic            grant,
 
     output  dcache_data_t    cache_resp_data, // slot 2 will be for cache miss loads
-    output  miss_request_t   miss_request,
+    output  miss_request_t   miss_request, 
 
     output MEM_COMMAND      wb2mem_command,
     output ADDR             wb2mem_addr,
@@ -43,7 +43,7 @@ module Dcache
     MEM_SIZE d_request_size;
     logic  d_req_unsigned;
 
-    miss_request_t next_miss_request;
+    //miss_request_t miss_request;
 
     cache_tag_t cache_tags [SETS-1:0][WAYS-1:0];
     cache_tag_t next_cache_tags [SETS-1:0][WAYS-1:0];
@@ -119,7 +119,8 @@ module Dcache
     assign d_request_set    = curr_req_addr[OFFSET_BITS + SET_BITS - 1 : OFFSET_BITS];
     assign d_request_offset = curr_req_addr[OFFSET_BITS-1:0];
 
-    assign cache_ready = !miss_queue_full && !(miss_returned && !com_miss_req.dep_miss);
+    logic vcache_accept;
+    assign cache_ready = vcache_accept && !miss_queue_full && !(miss_returned && !com_miss_req.dep_miss);
     
     logic load_req_active;
     assign load_req_active         = load_req_pack.valid;
@@ -189,7 +190,7 @@ module Dcache
 
     always_comb begin 
         next_cache_tags   = cache_tags;
-        next_miss_request = '0;
+        miss_request = '0;
         cache_resp_data = '0;
         hit     = 1'b0;
         hit_way = '0;
@@ -292,7 +293,7 @@ module Dcache
                     dcache_evicted_data  = MEM_BLOCK'(data_rdata[way_index_miss][0]); //should this change as well?
                     dcache_evicted_dirty = cache_tags[com_miss_req.miss_req_set][way_index_miss].dirty;
                 end
-                if (!dcache_evicted_valid || vc_evicted_ready) begin  // update lru logic here
+                  // update lru logic here
                     old_lru_index_miss =
                         cache_tags[com_miss_req.miss_req_set][way_index_miss].valid ?
                         cache_tags[com_miss_req.miss_req_set][way_index_miss].lru_val : 'd0;
@@ -309,7 +310,7 @@ module Dcache
                                     cache_tags[com_miss_req.miss_req_set][i].lru_val - 'd1;
                             end
                     end
-                end
+                
             end
         end else begin
             
@@ -334,16 +335,16 @@ module Dcache
                 end
             end
             if (!hit && !vc_hit && !wb_hit &&req_valid && cache_ready) begin
-                next_miss_request.valid             = 1'b1;
-                next_miss_request.miss_req_address  = load_req_pack.valid ? load_req_pack.addr : store_req_pack.valid ? store_req_pack.addr : '0;
-                next_miss_request.miss_req_tag      = d_request_tag;
-                next_miss_request.miss_req_set      = d_request_set;
-                next_miss_request.miss_req_offset   = d_request_offset;
-                next_miss_request.req_is_load       = load_req_pack.valid;
-                next_miss_request.miss_req_size     = d_request_size;
-                next_miss_request.miss_req_unsigned = d_req_unsigned;
-                next_miss_request.miss_req_data     = !load_req_pack.valid ? store_req_pack.data : '0; 
-                next_miss_request.lq_index          = load_req_pack.lq_index;
+                miss_request.valid             = 1'b1;
+                miss_request.miss_req_address  = load_req_pack.valid ? load_req_pack.addr : store_req_pack.valid ? store_req_pack.addr : '0;
+                miss_request.miss_req_tag      = d_request_tag;
+                miss_request.miss_req_set      = d_request_set;
+                miss_request.miss_req_offset   = d_request_offset;
+                miss_request.req_is_load       = load_req_pack.valid;
+                miss_request.miss_req_size     = d_request_size;
+                miss_request.miss_req_unsigned = d_req_unsigned;
+                miss_request.miss_req_data     = !load_req_pack.valid ? store_req_pack.data : '0; 
+                miss_request.lq_index          = load_req_pack.lq_index;
             end
 
             if(hit && is_valid_load) begin
@@ -369,7 +370,16 @@ module Dcache
                         cache_resp_data.data = '0;
                     end
                 endcase
+            end else if (vc_hit && load_req_pack.valid) begin
+                cache_resp_data.valid   = 1'b1;
+                cache_resp_data.lq_index = vc_load_resp_lq_index;
+                cache_resp_data.data = vc_load_resp_data;
+            end else if(wb_hit && load_req_pack.valid) begin
+                cache_resp_data.valid   = 1'b1;
+                cache_resp_data.lq_index = wb_hit_lq_index;
+                cache_resp_data.data = wb_load_data;
             end
+
             if(hit && is_valid_store)begin
                 merged_store_data = selected_read_data;
                 data_we[hit_way]    = 1'b1;
@@ -391,28 +401,17 @@ module Dcache
                 endcase
                 data_wdata[hit_way] = merged_store_data;
             end
-            // Vc Load hit
-            if (vc_hit && load_req_pack.valid) begin
-                cache_resp_data.valid   = 1'b1;
-                cache_resp_data.lq_index = vc_load_resp_lq_index;
-                cache_resp_data.data = vc_load_resp_data;
-            end
-            if(wb_hit && load_req_pack.valid) begin
-                cache_resp_data.valid   = 1'b1;
-                cache_resp_data.lq_index = wb_hit_lq_index;
-                cache_resp_data.data = wb_load_data;
-            end
         end   
     end
 
     always_ff @(posedge clock) begin
         if (reset) begin 
             cache_tags    <= {default: '0};
-            miss_request  <= '0;
+            //miss_request  <= '0;
         end
         else begin
             cache_tags <= next_cache_tags;
-            miss_request <= next_miss_request; 
+            //miss_request <= miss_request; 
         end
     end
  
@@ -438,6 +437,7 @@ module Dcache
         .vc_store_data        (store_req_pack.valid ? store_req_pack.data : '0),
 
         // dcache eviction into VC
+        .vcache_accept        (vcache_accept),
         .dcache_evicted_valid (dcache_evicted_valid),
         .dcache_evicted_tag   (dcache_evicted_tag),
         .dcache_evicted_set   (dcache_evicted_set),

@@ -12,7 +12,7 @@ echo_color() {
 }
 
 echo "Comparing ground truth outputs to new processor"
-cd /home/xinzeliu/eecs472/pfinal_472-w26.group8
+cd /home/cargarci/eecs472/final_proj/pfinal_472-w26.group8
 
 total=0
 pass=0

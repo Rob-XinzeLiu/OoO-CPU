@@ -29,6 +29,7 @@ module victim_cache #(
     input  DATA                           vc_store_data,
 
     // dcache eviction into VC
+    output logic                          vcache_accept,
     input  logic                          dcache_evicted_valid,
     input  logic [`DCACHE_TAG_BITS-1:0]   dcache_evicted_tag,
     input  logic [`DCACHE_SET_BITS-1:0]   dcache_evicted_set,
@@ -109,6 +110,8 @@ module victim_cache #(
         end
     endfunction
 
+    assign vcache_accept = !wb_full;
+
     always_comb begin
         next_vc_entries = vc_entries;
         found_hit = 1'b0;
@@ -130,9 +133,6 @@ module victim_cache #(
         lru_update_idx = '0;
 
         vc_hit         = 1'b0;
-        vc_hit_data    = '0;
-        vc_hit_dirty   = '0;
-        vc_store_ready = 1'b0;
 
 
         // lookup
@@ -171,7 +171,6 @@ module victim_cache #(
                     endcase
                 end
                 if (!req_is_load )begin
-                    vc_store_ready = 1'b1;
                     store_updated_block = store_into_block( //store block if the hit is a store 
                         vc_entries[i].data,
                         d_request_offset,
@@ -225,7 +224,6 @@ module victim_cache #(
             next_vc_entries[evict_idx].tag   = dcache_evicted_tag;
             next_vc_entries[evict_idx].set   = dcache_evicted_set;
             next_vc_entries[evict_idx].data  = dcache_evicted_data;
-            next_vc_entries[evict_idx].lq_index = lq_index;
 
             old_lru = vc_entries[evict_idx].valid ? vc_entries[evict_idx].lru_val : 'd0;
             next_vc_entries[evict_idx].lru_val = VC_LINES - 1;

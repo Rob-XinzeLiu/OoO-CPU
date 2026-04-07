@@ -1,4 +1,4 @@
-include "sys_defs.svh"
+`include "sys_defs.svh"
 
 module write_buffer #(
     parameter int ENTRIES = 8
@@ -181,7 +181,7 @@ module write_buffer #(
             count <= 'd0;
             head <= 'd0;
             tail <= 'd0;
-            write_buffer <= 'd0;
+            write_buffer <= {default: '0};
         end
         else begin
             write_buffer <= next_write_buffer;
@@ -190,4 +190,5 @@ module write_buffer #(
             tail <= next_tail;
         end 
     end
-    
+
+endmodule

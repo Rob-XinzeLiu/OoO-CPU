@@ -261,7 +261,7 @@ module cpu (
             proc2mem_addr    = wb2mem_addr;
             proc2mem_data    = wb2mem_data;
 
-        end else if begin
+        end else begin
             icache_gnt       = (Imem_command != MEM_NONE);
             proc2mem_command = Imem_command;
             proc2mem_size    = DOUBLE;

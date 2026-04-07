@@ -129,7 +129,7 @@ module load_queue(
                 lq_out_next.dest_tag = lq[LQ_IDX'(head+i)].dest_tag;
                 lq_out_next.data = lq[LQ_IDX'(head+i)].data;
                 lq_out_next.rob_index = lq[LQ_IDX'(head+i)].rob_index;
-                lq_n[LQ_IDX'(head+i)].valid = '0;
+                lq_n[LQ_IDX'(head+i)] = '0;
                 break;
             end
         end
