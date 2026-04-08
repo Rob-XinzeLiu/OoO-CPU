@@ -9,6 +9,7 @@
 
 `ifndef __SYS_DEFS_SVH__
 `define __SYS_DEFS_SVH__
+`include "ISA.svh"
 
 // all files should `include "sys_defs.svh" to at least define the timescale
 `timescale 1ns/100ps
