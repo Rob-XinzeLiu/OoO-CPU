@@ -54,6 +54,13 @@ module testbench;
     MEM_SIZE    proc2mem_size;
 
     RETIRE_PACKET [`N-1:0] committed_insts;
+
+
+    MEM_BLOCK    dcache_debug_data[`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0];
+    cache_tag_t  dcache_debug_tags[`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0];
+    vc_entry_t   debug_vc_entries[`VC_LINES-1: 0];
+    wb_entry_t   debug_write_buff[`WB_ENTRIES-1: 0];
+
     EXCEPTION_CODE error_status = NO_ERROR;
 
     ADDR  if_NPC_dbg;
@@ -73,6 +80,7 @@ module testbench;
     logic mem_wb_valid_dbg;
 
 
+
     // Instantiate the Pipeline
     cpu verisimpleV (
         // Inputs
@@ -90,7 +98,11 @@ module testbench;
         .proc2mem_size    (proc2mem_size),
 `endif
 
-        .committed_insts (committed_insts)
+        .committed_insts (committed_insts),
+        .dcache_debug_data(dcache_debug_data),
+        .dcache_debug_tags(dcache_debug_tags),
+        .debug_vc_entries(debug_vc_entries),
+        .debug_write_buff(debug_write_buff)
 
         // .if_NPC_dbg       (if_NPC_dbg),
         // .if_inst_dbg      (if_inst_dbg),
@@ -303,25 +315,167 @@ module testbench;
 
     // Show contents of Unified Memory in both hex and decimal
     // Also output the final processor status
+
+    function automatic logic dcache_has_line(
+        input int mem_line_idx,
+        output MEM_BLOCK line_data
+    );
+        int set_idx;
+        int tag_val;
+        begin
+            dcache_has_line = 1'b0;
+            line_data = '0;
+
+            set_idx = mem_line_idx % `DCACHE_SETS;
+            tag_val = mem_line_idx / `DCACHE_SETS;
+
+            for (int w = 0; w < `DCACHE_WAYS; w++) begin
+                if (!dcache_has_line &&
+                    dcache_debug_tags[set_idx][w].valid &&
+                    dcache_debug_tags[set_idx][w].tag == tag_val) begin
+                    line_data = dcache_debug_data[set_idx][w];
+                    dcache_has_line = 1'b1;
+                end
+            end
+        end
+    endfunction
+    function automatic logic vc_has_line(
+        input int mem_line_idx,
+        output MEM_BLOCK line_data
+    );
+        int set_idx;
+        int tag_val;
+        begin
+            vc_has_line = 1'b0;
+            line_data   = '0;
+
+            set_idx = mem_line_idx % `DCACHE_SETS;
+            tag_val = mem_line_idx / `DCACHE_SETS;
+
+            for (int i = 0; i < `VC_LINES; i++) begin
+                if (!vc_has_line &&
+                    debug_vc_entries[i].valid &&
+                    debug_vc_entries[i].tag == tag_val &&
+                    debug_vc_entries[i].set == set_idx) begin
+                    line_data   = debug_vc_entries[i].data;
+                    vc_has_line = 1'b1;
+                end
+            end
+        end
+    endfunction
+
+    function automatic logic wb_has_line(
+        input int mem_line_idx,
+        output MEM_BLOCK line_data
+    );
+        int set_idx;
+        int tag_val;
+        begin
+            wb_has_line = 1'b0;
+            line_data   = '0;
+
+            set_idx = mem_line_idx % `DCACHE_SETS;
+            tag_val = mem_line_idx / `DCACHE_SETS;
+
+            for (int i = 0; i < `WB_ENTRIES; i++) begin
+                if (!wb_has_line &&
+                    debug_write_buff[i].valid &&
+                    debug_write_buff[i].tag == tag_val &&
+                    debug_write_buff[i].set == set_idx) begin
+                    line_data   = debug_write_buff[i].data;
+                    wb_has_line = 1'b1;
+                end
+            end
+        end
+    endfunction
+
+    function automatic MEM_BLOCK get_final_line_data(
+        input int mem_line_idx
+    );
+        MEM_BLOCK line_data;
+        begin
+            if (dcache_has_line(mem_line_idx, line_data)) begin
+                get_final_line_data = line_data;
+            end
+            else if (wb_has_line(mem_line_idx, line_data)) begin
+                get_final_line_data = line_data;
+            end
+            else if (vc_has_line(mem_line_idx, line_data)) begin
+                get_final_line_data = line_data;
+            end
+            else begin
+                get_final_line_data = memory.unified_memory[mem_line_idx];
+            end
+        end
+    endfunction
+
+    
+
     task show_final_mem_and_status;
         input EXCEPTION_CODE final_status;
         int showing_data;
+        MEM_BLOCK final_line;
         begin
             $fdisplay(out_fileno, "\nFinal memory state and exit status:\n");
             $fdisplay(out_fileno, "@@@ Unified Memory contents hex on left, decimal on right: ");
             $fdisplay(out_fileno, "@@@");
             showing_data = 0;
+
             for (int k = 0; k <= `MEM_64BIT_LINES - 1; k = k+1) begin
-                if (memory.unified_memory[k] != 0) begin
-                    $fdisplay(out_fileno, "@@@ mem[%5d] = %x : %0d", k*8, memory.unified_memory[k],
-                                                             memory.unified_memory[k]);
+                final_line = get_final_line_data(k);
+
+                if (final_line != 0) begin
+                    $fdisplay(out_fileno, "@@@ mem[%5d] = %x : %0d", k*8, final_line, final_line);
                     showing_data = 1;
                 end else if (showing_data != 0) begin
                     $fdisplay(out_fileno, "@@@");
                     showing_data = 0;
                 end
+                // if (k == 559) begin
+                //     $fdisplay(out_fileno, "FINAL LINE k=%0d final_line=%h", k, final_line);
+
+                //     for (int w = 0; w < `DCACHE_WAYS; w++) begin
+                //         $fdisplay(out_fileno,
+                //             "TB set7 way%0d: valid=%0d tag=%0d data=%h",
+                //             w,
+                //             dcache_debug_tags[7][w].valid,
+                //             dcache_debug_tags[7][w].tag,
+                //             dcache_debug_data[7][w]
+                //         );
+                //     end
+
+                //     for (int w = 0; w < `DCACHE_WAYS; w++) begin
+                //         $fdisplay(out_fileno,
+                //             "CPU set7 way%0d: valid=%0d tag=%0d data=%h",
+                //             w,
+                //             verisimpleV.dcache_debug_tags[7][w].valid,
+                //             verisimpleV.dcache_debug_tags[7][w].tag,
+                //             verisimpleV.dcache_debug_data[7][w]
+                //         );
+                //     end
+
+                //     for (int w = 0; w < `DCACHE_WAYS; w++) begin
+                //         $fdisplay(out_fileno,
+                //             "INT set7 way%0d: valid=%0d tag=%0d data=%h",
+                //             w,
+                //             verisimpleV.dcache.dcache_debug_tags[7][w].valid,
+                //             verisimpleV.dcache.dcache_debug_tags[7][w].tag,
+                //             verisimpleV.dcache.dcache_debug_data[7][w]
+                //         );
+                //     end
+
+                //     for (int w = 0; w < `DCACHE_WAYS; w++) begin
+                //         $fdisplay(out_fileno,
+                //             "RAW way%0d set7 data=%h",
+                //             w,
+                //             verisimpleV.dcache.way_debug_mem[w][7]
+                //         );
+                //     end
+                // end
             end
+
             $fdisplay(out_fileno, "@@@");
+            
 
             case (final_status)
                 LOAD_ACCESS_FAULT: $fdisplay(out_fileno, "@@@ System halted on memory error");

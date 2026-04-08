@@ -31,8 +31,10 @@ module Dcache
     output logic           dcache_can_accept_load,
 
     //for memory unified file
-    output logic [WAYS-1:0][SETS-1:0][$bits(MEM_BLOCK)-1:0] dcache_debug_data,
-    output cache_tag_t [SETS-1:0][WAYS-1:0] dcache_debug_tags
+    output MEM_BLOCK        dcache_debug_data[`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0],
+    output cache_tag_t      dcache_debug_tags [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0],
+    output vc_entry_t       debug_vc_entries[`VC_LINES-1: 0],
+    output wb_entry_t       debug_write_buff[`WB_ENTRIES-1: 0]
 );
 
     localparam int ADDR_BITS   = $bits(ADDR);
@@ -48,13 +50,6 @@ module Dcache
     cache_tag_t cache_tags [SETS-1:0][WAYS-1:0];
     cache_tag_t next_cache_tags [SETS-1:0][WAYS-1:0];
 
-    always_comb begin
-        for (int s = 0; s < SETS; s++) begin
-            for (int w = 0; w < WAYS; w++) begin
-                dcache_debug_tags[s][w] = cache_tags[s][w];
-            end
-        end
-    end
     logic [TAG_BITS-1:0]     d_request_tag;
     logic [SET_BITS-1:0]     d_request_set;
     logic [OFFSET_BITS-1:0]  d_request_offset;
@@ -81,9 +76,7 @@ module Dcache
     logic [WAYS-1:0][DATA_WIDTH-1:0]      data_wdata;
 
     
-
-    logic [WAYS-1:0][SETS-1:0][$bits(MEM_BLOCK)-1:0] data_debug_mem;
-    assign dcache_debug_data = data_debug_mem;
+    logic [WAYS-1:0][SETS-1:0][$bits(MEM_BLOCK)-1:0] way_debug_mem;
 
     genvar w;
     generate
@@ -101,8 +94,8 @@ module Dcache
                 .rdata(data_rdata[w]),
                 .we(data_we[w]),
                 .waddr(data_waddr[w]),
-                .wdata(data_wdata[w])
-                // .debug_mem (data_debug_mem[w])
+                .wdata(data_wdata[w]),
+                .debug_mem (way_debug_mem[w])
             );
         end
     endgenerate
@@ -164,6 +157,7 @@ module Dcache
     logic [$clog2(WAYS)-1:0] old_lru_index_miss;
 
     logic wb_lookup_valid;
+    logic vc_lookup_valid;
 
     assign wb_lookup_valid = req_valid && cache_ready;
     assign vc_lookup_valid = req_valid && cache_ready; // only look up when not refilling
@@ -189,6 +183,12 @@ module Dcache
     end
 
     always_comb begin 
+        for (int s = 0; s < SETS; s++) begin
+            for (int w = 0; w < WAYS; w++) begin
+                dcache_debug_data[s][w] = MEM_BLOCK'(way_debug_mem[w][s]);
+                dcache_debug_tags[s][w] = cache_tags[s][w];
+            end
+        end
         next_cache_tags   = cache_tags;
         miss_request = '0;
         cache_resp_data = '0;
@@ -220,14 +220,31 @@ module Dcache
 
         if (miss_returned && !com_miss_req.dep_miss) begin
             // STEP 1. CHECK IF THERE IS AN INVALID WAY IN THE SET.
-            for (int i = 0; i < WAYS; ++i) begin
-                if (!cache_tags[com_miss_req.miss_req_set][i].valid && !found_way_miss) begin
+            // for (int i = 0; i < WAYS; ++i) begin
+                
+            //     if (!cache_tags[com_miss_req.miss_req_set][i].valid && !found_way_miss) begin
+            //         found_way_miss = 1'b1;
+            //         way_index_miss = i[$clog2(WAYS)-1:0]; // cast this
+            //     end 
+            //     else if (cache_tags[com_miss_req.miss_req_set][i].lru_val == 'd0 && !found_way_miss) begin
+            //         way_index_miss = i[$clog2(WAYS)-1:0]; // cast this
+            //         found_way_miss = 1'b1;
+            //     end
+            // end
+            for (int i = 0; i < WAYS; i++) begin
+                if (!cache_tags[com_miss_req.miss_req_set][i].valid) begin
+                    way_index_miss = i[$clog2(WAYS)-1:0];
                     found_way_miss = 1'b1;
-                    way_index_miss = i[$clog2(WAYS)-1:0]; // cast this
-                end 
-                else if (cache_tags[com_miss_req.miss_req_set][i].lru_val == 'd0 && !found_way_miss) begin
-                    way_index_miss = i[$clog2(WAYS)-1:0]; // cast this
-                    found_way_miss = 1'b1;
+                    break; 
+                end
+            end
+            if (!found_way_miss) begin
+                for (int i = 0; i < WAYS; i++) begin
+                    if (cache_tags[com_miss_req.miss_req_set][i].lru_val == 'd0) begin
+                        way_index_miss = i[$clog2(WAYS)-1:0];
+                        found_way_miss = 1'b1;
+                        break;
+                    end
                 end
             end
 
@@ -447,7 +464,9 @@ module Dcache
         .vc_wb_valid          (vc_wb_valid),
         .vc_wb_tag            (vc_wb_tag),
         .vc_wb_set            (vc_wb_set),
-        .vc_wb_data           (vc_wb_data)
+        .vc_wb_data           (vc_wb_data),
+
+        .debug_vc_entries(debug_vc_entries)
     );
  
     write_buffer wb(
@@ -481,6 +500,7 @@ module Dcache
         .wb2mem_command(wb2mem_command),
         .wb2mem_addr(wb2mem_addr),
         .wb2mem_data(wb2mem_data),
-        .wb2mem_size(wb2mem_size)
+        .wb2mem_size(wb2mem_size),
+        .debug_write_buff(debug_write_buff)
     );
 endmodule

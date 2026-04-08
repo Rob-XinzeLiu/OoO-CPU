@@ -11,6 +11,7 @@
 /////////////////////////////////////////////////////////////////////////
 
 `include "sys_defs.svh"
+`include "ISA.svh"
 
 
 module cpu (
@@ -29,9 +30,11 @@ module cpu (
     // // Note: these are assigned at the very bottom of the module
     output RETIRE_PACKET [`N-1:0] committed_insts,
 
-    //for mem file:
-    output logic [`DCACHE_WAYS-1:0][`DCACHE_SETS-1:0][$bits(MEM_BLOCK)-1:0] dcache_debug_data,
-    output cache_tag_t [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0] dcache_debug_tags
+     //for memory unified file
+    output MEM_BLOCK    dcache_debug_data[`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0],
+    output cache_tag_t  dcache_debug_tags [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0],
+    output vc_entry_t   debug_vc_entries[`VC_LINES-1: 0],
+    output wb_entry_t   debug_write_buff[`WB_ENTRIES-1: 0]
 
     // // Debug outputs: these signals are solely used for debugging in testbenches
     // // You should definitely change these for the final project
@@ -847,7 +850,9 @@ module cpu (
         .dcache_can_accept_store(dcache_can_accept_store),
         .dcache_can_accept_load(dcache_can_accept_load),
         .dcache_debug_data(dcache_debug_data),
-        .dcache_debug_tags(dcache_debug_tags)
+        .dcache_debug_tags(dcache_debug_tags),
+        .debug_vc_entries(debug_vc_entries),
+        .debug_write_buff(debug_write_buff)
     );
 
     mshr mshr (

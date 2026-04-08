@@ -154,6 +154,27 @@ typedef struct packed {
 `define DCACHE_SET_BITS    $clog2(`DCACHE_SETS)
 `define DCACHE_TAG_BITS    ($bits(ADDR) - `DCACHE_OFFSET_BITS - `DCACHE_SET_BITS)
 
+`define VC_LINES 4
+`define WB_ENTRIES 8
+`define VC_WAY_BITS $clog2(`VC_LINES)
+
+typedef struct packed {
+    logic                        valid;
+    logic                        dirty;
+    logic [`DCACHE_TAG_BITS-1:0] tag;
+    logic [`DCACHE_SET_BITS-1:0] set;
+    logic [`VC_WAY_BITS-1:0]      lru_val;
+    MEM_BLOCK                    data;
+} vc_entry_t;
+
+ // Write buffer entry
+typedef struct packed {
+    logic                        valid;
+    logic [`DCACHE_TAG_BITS-1:0] tag;
+    logic [`DCACHE_SET_BITS-1:0] set;
+    MEM_BLOCK                    data;
+} wb_entry_t;
+
 // Full cache-line address without byte offset.
 // Since line size is 8 bytes, this is ADDR[31:3].
 typedef logic [$bits(ADDR)-`DCACHE_OFFSET_BITS-1:0] BLOCK_ADDR;

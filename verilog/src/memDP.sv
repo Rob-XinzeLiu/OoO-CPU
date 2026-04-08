@@ -32,10 +32,14 @@ module memDP
     // ------------------------------------------------------------ //
     input                                            we,     // Write enable
     input                       [$clog2(DEPTH)-1:0]  waddr,  // Write address
-    input                       [WIDTH        -1:0]  wdata   // Write data
+    input                       [WIDTH        -1:0]  wdata,   // Write data
+
+    output logic [DEPTH-1:0][WIDTH-1:0] debug_mem
+
    );
 
 logic [DEPTH-1:0][WIDTH-1:0]  memData;
+assign debug_mem = memData;
 genvar i;
 
 ///////////////////////////////////////////////////////////////////

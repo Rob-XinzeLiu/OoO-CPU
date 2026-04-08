@@ -1,7 +1,7 @@
 `include "sys_defs.svh"
 
 module write_buffer #(
-    parameter int ENTRIES = 8
+    parameter int ENTRIES = `WB_ENTRIES
 )(
     input  logic      clock,
     input  logic      reset,
@@ -34,19 +34,14 @@ module write_buffer #(
     output MEM_COMMAND                  wb2mem_command,
     output ADDR                         wb2mem_addr,
     output MEM_BLOCK                    wb2mem_data,
-    output MEM_SIZE                     wb2mem_size
+    output MEM_SIZE                     wb2mem_size,
+
+    output wb_entry_t                   debug_write_buff[`WB_ENTRIES-1: 0]
+  
 );
 
-    // Write buffer entry
-    typedef struct packed {
-        logic                        valid;
-        logic [`DCACHE_TAG_BITS-1:0] tag;
-        logic [`DCACHE_SET_BITS-1:0] set;
-        MEM_BLOCK                    data;
-    } wb_entry_t;
-
-    wb_entry_t write_buffer      [ENTRIES];
-    wb_entry_t next_write_buffer [ENTRIES];
+    wb_entry_t write_buffer         [ENTRIES-1:0];
+    wb_entry_t next_write_buffer    [ENTRIES-1:0];
 
     logic [$clog2(ENTRIES)-1:0] head;
     logic [$clog2(ENTRIES)-1:0] next_head;
@@ -65,6 +60,11 @@ module write_buffer #(
     assign will_dequeue = write_buffer[head].valid && grant && (mem2proc_transaction_tag != 'd0);
     // Write buffer hit logic
     always_comb begin
+        for(int j = 0; j < ENTRIES; ++j)begin
+            debug_write_buff[j] = write_buffer[j];
+        end
+
+
         wb_hit       = 1'b0;
         wb_load_data = '0;
         wb_hit_lq_index = '0;

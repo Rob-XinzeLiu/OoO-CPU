@@ -1,7 +1,7 @@
 `include "sys_defs.svh"
 
 module victim_cache #(
-    parameter int VC_LINES   = 4,
+    parameter int VC_LINES   = `VC_LINES,
     parameter int LINE_BYTES = `DCACHE_LINE_BYTES
 )(
     input  logic      clock,
@@ -39,20 +39,15 @@ module victim_cache #(
     output logic                          vc_wb_valid,
     output logic [`DCACHE_TAG_BITS-1:0]   vc_wb_tag,
     output logic [`DCACHE_SET_BITS-1:0]   vc_wb_set,
-    output MEM_BLOCK                      vc_wb_data
+    output MEM_BLOCK                      vc_wb_data,
+
+    output vc_entry_t                     debug_vc_entries[`VC_LINES-1: 0]
+
 );
 
     localparam int OFFSET_BITS = $clog2(LINE_BYTES);
     localparam int VC_WAY_BITS = $clog2(VC_LINES);
 
-    typedef struct packed {
-        logic                        valid;
-        logic                        dirty;
-        logic [`DCACHE_TAG_BITS-1:0] tag;
-        logic [`DCACHE_SET_BITS-1:0] set;
-        logic [VC_WAY_BITS-1:0]      lru_val;
-        MEM_BLOCK                    data;
-    } vc_entry_t;
 
     vc_entry_t vc_entries      [VC_LINES-1:0];
     vc_entry_t next_vc_entries [VC_LINES-1:0];
@@ -113,6 +108,11 @@ module victim_cache #(
     assign vcache_accept = !wb_full;
 
     always_comb begin
+
+        for(int j = 0; j < VC_LINES; ++j)begin
+            debug_vc_entries[j] = vc_entries[j];
+        end
+
         next_vc_entries = vc_entries;
         found_hit = 1'b0;
         hit_idx   = '0;

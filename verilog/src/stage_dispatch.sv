@@ -1,4 +1,5 @@
 `include "sys_defs.svh"
+`include "ISA.svh"
 module stage_dispatch (
     input logic                             clock                               , 
     input logic                             reset                               , 

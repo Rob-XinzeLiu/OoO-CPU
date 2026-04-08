@@ -1,6 +1,6 @@
 
 `include "sys_defs.svh"
-
+`include "ISA.svh"
 module btb (
     input clock,
     input reset,
