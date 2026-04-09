@@ -436,7 +436,7 @@ module testbench;
 
                 //     for (int w = 0; w < `DCACHE_WAYS; w++) begin
                 //         $fdisplay(out_fileno,
-                //             "TB set7 way%0d: valid=%0d tag=%0d data=%h",
+                //             "DC set7 way%0d: valid=%0d tag=%0d data=%h",
                 //             w,
                 //             dcache_debug_tags[7][w].valid,
                 //             dcache_debug_tags[7][w].tag,
@@ -444,35 +444,31 @@ module testbench;
                 //         );
                 //     end
 
-                //     for (int w = 0; w < `DCACHE_WAYS; w++) begin
+                //     for (int i = 0; i < `VC_LINES; i++) begin
                 //         $fdisplay(out_fileno,
-                //             "CPU set7 way%0d: valid=%0d tag=%0d data=%h",
-                //             w,
-                //             verisimpleV.dcache_debug_tags[7][w].valid,
-                //             verisimpleV.dcache_debug_tags[7][w].tag,
-                //             verisimpleV.dcache_debug_data[7][w]
+                //             "VC idx%0d: valid=%0d tag=%0d set=%0d data=%h",
+                //             i,
+                //             debug_vc_entries[i].valid,
+                //             debug_vc_entries[i].tag,
+                //             debug_vc_entries[i].set,
+                //             debug_vc_entries[i].data
                 //         );
                 //     end
 
-                //     for (int w = 0; w < `DCACHE_WAYS; w++) begin
+                //     for (int i = 0; i < `WB_ENTRIES; i++) begin
                 //         $fdisplay(out_fileno,
-                //             "INT set7 way%0d: valid=%0d tag=%0d data=%h",
-                //             w,
-                //             verisimpleV.dcache.dcache_debug_tags[7][w].valid,
-                //             verisimpleV.dcache.dcache_debug_tags[7][w].tag,
-                //             verisimpleV.dcache.dcache_debug_data[7][w]
+                //             "WB idx%0d: valid=%0d tag=%0d set=%0d data=%h",
+                //             i,
+                //             debug_write_buff[i].valid,
+                //             debug_write_buff[i].tag,
+                //             debug_write_buff[i].set,
+                //             debug_write_buff[i].data
                 //         );
                 //     end
-
-                //     for (int w = 0; w < `DCACHE_WAYS; w++) begin
-                //         $fdisplay(out_fileno,
-                //             "RAW way%0d set7 data=%h",
-                //             w,
-                //             verisimpleV.dcache.way_debug_mem[w][7]
-                //         );
-                //     end
-                // end
+                //end
+                
             end
+            
 
             $fdisplay(out_fileno, "@@@");
             

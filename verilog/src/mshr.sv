@@ -22,7 +22,8 @@ module mshr #(
     output completed_mshr_t     com_miss_req,
     output logic                miss_queue_full,
     output logic                miss_returned,
-    output logic                mshr_wait_for_trans
+    output logic                mshr_wait_for_trans,
+    output logic                mshr_currently_waiting
 
 );
 
@@ -56,6 +57,13 @@ module mshr #(
     logic sending_to_dcache;
     //assign next_miss_returned   = found_completed;
 
+    //assign mshr_currently_waiting = miss_count != 'd0 || out_count != 'd0 || req_state != REQ_IDLE ;
+    assign mshr_currently_waiting =
+    (miss_count != 'd0) ||
+    (out_count  != 'd0) ||
+    (req_state  != REQ_IDLE) ||
+    (dcache_miss_req.valid && !miss_queue_full);
+    
     logic miss_merged;
     always_comb begin: MISS_QUEUE_LOGIC
 

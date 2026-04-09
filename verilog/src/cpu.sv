@@ -193,6 +193,7 @@ module cpu (
     completed_mshr_t      com_miss_req;
     logic                 miss_queue_full;
     logic                 miss_returned;
+    logic                 mshr_currently_waiting;
 
     //store queue
     SQ_PACKET            sq_out                          ;
@@ -229,7 +230,7 @@ module cpu (
 
     // RS
     logic [1:0] rs_empty_entries_num;
-
+    logic stall_retire;
 
 
     // Outputs from MEM-Stage to memory
@@ -607,12 +608,15 @@ module cpu (
         .clock(clock),
         .reset(reset),
         .rob_commit_pack(rob_commit_pack),
+        .dcache_filling(miss_returned),
+        .mshr_currently_waiting(mshr_currently_waiting),
 
         // Output
         .freelist_pack(freelist_pack),
         .store_retire_pack(store_retire_pack),
         .commit_pack(commit_pack),
         .stall_fetch(stall_fetch)
+        //.stall_retire(stall_retire)
     );
 
     //////////////////////////////////////////////////
@@ -654,6 +658,7 @@ module cpu (
         .cdb(cdb),
         .cond_branch_in(cond_pack_reg),
         .sq_in(store_pack_reg),
+        //.stall_retire(stall_retire),
 
         // Output
         .rob_commit(rob_commit_pack),
@@ -870,7 +875,8 @@ module cpu (
         .com_miss_req(com_miss_req),
         .miss_queue_full(miss_queue_full),
         .miss_returned(miss_returned),
-        .mshr_wait_for_trans(mshr_wait_for_trans)
+        .mshr_wait_for_trans(mshr_wait_for_trans),
+        .mshr_currently_waiting(mshr_currently_waiting)
     );
 
 
