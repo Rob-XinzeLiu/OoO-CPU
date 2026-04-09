@@ -31,10 +31,10 @@ module Dcache
     output logic           dcache_can_accept_load,
 
     //for memory unified file
-    output MEM_BLOCK        dcache_debug_data[`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0],
-    output cache_tag_t      dcache_debug_tags [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0],
-    output vc_entry_t       debug_vc_entries[`VC_LINES-1: 0],
-    output wb_entry_t       debug_write_buff[`WB_ENTRIES-1: 0]
+    output MEM_BLOCK       [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0] dcache_debug_data,
+    output cache_tag_t       [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0]dcache_debug_tags,
+    output vc_entry_t       [`VC_LINES-1: 0]debug_vc_entries,
+    output wb_entry_t      [`WB_ENTRIES-1: 0] debug_write_buff
 );
 
     localparam int ADDR_BITS   = $bits(ADDR);
@@ -47,8 +47,8 @@ module Dcache
 
     //miss_request_t miss_request;
 
-    cache_tag_t cache_tags [SETS-1:0][WAYS-1:0];
-    cache_tag_t next_cache_tags [SETS-1:0][WAYS-1:0];
+    cache_tag_t [SETS-1:0][WAYS-1:0]cache_tags ;
+    cache_tag_t  [SETS-1:0][WAYS-1:0]next_cache_tags;
 
     logic [TAG_BITS-1:0]     d_request_tag;
     logic [SET_BITS-1:0]     d_request_set;
@@ -423,7 +423,7 @@ module Dcache
 
     always_ff @(posedge clock) begin
         if (reset) begin 
-            cache_tags    <= {default: '0};
+            cache_tags    <=  '0;
             //miss_request  <= '0;
         end
         else begin

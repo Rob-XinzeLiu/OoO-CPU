@@ -36,12 +36,12 @@ module write_buffer #(
     output MEM_BLOCK                    wb2mem_data,
     output MEM_SIZE                     wb2mem_size,
 
-    output wb_entry_t                   debug_write_buff[`WB_ENTRIES-1: 0]
+    output wb_entry_t     [`WB_ENTRIES-1: 0] debug_write_buff
   
 );
 
-    wb_entry_t write_buffer         [ENTRIES-1:0];
-    wb_entry_t next_write_buffer    [ENTRIES-1:0];
+    wb_entry_t          [ENTRIES-1:0] write_buffer;
+    wb_entry_t    [ENTRIES-1:0] next_write_buffer ;
 
     logic [$clog2(ENTRIES)-1:0] head;
     logic [$clog2(ENTRIES)-1:0] next_head;
@@ -181,7 +181,7 @@ module write_buffer #(
             count <= 'd0;
             head <= 'd0;
             tail <= 'd0;
-            write_buffer <= {default: '0};
+            write_buffer <=  '0;
         end
         else begin
             write_buffer <= next_write_buffer;

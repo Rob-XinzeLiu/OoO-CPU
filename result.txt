@@ -4,19 +4,19 @@ btest1 passed
 
 btest2 passed
 
-copy passed
-
 copy_long passed
 
-evens passed
+copy passed
 
 evens_long passed
 
-fib passed
+evens passed
 
 fib_long passed
 
 fib_rec failed
+
+fib passed
 
 haha passed
 
@@ -36,7 +36,7 @@ no_hazard passed
 
 parallel passed
 
-sampler failed
+sampler passed
 
 saxpy passed
 

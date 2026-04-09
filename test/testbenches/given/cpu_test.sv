@@ -56,10 +56,10 @@ module testbench;
     RETIRE_PACKET [`N-1:0] committed_insts;
 
 
-    MEM_BLOCK    dcache_debug_data[`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0];
-    cache_tag_t  dcache_debug_tags[`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0];
-    vc_entry_t   debug_vc_entries[`VC_LINES-1: 0];
-    wb_entry_t   debug_write_buff[`WB_ENTRIES-1: 0];
+    MEM_BLOCK    [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0]dcache_debug_data;
+    cache_tag_t  [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0]dcache_debug_tags;
+    vc_entry_t   [`VC_LINES-1: 0]debug_vc_entries;
+    wb_entry_t   [`WB_ENTRIES-1: 0]debug_write_buff;
 
     EXCEPTION_CODE error_status = NO_ERROR;
 

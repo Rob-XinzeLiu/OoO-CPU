@@ -31,10 +31,10 @@ module cpu (
     output RETIRE_PACKET [`N-1:0] committed_insts,
 
      //for memory unified file
-    output MEM_BLOCK    dcache_debug_data[`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0],
-    output cache_tag_t  dcache_debug_tags [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0],
-    output vc_entry_t   debug_vc_entries[`VC_LINES-1: 0],
-    output wb_entry_t   debug_write_buff[`WB_ENTRIES-1: 0]
+    output MEM_BLOCK   [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0]dcache_debug_data,
+    output cache_tag_t   [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0]dcache_debug_tags,
+    output vc_entry_t   [`VC_LINES-1: 0]debug_vc_entries,
+    output wb_entry_t  [`WB_ENTRIES-1: 0] debug_write_buff
 
     // // Debug outputs: these signals are solely used for debugging in testbenches
     // // You should definitely change these for the final project
@@ -195,6 +195,10 @@ module cpu (
     logic                 miss_returned;
     logic                 mshr_currently_waiting;
 
+
+    logic halt_safe;
+    assign halt_safe    = !miss_returned && !mshr_currently_waiting;
+
     //store queue
     SQ_PACKET            sq_out                          ;
     SQ_IDX               BS_sq_tail              [`N-1:0];
@@ -208,6 +212,7 @@ module cpu (
     logic [2:0]          sq_funct3_out       [`SQ_SZ-1:0];
     logic [`SQ_SZ-1:0]   sq_valid_out                    ;
     logic [`SQ_SZ-1:0]   sq_valid_out_mask       [`N-1:0];
+    logic [`SQ_SZ-1:0]   sq_ready_retire_out ;
     SQ_IDX               sq_tail_out             [`N-1:0];
 
     // CDB_Arbiter
@@ -230,7 +235,6 @@ module cpu (
 
     // RS
     logic [1:0] rs_empty_entries_num;
-    logic stall_retire;
 
 
     // Outputs from MEM-Stage to memory
@@ -608,8 +612,6 @@ module cpu (
         .clock(clock),
         .reset(reset),
         .rob_commit_pack(rob_commit_pack),
-        .dcache_filling(miss_returned),
-        .mshr_currently_waiting(mshr_currently_waiting),
 
         // Output
         .freelist_pack(freelist_pack),
@@ -658,7 +660,7 @@ module cpu (
         .cdb(cdb),
         .cond_branch_in(cond_pack_reg),
         .sq_in(store_pack_reg),
-        //.stall_retire(stall_retire),
+        .halt_safe(halt_safe),
 
         // Output
         .rob_commit(rob_commit_pack),
@@ -820,6 +822,7 @@ module cpu (
         .load_execute_pack(load_execute_pack),
         .dcache_can_accept_load(dcache_can_accept_load),
         .dcache_load_packet(cache_resp_data),
+        .sq_ready_retire_in(sq_ready_retire_out),
 
         //output
         .lq_index(lq_index),
@@ -913,6 +916,7 @@ module cpu (
         .sq_funct3_out(sq_funct3_out),
         .sq_valid_out(sq_valid_out),
         .sq_valid_out_mask(sq_valid_out_mask),
+        .sq_ready_retire_out(sq_ready_retire_out),
         .sq_tail_out(sq_tail_out)
     );
 

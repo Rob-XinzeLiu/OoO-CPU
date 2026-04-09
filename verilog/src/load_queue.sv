@@ -23,7 +23,8 @@ module load_queue(
     input logic [`SQ_SZ-1:0]     sq_valid_in                    ,
     input logic [`SQ_SZ-1:0]     sq_valid_in_mask       [`N-1:0],
     input SQ_IDX                 sq_tail_in             [`N-1:0],
-    input logic  [2:0]           sq_funct3_in         [`SQ_SZ-1:0],//full word forwarding
+    input logic  [2:0]           sq_funct3_in         [`SQ_SZ-1:0],// forwarding
+    input logic [`SQ_SZ-1:0]     sq_ready_retire_in             ,
     //the address calculated from execute stage
     input LQ_PACKET              load_execute_pack              ,
     //dcache can accept load
@@ -81,8 +82,8 @@ module load_queue(
     DATA                     fwd_data_arr  [`LQ_SZ-1:0];
     SQ_IDX highest_idx                     [`LQ_SZ-1:0];
     SQ_IDX selected_idx;
-    logic load_is_lw;
-    logic store_is_sw;
+    logic store_covers_load;
+    logic has_pending_store;
 
     LQ_IDX   dcache_req_idx;
     LQ_PACKET lq_out_r, lq_out_next;
@@ -113,8 +114,7 @@ module load_queue(
         fwd_data_arr     = '{default: '0};
         highest_idx      = '{default: '0};
         selected_idx     = '0;
-        load_is_lw       = '0;
-        store_is_sw      = '0;
+        store_covers_load=  '0;
         dcache_req_idx   = '0;
         
 
@@ -213,14 +213,44 @@ module load_queue(
 
 
                 selected_idx = SQ_IDX'(highest_idx[i] + lq[i].sq_tail_position);
-                load_is_lw   = (lq[i].funct3 == 3'b010);
-                store_is_sw  = (sq_funct3_in[selected_idx] == 3'b010);
+                store_covers_load = (lq[i].funct3[1:0] == sq_funct3_in[selected_idx][1:0]);
 
                 //check if the youngest older store's data is ready
                 if (sq_data_ready_in[selected_idx]) begin
-                    if (load_is_lw && store_is_sw) begin
+                    if (store_covers_load) begin
                         fwd_hit_arr[i]  = 1'b1;
-                        fwd_data_arr[i] = sq_data_in[selected_idx];
+                        case(lq[i].funct3[1:0])
+                            2'b00: begin // lb/lbu
+                                case(lq[i].addr[1:0])
+                                    2'b00: fwd_data_arr[i] = lq[i].funct3[2] ? 
+                                            {24'b0, sq_data_in[selected_idx][7:0]} :
+                                            {{24{sq_data_in[selected_idx][7]}},  sq_data_in[selected_idx][7:0]};
+                                    2'b01: fwd_data_arr[i] = lq[i].funct3[2] ? 
+                                            {24'b0, sq_data_in[selected_idx][15:8]} :
+                                            {{24{sq_data_in[selected_idx][15]}}, sq_data_in[selected_idx][15:8]};
+                                    2'b10: fwd_data_arr[i] = lq[i].funct3[2] ? 
+                                            {24'b0, sq_data_in[selected_idx][23:16]} :
+                                            {{24{sq_data_in[selected_idx][23]}}, sq_data_in[selected_idx][23:16]};
+                                    2'b11: fwd_data_arr[i] = lq[i].funct3[2] ? 
+                                            {24'b0, sq_data_in[selected_idx][31:24]} :
+                                            {{24{sq_data_in[selected_idx][31]}}, sq_data_in[selected_idx][31:24]};
+                                endcase
+                            end
+                            2'b01: begin // lh/lhu
+                                case(lq[i].addr[1])
+                                    1'b0: fwd_data_arr[i] = lq[i].funct3[2] ? 
+                                            {16'b0, sq_data_in[selected_idx][15:0]} :
+                                            {{16{sq_data_in[selected_idx][15]}}, sq_data_in[selected_idx][15:0]};
+                                    1'b1: fwd_data_arr[i] = lq[i].funct3[2] ? 
+                                            {16'b0, sq_data_in[selected_idx][31:16]} :
+                                            {{16{sq_data_in[selected_idx][31]}}, sq_data_in[selected_idx][31:16]};
+                                endcase
+                            end
+                            2'b10: begin // lw
+                                fwd_data_arr[i] = sq_data_in[selected_idx];
+                            end
+                            default: fwd_data_arr[i] = sq_data_in[selected_idx];
+                        endcase
                     end else begin
                         conflict_arr[i] = 1'b1; // mixed-width or partial-width case: stall
                     end
@@ -254,13 +284,22 @@ module load_queue(
         // dcache request, start from head
         for(int i = 0; i < `LQ_SZ; i++) begin
             dcache_req_idx = LQ_IDX'(head + i);
+
+            has_pending_store = 1'b0;
+            for(int j = 0; j < `SQ_SZ; j++) begin
+                if(fwd_mask_arr[dcache_req_idx][j] && sq_ready_retire_in[j]) begin
+                    has_pending_store = 1'b1;
+                end
+            end
+
             if(lq[dcache_req_idx].valid 
                 && lq[dcache_req_idx].addr_ready 
                 && dcache_can_accept_load
                 && !lq[dcache_req_idx].data_ready 
                 && !lq[dcache_req_idx].issued 
                 && !fwd_hit_arr[dcache_req_idx]
-                && !conflict_arr[dcache_req_idx]) begin //only request when no conflict
+                && !conflict_arr[dcache_req_idx]
+                && !has_pending_store) begin //only request when no conflict
                     load_packet.valid    = 1'b1;
                     load_packet.addr     = lq[dcache_req_idx].addr;
                     load_packet.lq_index = dcache_req_idx;

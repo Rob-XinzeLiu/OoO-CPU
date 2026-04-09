@@ -39,6 +39,7 @@ module store_queue (
     output logic [2:0]          sq_funct3_out       [`SQ_SZ-1:0],//full word forwarding
     output logic [`SQ_SZ-1:0]   sq_valid_out                    ,//also to rs
     output logic [`SQ_SZ-1:0]   sq_valid_out_mask       [`N-1:0],
+    output logic [`SQ_SZ-1:0]   sq_ready_retire_out             ,
     output SQ_IDX               sq_tail_out             [`N-1:0]
 
 
@@ -83,6 +84,7 @@ module store_queue (
         sq_funct3_out = '{default:'0};
         sq_tail_out = '{default:'0};
         sq_valid_out = '0;
+        sq_ready_retire_out = '0;
 
 
         //commit/retire logic
@@ -108,6 +110,7 @@ module store_queue (
             sq_valid_snapshot[i] = sq[i].valid;
             sq_valid_out[i]      = sq[i].valid;
             sq_funct3_out[i]     = sq[i].funct3;
+            sq_ready_retire_out[i] = sq[i].ready_retire;
         end
 
         //set ready retire

@@ -41,7 +41,7 @@ module victim_cache #(
     output logic [`DCACHE_SET_BITS-1:0]   vc_wb_set,
     output MEM_BLOCK                      vc_wb_data,
 
-    output vc_entry_t                     debug_vc_entries[`VC_LINES-1: 0]
+    output vc_entry_t                   [`VC_LINES-1: 0]  debug_vc_entries
 
 );
 
@@ -49,8 +49,8 @@ module victim_cache #(
     localparam int VC_WAY_BITS = $clog2(VC_LINES);
 
 
-    vc_entry_t vc_entries      [VC_LINES-1:0];
-    vc_entry_t next_vc_entries [VC_LINES-1:0];
+    vc_entry_t     [VC_LINES-1:0] vc_entries  ;
+    vc_entry_t [VC_LINES-1:0] next_vc_entries ;
 
     logic                   found_hit;
     logic [VC_WAY_BITS-1:0] hit_idx;
@@ -242,14 +242,14 @@ module victim_cache #(
     end  
     always_ff @(posedge clock) begin
         if (reset) begin
-            for (int i = 0; i < VC_LINES; i++) begin
-                vc_entries[i] <= '0;
-            end
+            //for (int i = 0; i < VC_LINES; i++) begin
+                vc_entries <= '0;
+            //nd
         end
         else begin
-            for (int i = 0; i < VC_LINES; i++) begin
-                vc_entries[i] <= next_vc_entries[i];
-            end
+            //for (int i = 0; i < VC_LINES; i++) begin
+                vc_entries <= next_vc_entries;
+            //end
         end
     end
 endmodule

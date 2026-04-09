@@ -8,7 +8,8 @@ module rob(
     input ROB_IDX               rob_tail_in                     ,//from branch stack
     input X_C_PACKET            [`N-1:0]   cdb                  ,//set complete bit
     input COND_BRANCH_PACKET    cond_branch_in                  ,//from execute  
-    input SQ_PACKET             sq_in                           ,//from execute       
+    input SQ_PACKET             sq_in                           ,//from execute   
+    input logic                 halt_safe                       ,   
 
     output RETIRE_PACKET        [`N-1:0] rob_commit             ,//to retire stage
     output logic [1:0]          rob_space_avail                 ,//to dispatch stage
@@ -79,14 +80,35 @@ module rob(
 //////////////////////                         ////////////////////////
 ///////////////////////////////////////////////////////////////////////
 
-        retire_num = (head_ptr != tail_ptr || full) &&
-                        rob_array[head_ptr].valid && rob_array[head_ptr].ready_retire &&
-                        (ROB_IDX'(head_ptr+1) != tail_ptr) &&   
-                        rob_array[ROB_IDX'(head_ptr+1)].valid && 
-                        rob_array[ROB_IDX'(head_ptr+1)].ready_retire ? 2 :
-                        (head_ptr != tail_ptr || full) &&
-                        rob_array[head_ptr].valid && 
-                        rob_array[head_ptr].ready_retire ? 1 : 0;
+        if (head_ptr == tail_ptr && !full) begin
+            // ROB empty
+            retire_num = 0;
+        end else if (!rob_array[head_ptr].valid || !rob_array[head_ptr].ready_retire) begin
+            // head is not ready
+            retire_num = 0;
+        end else if (rob_array[head_ptr].halt && !halt_safe) begin
+            // head is halt but not safe
+            retire_num = 0;
+        end else if (rob_array[head_ptr].halt && halt_safe) begin
+            // head is halt and safe， only retire this one
+            retire_num = 1;
+        end else begin
+            // head是普通指令，看head+1
+            if (rob_array[ROB_IDX'(head_ptr+1)].valid && 
+                rob_array[ROB_IDX'(head_ptr+1)].ready_retire &&
+                ROB_IDX'(head_ptr+1) != tail_ptr) begin
+                
+                if (rob_array[ROB_IDX'(head_ptr+1)].halt && !halt_safe) begin
+                    // head+1是halt但不safe，只retire head
+                    retire_num = 1;
+                end else begin
+                    // head+1是普通指令或halt且safe
+                    retire_num = 2;
+                end
+            end else begin
+                retire_num = 1;
+            end
+        end
         
 
         if(retire_num == 2)begin
