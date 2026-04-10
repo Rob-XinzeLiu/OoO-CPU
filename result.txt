@@ -58,7 +58,7 @@ graph failed
 
 insertionsort failed
 
-matrix_mult_rec failed
+matrix_mult_rec passed
 
 mergesort failed
 

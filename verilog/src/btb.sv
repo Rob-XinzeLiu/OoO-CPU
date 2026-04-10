@@ -18,7 +18,7 @@ module btb (
     input ADDR      update_pc,
     input ADDR      update_target,
     input CTYPE     update_c_type,
-    //update from dispatch, for jal
+    //update from dispatch
     input logic     early_update_valid,
     input ADDR      early_update_pc,
     input ADDR      early_update_target,

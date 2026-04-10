@@ -84,7 +84,7 @@ typedef enum logic [1:0] {
         .early_update_valid  (early_mistarget_pack.valid && early_mistarget_pack.c_type == C_JAL),//only update for jal
         .early_update_pc     (early_mistarget_pack.current_PC),
         .early_update_target (early_mistarget_pack.correct_next_pc),
-        .early_update_c_type (C_JAL)
+        .early_update_c_type (early_mistarget_pack.c_type)
     );
 
     //local PHT and BHT 

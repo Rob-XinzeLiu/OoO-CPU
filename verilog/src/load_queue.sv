@@ -88,6 +88,7 @@ module load_queue(
     LQ_IDX   dcache_req_idx;
     LQ_PACKET lq_out_r, lq_out_next;
     assign lq_out = lq_out_r;
+    logic head_moved;
 
 
 
@@ -99,6 +100,7 @@ module load_queue(
         lq_n = lq;
         load_packet = '0;
         lq_out_next = '0;
+        head_moved = '0;
         cdb_req_load = '0;
         lq_index = '{default: '0};
         BS_lq_tail_out = '{default: '0};
@@ -138,14 +140,18 @@ module load_queue(
         for(int i = 0; i < `LQ_SZ; i++) begin
             if(!lq_n[LQ_IDX'(head + i)].valid) begin
                 head_next = LQ_IDX'(head + i + 1);
+                head_moved = 1'b1;
+                if(head_next == tail_next) begin
+                    break; 
+                end
             end else begin
                 break;
             end
         end
 
 
-        //forward and dcache request
 
+        //forward and dcache request
         //----------------------------------------------------
         // step1: generate forward mask for each lq entry
         // fwd_mask = stores that are older than load 老and still in SQ
@@ -355,9 +361,24 @@ module load_queue(
         end
 
          //calculate available space
-        full_n = mispredicted ? (head_next == tail_next && full) :  
-                                full ? (head_next == tail_next) :
-                                ((tail_next == head_next) && (tail_next != tail));       
+        if(head_next == tail_next) begin
+            if(head_moved) begin
+                // head swept through entries and caught up to tail: always empty
+                full_n = 1'b0;
+            end else if(mispredicted) begin
+                // tail rolled back: full only if tail didn't actually move
+                full_n = (tail_next == tail) && full;
+            end else if(head_next == head && tail_next == tail) begin
+                // nothing changed, keep current state
+                full_n = full;
+            end else begin
+                // tail advanced into head: full
+                // head caught up to tail: empty
+                full_n = (tail_next != tail) && (head_next == head);
+            end
+        end else begin
+            full_n = 1'b0; // head and tail not equal, definitely not full
+        end     
                                 
         free_slots = (full_n)? 0 : 
                         (head_next == tail_next) ? `LQ_SZ :

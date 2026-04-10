@@ -173,21 +173,27 @@ module store_queue (
             end
         end
 
-        full_n = mispredicted ? (head_next == tail_next && full) :  
-                                full ? (head_next == tail_next) :
-                                ((tail_next == head_next) && (tail_next != tail));
+        if(head_next == tail_next) begin
+            if(mispredicted) begin
+                // tail rolled back: full only if tail didn't actually move
+                full_n = (tail_next == tail) && full;
+            end else if(head_next == head && tail_next == tail) begin
+                full_n = full;
+            end else begin
+                full_n = (tail_next != tail) && (head_next == head);
+            end
+        end else begin
+            full_n = 1'b0;
+        end
+
         //calculate available space
-        free_slots = (full_n)? 0 : 
-                        (head_next == tail_next) ? `SQ_SZ :
-                        (head_next > tail_next) ? SQ_IDX'(head_next - tail_next) : 
-                        SQ_IDX'(`SQ_SZ - (tail_next - head_next));
+        free_slots = full_n ? 0 :
+                    (head_next == tail_next) ? `SQ_SZ :
+                    (head_next > tail_next)  ? SQ_IDX'(head_next - tail_next) :
+                                                SQ_IDX'(`SQ_SZ - (tail_next - head_next));
 
-
-    
-        sq_space_available = full_n             ? 0 :
-                            (head_next == tail_next) ? 2 : // empty
-                            (free_slots >= 2)  ? 2 :
-                            (free_slots == 1)  ? 1 : 0;
+        sq_space_available = (free_slots >= 2) ? 2 :
+                            (free_slots == 1) ? 1 : 0;
 
 
 

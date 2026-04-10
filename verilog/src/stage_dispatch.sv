@@ -142,11 +142,21 @@ module stage_dispatch (
         end
 
        
-        mistarget1 = f_d_pack[0].valid && (decode_pack[0].jal && (f_d_pack[0].PC + `RV32_signext_Jimm(f_d_pack[0].inst)) != f_d_pack[0].predict_addr) || 
-                        (decode_pack[0].cond_branch && (f_d_pack[0].PC + `RV32_signext_Bimm(f_d_pack[0].inst)) == f_d_pack[0].predict_addr);
+        mistarget1 = f_d_pack[0].valid && (
+            (decode_pack[0].jal && 
+            (f_d_pack[0].PC + `RV32_signext_Jimm(f_d_pack[0].inst)) != f_d_pack[0].predict_addr) ||
+            (decode_pack[0].cond_branch && 
+            f_d_pack[0].predict_taken &&
+            (f_d_pack[0].PC + `RV32_signext_Bimm(f_d_pack[0].inst)) != f_d_pack[0].predict_addr)
+        );
 
-        mistarget2 = f_d_pack[1].valid && (decode_pack[1].jal && (f_d_pack[1].PC + `RV32_signext_Jimm(f_d_pack[1].inst)) != f_d_pack[1].predict_addr) || 
-                        (decode_pack[1].cond_branch && (f_d_pack[1].PC + `RV32_signext_Bimm(f_d_pack[1].inst)) == f_d_pack[1].predict_addr);
+        mistarget2 = f_d_pack[1].valid && (
+            (decode_pack[1].jal && 
+            (f_d_pack[1].PC + `RV32_signext_Jimm(f_d_pack[1].inst)) != f_d_pack[1].predict_addr) ||
+            (decode_pack[1].cond_branch && 
+            f_d_pack[1].predict_taken &&
+            (f_d_pack[1].PC + `RV32_signext_Bimm(f_d_pack[1].inst)) != f_d_pack[1].predict_addr)
+        );
 
         actual_valid[0] = f_d_pack[0].valid ;
 

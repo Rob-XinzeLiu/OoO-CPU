@@ -124,7 +124,7 @@ module rob(
                 rob_commit[i].data = rob_array[(head_ptr+i) % `ROB_SZ].data;
                 rob_commit[i].is_store = rob_array[(head_ptr+i) % `ROB_SZ].is_store;
                 rob_commit[i].sq_index = rob_array[(head_ptr+i) % `ROB_SZ].sq_index;
-                next_rob_array[(head_ptr+i) % `ROB_SZ].valid = 0;
+                next_rob_array[(head_ptr+i) % `ROB_SZ] = 0;
             end
             next_head_ptr = head_ptr + 2;
 
@@ -140,7 +140,7 @@ module rob(
             rob_commit[0].data = rob_array[head_ptr].data;
             rob_commit[0].is_store = rob_array[head_ptr].is_store;
             rob_commit[0].sq_index = rob_array[head_ptr].sq_index;
-            next_rob_array[head_ptr].valid = 0;
+            next_rob_array[head_ptr] = 0;
             next_head_ptr = head_ptr + 1;
 
 
@@ -245,21 +245,23 @@ module rob(
             end
         end
 
-        full_n = mispredicted ? (next_head_ptr == next_tail_ptr && full) :  
-                                full ? (next_head_ptr == next_tail_ptr) :
-                                ((next_tail_ptr == next_head_ptr) && (next_tail_ptr != tail_ptr));
+        if(next_head_ptr == next_tail_ptr) begin
+            if(next_head_ptr == head_ptr && next_tail_ptr == tail_ptr) begin
+                full_n = full; // nothing changed, keep current state
+            end else begin
+                full_n = (next_tail_ptr != tail_ptr) && (next_head_ptr == head_ptr); // tail moved, not head
+            end
+        end else begin
+            full_n = 1'b0; // head and tail not equal, definitely not full
+        end
         //calculate available space
-        free_slots = (full_n)? 0 : 
-                        (next_head_ptr == next_tail_ptr) ? `ROB_SZ :
-                        (next_head_ptr > next_tail_ptr) ? ROB_IDX'(next_head_ptr - next_tail_ptr) : 
-                        ROB_IDX'(`ROB_SZ - (next_tail_ptr - next_head_ptr));
+        free_slots = full_n ? 0 :
+                    (next_head_ptr == next_tail_ptr) ? `ROB_SZ :
+                    (next_head_ptr > next_tail_ptr)  ? ROB_IDX'(next_head_ptr - next_tail_ptr) :
+                                                        ROB_IDX'(`ROB_SZ - (next_tail_ptr - next_head_ptr));
 
-
-    
-        rob_space_avail = full_n             ? 0 :
-                            (next_head_ptr == next_tail_ptr) ? 2 : // empty
-                            (free_slots >= 2)  ? 2 :
-                            (free_slots == 1)  ? 1 : 0;
+        rob_space_avail = (free_slots >= 2) ? 2 :
+                        (free_slots == 1) ? 1 : 0;
     end
     
 ///////////////////////////////////////////////////////////////////////
