@@ -118,6 +118,7 @@ module branch_stack (
                     stack_next[stack_ptr_temp2].rob_tail          = rob_tail_in[i];
                     stack_next[stack_ptr_temp2].lq_tail           = lq_tail_in[i];
                     stack_next[stack_ptr_temp2].sq_tail           = sq_tail_in[i];
+                    stack_next[stack_ptr_temp2].resolved          = '0;
                     stack_ptr_temp2 = stack_ptr_temp2 + 1;
                 end
             end

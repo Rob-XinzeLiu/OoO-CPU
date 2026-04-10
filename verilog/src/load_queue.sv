@@ -123,7 +123,7 @@ module load_queue(
         //request broadcast and broadcast it 1 cycle later
         //we can execute out of order
         for(int i = 0; i < `LQ_SZ; i++)begin
-            if(lq[LQ_IDX'(head+i)].valid && lq[LQ_IDX'(head+i)].data_ready) begin
+            if(lq[LQ_IDX'(head+i)].valid && lq[LQ_IDX'(head+i)].data_ready && lq[LQ_IDX'(head+i)].addr_ready) begin
                 cdb_req_load = '1;
                 lq_out_next.valid = '1;
                 lq_out_next.dest_tag = lq[LQ_IDX'(head+i)].dest_tag;
@@ -213,7 +213,7 @@ module load_queue(
 
 
                 selected_idx = SQ_IDX'(highest_idx[i] + lq[i].sq_tail_position);
-                store_covers_load = (lq[i].funct3[1:0] == sq_funct3_in[selected_idx][1:0]);
+                store_covers_load = (lq[i].funct3[1:0] >= sq_funct3_in[selected_idx][1:0]);
 
                 //check if the youngest older store's data is ready
                 if (sq_data_ready_in[selected_idx]) begin
@@ -274,12 +274,7 @@ module load_queue(
             end
         end
 
-        // dcache return write back
-        if(dcache_load_packet.valid &&  lq_n[dcache_load_packet.lq_index].valid ) begin
-            lq_n[dcache_load_packet.lq_index].data       = dcache_load_packet.data;
-            lq_n[dcache_load_packet.lq_index].data_ready  = 1'b1;
-            lq_n[dcache_load_packet.lq_index].issued      = 1'b0;
-        end
+
 
         // dcache request, start from head
         for(int i = 0; i < `LQ_SZ; i++) begin
@@ -309,7 +304,12 @@ module load_queue(
             end
         end
 
-
+        // dcache return write back
+        if(dcache_load_packet.valid &&  lq_n[dcache_load_packet.lq_index].valid && lq_n[dcache_load_packet.lq_index].issued) begin
+            lq_n[dcache_load_packet.lq_index].data       = dcache_load_packet.data;
+            lq_n[dcache_load_packet.lq_index].data_ready  = 1'b1;
+            lq_n[dcache_load_packet.lq_index].issued      = 1'b0;
+        end
         //fill in address from execute stage
         if(load_execute_pack.valid) begin
             lq_n[load_execute_pack.lq_index].addr       = load_execute_pack.addr;

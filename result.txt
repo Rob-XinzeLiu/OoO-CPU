@@ -14,7 +14,7 @@ evens passed
 
 fib_long passed
 
-fib_rec failed
+fib_rec passed
 
 fib passed
 
@@ -52,7 +52,7 @@ bfs failed
 
 dft failed
 
-fc_forward failed
+fc_forward passed
 
 graph failed
 
@@ -62,7 +62,7 @@ matrix_mult_rec failed
 
 mergesort failed
 
-omegalul failed
+omegalul passed
 
 outer_product failed
 

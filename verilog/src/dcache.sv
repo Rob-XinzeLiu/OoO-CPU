@@ -117,8 +117,8 @@ module Dcache
     
     logic load_req_active;
     assign load_req_active         = load_req_pack.valid;
-    assign dcache_can_accept_store = !load_req_active && cache_ready;
-    assign dcache_can_accept_load  = cache_ready;
+    assign dcache_can_accept_store = !load_req_active && cache_ready && !miss_returned;
+    assign dcache_can_accept_load  = cache_ready && !miss_returned;
 
     logic req_valid;
     assign req_valid = load_req_pack.valid || store_req_pack.valid || (com_miss_req.valid && com_miss_req.dep_miss); // only consider miss request if it's dependent on another miss, otherwise it will be handled in the same way as a new request from the core
@@ -173,12 +173,17 @@ module Dcache
 
     logic currently_storing;
     assign currently_storing = store_req_pack.valid;
+    logic found_matching_tags;
     
     
     always_comb begin
         selected_read_data = '0;
         if (hit) begin
             selected_read_data = MEM_BLOCK'(data_rdata[hit_way][0]);
+        end
+
+        if(found_matching_tags)begin
+            selected_read_data =  MEM_BLOCK'(data_rdata[way_index_miss][0]);
         end
     end
 
@@ -217,6 +222,7 @@ module Dcache
         found_way_miss      = '0;
         way_index_miss      = '0;
         old_lru_index_miss  = '0;
+        found_matching_tags = '0;
 
         if (miss_returned && !com_miss_req.dep_miss) begin
             // STEP 1. CHECK IF THERE IS AN INVALID WAY IN THE SET.
@@ -232,18 +238,28 @@ module Dcache
             //     end
             // end
             for (int i = 0; i < WAYS; i++) begin
-                if (!cache_tags[com_miss_req.miss_req_set][i].valid) begin
-                    way_index_miss = i[$clog2(WAYS)-1:0];
+                if(cache_tags[com_miss_req.miss_req_set][i].valid && cache_tags[com_miss_req.miss_req_set][i].tag == com_miss_req.miss_req_tag)begin
                     found_way_miss = 1'b1;
-                    break; 
+                    found_matching_tags = 1'b1;
+                    way_index_miss = i[$clog2(WAYS)-1:0];
                 end
             end
-            if (!found_way_miss) begin
+
+            if(!found_matching_tags)begin
                 for (int i = 0; i < WAYS; i++) begin
-                    if (cache_tags[com_miss_req.miss_req_set][i].lru_val == 'd0) begin
+                    if (!cache_tags[com_miss_req.miss_req_set][i].valid) begin
                         way_index_miss = i[$clog2(WAYS)-1:0];
                         found_way_miss = 1'b1;
-                        break;
+                        break; 
+                    end
+                end
+                if (!found_way_miss) begin
+                    for (int i = 0; i < WAYS; i++) begin
+                        if (cache_tags[com_miss_req.miss_req_set][i].lru_val == 'd0) begin
+                            way_index_miss = i[$clog2(WAYS)-1:0];
+                            found_way_miss = 1'b1;
+                            break;
+                        end
                     end
                 end
             end
@@ -287,7 +303,8 @@ module Dcache
                 end
 
                 if(!com_miss_req.req_is_load) begin
-                    merged_store_data = com_miss_req.refill_data;
+                
+                    merged_store_data = found_matching_tags ? selected_read_data : com_miss_req.refill_data;
                     data_we[way_index_miss] = 1'b1;
                     data_waddr[way_index_miss] = com_miss_req.miss_req_set;
                     case (com_miss_req.miss_req_size)
