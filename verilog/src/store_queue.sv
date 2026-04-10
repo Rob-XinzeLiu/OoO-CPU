@@ -67,7 +67,6 @@ module store_queue (
     SQ_CNT free_slots;
     logic [`SQ_SZ-1:0] sq_valid_snapshot; // internal signal，update when dispatch
 
-
     always_comb begin
         //default
         sq_n = sq;
@@ -133,23 +132,22 @@ module store_queue (
             sq_n[store_execute_pack.sq_index].data = store_execute_pack.data;
         end
 
-
-        //mispredict recovery
-        if(mispredicted) begin
+        if(mispredicted)  begin
             tail_next = BS_sq_tail_in;
-            //flush entry
-        for(int i = 0; i < `SQ_SZ; i++) begin
-            if(tail >= BS_sq_tail_in) begin
-                // no wrap around
-                if(i >=BS_sq_tail_in && i < tail)
+            for(int i = 0; i < `SQ_SZ; i++) begin
+                if(full && tail == BS_sq_tail_in) begin
+                    // full and tail didn't move: clear everything
                     sq_n[i] = '{default:'0};
-            end else begin
-                // wrap around
-                if(i >= BS_sq_tail_in || i < tail)
-                    sq_n[i] = '{default:'0};
+                end else if(BS_sq_tail_in <= tail) begin
+                    // no wrap around: flush [BS_sq_tail_in, tail)
+                    if(i >= BS_sq_tail_in && i < tail)
+                        sq_n[i] = '{default:'0};
+                end else begin
+                    // wrap around: flush [BS_sq_tail_in, SQ_SZ) and [0, tail)
+                    if(i >= BS_sq_tail_in || i < tail)
+                        sq_n[i] = '{default:'0};
+                end
             end
-        end
-
         end else begin
             //dispatch logic
             for(int i = 0; i < `N; i++) begin
@@ -205,7 +203,7 @@ module store_queue (
             tail <= 0;
             sq <= '{default:'0};
             full <= '0;
-        end else begin
+        end  else begin
             head <= head_next;
             tail <= tail_next;
             sq <= sq_n;

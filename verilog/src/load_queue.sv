@@ -12,6 +12,8 @@ module load_queue(
     input  PRF_IDX           [`N-1:0]     dest_tag_in           ,
     //from rob
     input  ROB_IDX               rob_index              [`N-1:0],
+    //from retire stage
+    input  LQ_PACKET             load_retire_pack       [`N-1:0],
     //mispredict recovery
     input  logic                 mispredicted                   ,
     input  LQ_IDX                BS_lq_tail_in                  ,
@@ -59,7 +61,9 @@ module load_queue(
         logic [`SQ_SZ-1:0] old_sq_valid_mask; 
         SQ_IDX         sq_tail_position; 
         logic          issued; // already request to dcache，waiting for data return    
-        ROB_IDX         rob_index;    
+        ROB_IDX         rob_index; 
+        logic           ready_retire;  
+        logic           broadcasted;
     } LQ_ENTRY;
 
     LQ_ENTRY    lq          [`LQ_SZ-1:0];
@@ -90,8 +94,6 @@ module load_queue(
     assign lq_out = lq_out_r;
     logic head_moved;
 
-
-
     always_comb begin
         //default
         head_next = head;
@@ -119,28 +121,12 @@ module load_queue(
         store_covers_load=  '0;
         dcache_req_idx   = '0;
         
-
-
-
-        //request broadcast and broadcast it 1 cycle later
-        //we can execute out of order
-        for(int i = 0; i < `LQ_SZ; i++)begin
-            if(lq[LQ_IDX'(head+i)].valid && lq[LQ_IDX'(head+i)].data_ready && lq[LQ_IDX'(head+i)].addr_ready) begin
-                cdb_req_load = '1;
-                lq_out_next.valid = '1;
-                lq_out_next.dest_tag = lq[LQ_IDX'(head+i)].dest_tag;
-                lq_out_next.data = lq[LQ_IDX'(head+i)].data;
-                lq_out_next.rob_index = lq[LQ_IDX'(head+i)].rob_index;
-                lq_n[LQ_IDX'(head+i)] = '0;
-                break;
-            end
-        end
-
-        // head move
+        //retire
         for(int i = 0; i < `LQ_SZ; i++) begin
-            if(!lq_n[LQ_IDX'(head + i)].valid) begin
+            if(lq[LQ_IDX'(head + i)].valid && lq[LQ_IDX'(head + i)].ready_retire) begin
                 head_next = LQ_IDX'(head + i + 1);
                 head_moved = 1'b1;
+                lq_n[LQ_IDX'(head+i)] = 0;
                 if(head_next == tail_next) begin
                     break; 
                 end
@@ -149,7 +135,30 @@ module load_queue(
             end
         end
 
+       // set ready retire
+        for(int i = 0; i < `N; i++) begin
+            if(load_retire_pack[i].valid) begin
+                if(lq[load_retire_pack[i].lq_index].valid 
+                && lq[load_retire_pack[i].lq_index].broadcasted 
+                && !lq[load_retire_pack[i].lq_index].ready_retire) begin
+                    lq_n[load_retire_pack[i].lq_index].ready_retire = 1;
+                end
+            end
+        end
 
+        //request broadcast and broadcast it 1 cycle later
+        //we can execute out of order
+        for(int i = 0; i < `LQ_SZ; i++)begin
+            if(lq[LQ_IDX'(head+i)].valid && lq[LQ_IDX'(head+i)].data_ready &&  lq[LQ_IDX'(head+i)].addr_ready && !lq[LQ_IDX'(head+i)].broadcasted) begin
+                cdb_req_load = '1;
+                lq_out_next.valid = '1;
+                lq_out_next.dest_tag = lq[LQ_IDX'(head+i)].dest_tag;
+                lq_out_next.data = lq[LQ_IDX'(head+i)].data;
+                lq_out_next.rob_index = lq[LQ_IDX'(head+i)].rob_index;
+                lq_n[LQ_IDX'(head+i)].broadcasted = 1;
+                break;
+            end
+        end
 
         //forward and dcache request
         //----------------------------------------------------
@@ -324,20 +333,22 @@ module load_queue(
 
 
         //dispatch
-        if(mispredicted)begin
-            tail_next = BS_lq_tail_in;
-            //flush entry
+        if(mispredicted) begin
+           tail_next = BS_lq_tail_in;
             for(int i = 0; i < `LQ_SZ; i++) begin
-                if(tail >= BS_lq_tail_in) begin
-                    // no wrap around
+                if(full && tail == BS_lq_tail_in) begin
+                    // full and tail didn't move: clear everything
+                    lq_n[i] = '{default:'0};
+                end else if(BS_lq_tail_in <= tail) begin
+                    // no wrap around: flush [BS_lq_tail_in, tail)
                     if(i >= BS_lq_tail_in && i < tail)
                         lq_n[i] = '{default:'0};
                 end else begin
-                    // wrap around
+                    // wrap around: flush [BS_lq_tail_in, LQ_SZ) and [0, tail)
                     if(i >= BS_lq_tail_in || i < tail)
                         lq_n[i] = '{default:'0};
                 end
-            end
+            end 
         end else begin
             //dispatch logic
             for(int i = 0; i < `N; i++) begin

@@ -30,6 +30,7 @@ module rob(
         REG_IDX         dest_reg_idx;//for debug
         DATA            data;
         logic           is_store;
+        logic           is_load;
         LQ_IDX          lq_index;
         SQ_IDX          sq_index;
 
@@ -124,6 +125,8 @@ module rob(
                 rob_commit[i].data = rob_array[(head_ptr+i) % `ROB_SZ].data;
                 rob_commit[i].is_store = rob_array[(head_ptr+i) % `ROB_SZ].is_store;
                 rob_commit[i].sq_index = rob_array[(head_ptr+i) % `ROB_SZ].sq_index;
+                rob_commit[i].is_load = rob_array[(head_ptr+i) % `ROB_SZ].is_load;
+                rob_commit[i].lq_index = rob_array[(head_ptr+i) % `ROB_SZ].lq_index;
                 next_rob_array[(head_ptr+i) % `ROB_SZ] = 0;
             end
             next_head_ptr = head_ptr + 2;
@@ -140,6 +143,8 @@ module rob(
             rob_commit[0].data = rob_array[head_ptr].data;
             rob_commit[0].is_store = rob_array[head_ptr].is_store;
             rob_commit[0].sq_index = rob_array[head_ptr].sq_index;
+            rob_commit[0].is_load = rob_array[head_ptr].is_load;
+            rob_commit[0].lq_index = rob_array[head_ptr].lq_index;
             next_rob_array[head_ptr] = 0;
             next_head_ptr = head_ptr + 1;
 
@@ -197,6 +202,7 @@ module rob(
                 next_rob_array[tail_ptr].lq_index = dispatch_pack[0].lq_index;
                 next_rob_array[tail_ptr].sq_index = dispatch_pack[0].sq_index;
                 next_rob_array[tail_ptr].is_store = dispatch_pack[0].wr_mem;
+                next_rob_array[tail_ptr].is_load = dispatch_pack[0].rd_mem;
                 next_tail_ptr = tail_ptr + 1;  
 
                 rob_index[0] = tail_ptr;          
@@ -217,7 +223,8 @@ module rob(
                 next_rob_array[tail_ptr].dest_reg_idx = dispatch_pack[0].dest_reg_idx; 
                 next_rob_array[tail_ptr].lq_index = dispatch_pack[0].lq_index;
                 next_rob_array[tail_ptr].sq_index = dispatch_pack[0].sq_index;   
-                next_rob_array[tail_ptr].is_store = dispatch_pack[0].wr_mem;        
+                next_rob_array[tail_ptr].is_store = dispatch_pack[0].wr_mem;  
+                next_rob_array[tail_ptr].is_load = dispatch_pack[0].rd_mem;      
 
                 next_rob_array[ROB_IDX'(tail_ptr + 1)].valid = 1;
                 next_rob_array[ROB_IDX'(tail_ptr + 1)].t = dispatch_pack[1].T;
@@ -232,6 +239,7 @@ module rob(
                 next_rob_array[ROB_IDX'(tail_ptr + 1)].lq_index = dispatch_pack[1].lq_index;
                 next_rob_array[ROB_IDX'(tail_ptr + 1)].sq_index = dispatch_pack[1].sq_index;
                 next_rob_array[ROB_IDX'(tail_ptr + 1)].is_store = dispatch_pack[1].wr_mem;
+                next_rob_array[ROB_IDX'(tail_ptr + 1)].is_load = dispatch_pack[1].rd_mem;
 
                 rob_index[0] = tail_ptr;
                 rob_index[1] = tail_ptr + 1;

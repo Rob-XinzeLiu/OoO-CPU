@@ -561,6 +561,8 @@ typedef struct packed{
     logic           halt;
     logic           illegal;
     logic           is_store;
+    logic           is_load;
+    LQ_IDX          lq_index;
     SQ_IDX          sq_index;
 } RETIRE_PACKET;
 

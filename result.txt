@@ -46,9 +46,9 @@ alexnet failed
 
 backtrack failed
 
-basic_malloc failed
+basic_malloc passed
 
-bfs failed
+bfs passed
 
 dft failed
 
@@ -56,15 +56,15 @@ fc_forward passed
 
 graph failed
 
-insertionsort failed
+insertionsort passed
 
-matrix_mult_rec passed
+matrix_mult_rec failed
 
 mergesort failed
 
 omegalul passed
 
-outer_product failed
+outer_product passed
 
 priority_queue failed
 
