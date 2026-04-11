@@ -98,10 +98,10 @@ module icache (
 
     // Write enable
     logic icache_we_0, icache_we_1, icache_we_pf_0, icache_we_pf_1;
-    assign icache_we_0    = got_mem_data && !lru[locked_index];
-    assign icache_we_1    = got_mem_data && lru[locked_index];
-    assign icache_we_pf_0 = got_prefetch_data && !lru[locked_pf_index];
-    assign icache_we_pf_1 = got_prefetch_data && lru[locked_pf_index];
+    assign icache_we_0    = got_mem_data && !lru[locked_index] && !(hit_0 && locked_index == current_index && locked_tag != current_tag);
+    assign icache_we_1    = got_mem_data && lru[locked_index] && !(hit_1 && locked_index == current_index && locked_tag != current_tag);
+    assign icache_we_pf_0 = got_prefetch_data && !lru[locked_pf_index] && !(hit_0 && locked_pf_index == current_index && locked_pf_tag != current_tag);
+    assign icache_we_pf_1 = got_prefetch_data && lru[locked_pf_index] && !(hit_1 && locked_pf_index == current_index && locked_pf_tag != current_tag);
 
     // Fillin control
     logic                   fill_we [1:0];
