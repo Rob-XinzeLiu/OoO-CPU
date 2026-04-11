@@ -309,7 +309,8 @@ module load_queue(
                 && !lq[dcache_req_idx].issued 
                 && !fwd_hit_arr[dcache_req_idx]
                 && !conflict_arr[dcache_req_idx]
-                && !has_pending_store) begin //only request when no conflict
+                && !has_pending_store
+                && lq[dcache_req_idx].addr < `MEM_SIZE_IN_BYTES) begin //only request when no conflict
                     load_packet.valid    = 1'b1;
                     load_packet.addr     = lq[dcache_req_idx].addr;
                     load_packet.lq_index = dcache_req_idx;
