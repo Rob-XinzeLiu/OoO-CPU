@@ -251,22 +251,18 @@ ALL_HEADERS = $(INC)*.svh
 # 	All headers must be in inc/ directly.
 
 # TODO: add more modules here, or rename the given ones
-MODULES = cpu mult rob rs psel_gen freelist victim_cache mshr dcache
-
-# TODO: add extra source file dependencies below
+MODULES = cpu mult rob rs psel_gen freelist victim_cache mshr dcache miss_path
 
 MULT_FILES =		 $(SRC)mult.sv
 build/mult.simv:	 $(MULT_FILES)
 build/mult.cov.simv: $(MULT_FILES)
 synth/mult.vg:		 $(MULT_FILES)
 
-# TODO: add any files required for the RS here (besides test/testbenches/rs_test.sv)
-RS_FILES =		   	 $(SRC)rs.sv 	$(SRC)combinational/psel_gen.sv	# e.x. file name doesn't need to match build/'rs', but BE ORGANIZED
+RS_FILES =		   	 $(SRC)rs.sv $(SRC)combinational/psel_gen.sv
 build/rs.simv:     	 $(RS_FILES)
 build/rs.cov.simv: 	 $(RS_FILES)
 synth/rs.vg:       	 $(RS_FILES)
 
-# TODO: add any files required for the ROB here (besides test/testbenches/rob_test.sv)
 ROB_FILES =      	 $(SRC)rob.sv
 build/rob.simv:  	 $(ROB_FILES)
 build/rob.cov.simv:	 $(ROB_FILES)
@@ -290,11 +286,22 @@ synth/mshr.vg:        $(MSHR_FILES)
 DCACHE_FILES = \
 	$(SRC)dcache.sv \
 	$(SRC)memDP.sv \
-	$(SRC)victim_cache.sv
+	$(SRC)victim_cache.sv \
+	$(SRC)write_buf.sv
 build/dcache.simv:      $(DCACHE_FILES)
 build/dcache.cov.simv:  $(DCACHE_FILES)
 synth/dcache.vg:        $(DCACHE_FILES)
 
+MISS_PATH_FILES = \
+	$(SRC)dcache.sv \
+	$(SRC)memDP.sv \
+	$(SRC)victim_cache.sv \
+	$(SRC)write_buff.sv \
+	$(SRC)mshr.sv \
+	test/testbenches/miss_path_test.sv
+build/miss_path.simv:      $(MISS_PATH_FILES)
+build/miss_path.cov.simv:  $(MISS_PATH_FILES)
+synth/miss_path.vg:        $(MISS_PATH_FILES)
 #################################
 # ---- Main CPU Definition ---- #
 #################################

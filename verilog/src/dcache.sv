@@ -187,6 +187,8 @@ module Dcache
         end
     end
 
+    DATA data_for_store;
+
     always_comb begin 
         for (int s = 0; s < SETS; s++) begin
             for (int w = 0; w < WAYS; w++) begin
@@ -200,13 +202,23 @@ module Dcache
         hit     = 1'b0;
         hit_way = '0;
         old_lru_index_hit = '0;
+        data_for_store = com_miss_req.dep_miss ? com_miss_req.miss_req_data : store_req_pack.valid ? store_req_pack.data : '0;
 
         for (int i = 0; i < WAYS; i++) begin
-            data_re[i][0]    = (cache_ready && req_valid) ? 1'b1 : 1'b0;
-            data_raddr[i][0] = (cache_ready && req_valid) ? d_request_set : '0;
-            data_we[i]       = 1'b0;
-            data_waddr[i]    = '0;
-            data_wdata[i]    = '0;
+            data_we[i]    = 1'b0;
+            data_waddr[i] = '0;
+            data_wdata[i] = '0;
+
+            if (miss_returned && !com_miss_req.dep_miss) begin
+                data_re[i][0]    = 1'b1;
+                data_raddr[i][0] = com_miss_req.miss_req_set;
+            end else if (cache_ready && req_valid) begin
+                data_re[i][0]    = 1'b1;
+                data_raddr[i][0] = d_request_set;
+            end else begin
+                data_re[i][0]    = 1'b0;
+                data_raddr[i][0] = '0;
+            end
         end
     
         dcache_evicted_valid = 1'b0;
@@ -317,7 +329,7 @@ module Dcache
                     next_cache_tags[com_miss_req.miss_req_set][way_index_miss].dirty = 1'b1;
                 end
     
-                if (cache_tags[com_miss_req.miss_req_set][way_index_miss].valid) begin
+                if (!found_matching_tags && cache_tags[com_miss_req.miss_req_set][way_index_miss].valid) begin
                     data_re[way_index_miss][0] = 1'b1;
                     data_raddr[way_index_miss][ 0] = com_miss_req.miss_req_set;
 
@@ -334,7 +346,10 @@ module Dcache
 
                     next_cache_tags[com_miss_req.miss_req_set][way_index_miss].tag   = com_miss_req.miss_req_tag;
                     next_cache_tags[com_miss_req.miss_req_set][way_index_miss].valid = 1'b1;
-                    next_cache_tags[com_miss_req.miss_req_set][way_index_miss].dirty = !com_miss_req.req_is_load;
+                    next_cache_tags[com_miss_req.miss_req_set][way_index_miss].dirty =
+                    found_matching_tags ?
+                        cache_tags[com_miss_req.miss_req_set][way_index_miss].dirty : // preserve existing
+                        !com_miss_req.req_is_load; // new line: dirty if store, clean if load
                     next_cache_tags[com_miss_req.miss_req_set][way_index_miss].lru_val = WAYS - 1;
 
                     for(int i = 0; i < WAYS; i++) begin
@@ -421,13 +436,13 @@ module Dcache
                 next_cache_tags[d_request_set][hit_way].dirty = 1'b1;
                 case (d_request_size)
                     BYTE: begin
-                        merged_store_data.byte_level[d_request_offset] = store_req_pack.data[7:0];
+                        merged_store_data.byte_level[d_request_offset] = data_for_store[7:0];
                     end
                     HALF: begin
-                        merged_store_data.half_level[d_request_offset[2:1]] = store_req_pack.data[15:0];
+                        merged_store_data.half_level[d_request_offset[2:1]] = data_for_store[15:0];
                     end
                     WORD: begin
-                        merged_store_data.word_level[d_request_offset[2]] = store_req_pack.data;
+                        merged_store_data.word_level[d_request_offset[2]] = data_for_store;
                     end
                     default: begin
                         //merged_store_data = '0;

@@ -431,24 +431,31 @@ module testbench;
                     $fdisplay(out_fileno, "@@@");
                     showing_data = 0;
                 end
-                // if (k == 559) begin
+                // if (k == 128) begin
                 //     $fdisplay(out_fileno, "FINAL LINE k=%0d final_line=%h", k, final_line);
+                //     $fdisplay(out_fileno, "Expected location: set=%0d tag=%0d",
+                //         128 % `DCACHE_SETS,
+                //         128 / `DCACHE_SETS
+                //     );
 
                 //     for (int w = 0; w < `DCACHE_WAYS; w++) begin
                 //         $fdisplay(out_fileno,
-                //             "DC set7 way%0d: valid=%0d tag=%0d data=%h",
+                //             "DC set%0d way%0d: valid=%0d dirty=%0d tag=%0d data=%h",
+                //             128 % `DCACHE_SETS,
                 //             w,
-                //             dcache_debug_tags[7][w].valid,
-                //             dcache_debug_tags[7][w].tag,
-                //             dcache_debug_data[7][w]
+                //             dcache_debug_tags[128 % `DCACHE_SETS][w].valid,
+                //             dcache_debug_tags[128 % `DCACHE_SETS][w].dirty,
+                //             dcache_debug_tags[128 % `DCACHE_SETS][w].tag,
+                //             dcache_debug_data[128 % `DCACHE_SETS][w]
                 //         );
                 //     end
 
                 //     for (int i = 0; i < `VC_LINES; i++) begin
                 //         $fdisplay(out_fileno,
-                //             "VC idx%0d: valid=%0d tag=%0d set=%0d data=%h",
+                //             "VC idx%0d: valid=%0d dirty=%0d tag=%0d set=%0d data=%h",
                 //             i,
                 //             debug_vc_entries[i].valid,
+                //             debug_vc_entries[i].dirty,
                 //             debug_vc_entries[i].tag,
                 //             debug_vc_entries[i].set,
                 //             debug_vc_entries[i].data
@@ -465,7 +472,7 @@ module testbench;
                 //             debug_write_buff[i].data
                 //         );
                 //     end
-                //end
+                // end
                 
             end
             

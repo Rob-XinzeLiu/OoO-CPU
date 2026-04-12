@@ -1,2 +1,3 @@
 .__smb*
 build/
+.vcs_checkpoint_shared_memory*

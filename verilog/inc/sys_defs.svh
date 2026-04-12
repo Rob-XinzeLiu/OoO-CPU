@@ -214,6 +214,7 @@ typedef struct packed {
 
 typedef struct packed {
     logic                                     valid;
+    logic                                     dependent;
     ADDR                                      miss_req_address;
     logic [`DCACHE_TAG_BITS-1:0]              miss_req_tag;
     logic [`DCACHE_SET_BITS-1:0]              miss_req_set;
@@ -228,6 +229,7 @@ typedef struct packed {
 `define MSHR_ENTRIES 16
 typedef struct packed {
     logic                                     valid;
+    logic                                     ready;
     logic                                     dep_miss;
     MEM_TAG                                   trans_tag;
     ADDR                                      miss_req_address;
@@ -239,6 +241,7 @@ typedef struct packed {
     logic                                     miss_req_unsigned;
     DATA                                      miss_req_data;
     LQ_IDX                                    lq_index;
+    MEM_BLOCK                                 refill_data;
 
 } outstanding_entry_t;
 

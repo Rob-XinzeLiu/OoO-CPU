@@ -710,6 +710,7 @@ module testbench;
         @(negedge clock);
         clear_req();
         @(negedge clock);
+        
 
         // ------------------------------------------------------------
         // Final Result
