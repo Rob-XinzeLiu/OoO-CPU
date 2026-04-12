@@ -18,7 +18,7 @@ cd /home/weitungl/Documents/EECS472/pfinal_472-w26.group8
 # This only runs *.s files. How could you add *.c files?
 > result.txt
 for source_file in programs/*.s programs/*c; do
-    if [ "$source_file" = "programs/dft.c" ] 
+    if [ "$source_file" = "programs/matrix_mult_rec.c" ] 
     then
         program=$(echo "$source_file" | cut -d '.' -f1 | cut -d '/' -f 2)
         echo "Running $program"

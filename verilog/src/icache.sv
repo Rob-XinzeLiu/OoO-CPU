@@ -110,8 +110,8 @@ module icache (
 
     assign fill_index = (got_mem_data)? locked_index:locked_pf_index;
     assign fill_data = Imem2proc_data;
-    assign fill_we[0] = got_mem_data && !lru[locked_index] || (!got_mem_data && got_prefetch_data && !lru[locked_pf_index]);
-    assign fill_we[1] = got_mem_data && lru[locked_index]  || (!got_mem_data && got_prefetch_data && lru[locked_pf_index]);
+    assign fill_we[0] = icache_we_0 || icache_we_pf_0;
+    assign fill_we[1] = icache_we_1 || icache_we_pf_1;
     
     // ---- Cache state registers ---- //
 
