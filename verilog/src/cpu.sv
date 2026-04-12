@@ -198,7 +198,8 @@ module cpu (
 
 
     logic halt_safe;
-    assign halt_safe    = !miss_returned && !mshr_currently_waiting;
+    logic req_valid;
+    assign halt_safe    = !miss_returned && !mshr_currently_waiting && !req_valid;
 
     //store queue
     SQ_PACKET            sq_out                          ;
@@ -854,6 +855,7 @@ module cpu (
         .grant(wb_gnt),
         .cache_resp_data(cache_resp_data),
         .miss_request(miss_request),
+        .req_valid(req_valid),
         .wb2mem_command(wb2mem_command),
         .wb2mem_addr(wb2mem_addr),
         .wb2mem_data(wb2mem_data),

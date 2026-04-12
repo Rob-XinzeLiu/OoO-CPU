@@ -21,6 +21,7 @@ module Dcache
 
     output  dcache_data_t    cache_resp_data, // slot 2 will be for cache miss loads
     output  miss_request_t   miss_request, 
+    output logic            req_valid,
 
     output MEM_COMMAND      wb2mem_command,
     output ADDR             wb2mem_addr,
@@ -29,6 +30,7 @@ module Dcache
 
     output logic           dcache_can_accept_store,
     output logic           dcache_can_accept_load,
+    
 
     //for memory unified file
     output MEM_BLOCK       [`DCACHE_SETS-1:0][`DCACHE_WAYS-1:0] dcache_debug_data,
@@ -120,7 +122,7 @@ module Dcache
     assign dcache_can_accept_store = !load_req_active && cache_ready && !miss_returned;
     assign dcache_can_accept_load  = cache_ready && !miss_returned;
 
-    logic req_valid;
+    //logic req_valid;
     assign req_valid = load_req_pack.valid || store_req_pack.valid || (com_miss_req.valid && com_miss_req.dep_miss); // only consider miss request if it's dependent on another miss, otherwise it will be handled in the same way as a new request from the core
     /////////////////
     ////VC signals
