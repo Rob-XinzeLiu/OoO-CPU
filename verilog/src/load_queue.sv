@@ -236,30 +236,14 @@ module load_queue(
                         fwd_hit_arr[i]  = 1'b1;
                         case(lq[i].funct3[1:0])
                             2'b00: begin // lb/lbu
-                                case(lq[i].addr[1:0])
-                                    2'b00: fwd_data_arr[i] = lq[i].funct3[2] ? 
-                                            {24'b0, sq_data_in[selected_idx][7:0]} :
-                                            {{24{sq_data_in[selected_idx][7]}},  sq_data_in[selected_idx][7:0]};
-                                    2'b01: fwd_data_arr[i] = lq[i].funct3[2] ? 
-                                            {24'b0, sq_data_in[selected_idx][15:8]} :
-                                            {{24{sq_data_in[selected_idx][15]}}, sq_data_in[selected_idx][15:8]};
-                                    2'b10: fwd_data_arr[i] = lq[i].funct3[2] ? 
-                                            {24'b0, sq_data_in[selected_idx][23:16]} :
-                                            {{24{sq_data_in[selected_idx][23]}}, sq_data_in[selected_idx][23:16]};
-                                    2'b11: fwd_data_arr[i] = lq[i].funct3[2] ? 
-                                            {24'b0, sq_data_in[selected_idx][31:24]} :
-                                            {{24{sq_data_in[selected_idx][31]}}, sq_data_in[selected_idx][31:24]};
-                                endcase
+                                fwd_data_arr[i] = lq[i].funct3[2] ?
+                                                {24'b0, sq_data_in[selected_idx][7:0]} :
+                                                {{24{sq_data_in[selected_idx][7]}}, sq_data_in[selected_idx][7:0]};
                             end
                             2'b01: begin // lh/lhu
-                                case(lq[i].addr[1])
-                                    1'b0: fwd_data_arr[i] = lq[i].funct3[2] ? 
-                                            {16'b0, sq_data_in[selected_idx][15:0]} :
-                                            {{16{sq_data_in[selected_idx][15]}}, sq_data_in[selected_idx][15:0]};
-                                    1'b1: fwd_data_arr[i] = lq[i].funct3[2] ? 
-                                            {16'b0, sq_data_in[selected_idx][31:16]} :
-                                            {{16{sq_data_in[selected_idx][31]}}, sq_data_in[selected_idx][31:16]};
-                                endcase
+                                fwd_data_arr[i] = lq[i].funct3[2] ? 
+                                                {16'b0, sq_data_in[selected_idx][15:0]} :
+                                                {{16{sq_data_in[selected_idx][15]}}, sq_data_in[selected_idx][15:0]};
                             end
                             2'b10: begin // lw
                                 fwd_data_arr[i] = sq_data_in[selected_idx];
