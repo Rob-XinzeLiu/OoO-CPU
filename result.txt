@@ -8,6 +8,8 @@ copy_long passed
 
 copy passed
 
+crt failed
+
 evens_long passed
 
 evens passed
@@ -41,4 +43,34 @@ sampler passed
 saxpy passed
 
 simple passed
+
+alexnet failed
+
+backtrack passed
+
+basic_malloc passed
+
+bfs passed
+
+dft passed
+
+fc_forward passed
+
+graph passed
+
+insertionsort passed
+
+matrix_mult_rec passed
+
+mergesort passed
+
+omegalul failed
+
+outer_product passed
+
+priority_queue passed
+
+quicksort failed
+
+sort_search passed
 

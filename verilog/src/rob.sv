@@ -91,19 +91,23 @@ module rob(
             // head is halt but not safe
             retire_num = 0;
         end else if (rob_array[head_ptr].halt && halt_safe) begin
-            // head is halt and safe， only retire this one
+            // head is halt and safe, only retire this one
             retire_num = 1;
         end else begin
-            // head是普通指令，看head+1
+            // head is normal instruction, check head+1
             if (rob_array[ROB_IDX'(head_ptr+1)].valid && 
                 rob_array[ROB_IDX'(head_ptr+1)].ready_retire &&
                 ROB_IDX'(head_ptr+1) != tail_ptr) begin
                 
                 if (rob_array[ROB_IDX'(head_ptr+1)].halt && !halt_safe) begin
-                    // head+1是halt但不safe，只retire head
+                    // head+1 is halt but not safe, only retire head
+                    retire_num = 1;
+                end else if (rob_array[ROB_IDX'(head_ptr+1)].halt && halt_safe) begin
+                    // head+1 is halt and safe, but only retire head this cycle
+                    // halt will be retired next cycle to ensure all stores are flushed to dcache
                     retire_num = 1;
                 end else begin
-                    // head+1是普通指令或halt且safe
+                    // head+1 is normal instruction or halt and safe
                     retire_num = 2;
                 end
             end else begin
