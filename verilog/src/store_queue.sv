@@ -31,6 +31,7 @@ module store_queue (
     output logic [`SQ_SZ-1:0]   sq_addr_ready_mask              ,
     //to rs & rob
     output  SQ_IDX              sq_index                [`N-1:0],
+    output  SQ_IDX              sq_head_out                     ,
     //store to load forwarding
     output ADDR                 sq_addr_out         [`SQ_SZ-1:0],
     output logic                sq_addr_ready_out   [`SQ_SZ-1:0],
@@ -66,6 +67,9 @@ module store_queue (
     SQ_IDX tail, tail_next;
     SQ_CNT free_slots;
     logic [`SQ_SZ-1:0] sq_valid_snapshot; // internal signal，update when dispatch
+    logic head_moved;
+
+    assign sq_head_out = head;
 
     always_comb begin
         //default
@@ -84,6 +88,7 @@ module store_queue (
         sq_tail_out = '{default:'0};
         sq_valid_out = '0;
         sq_ready_retire_out = '0;
+        head_moved = '0;
 
 
         //commit/retire logic
@@ -95,6 +100,7 @@ module store_queue (
                 sq_out.funct3 = sq[head].funct3;
                 sq_n[head] = 0;
                 head_next = head_next + 1;
+                head_moved = 1;
             end
         end    
 
@@ -172,17 +178,23 @@ module store_queue (
         end
 
         if(head_next == tail_next) begin
-            if(mispredicted) begin
+            if(head_moved) begin
+                // head swept through entries and caught up to tail: always empty
+                full_n = 1'b0;
+            end else if(mispredicted) begin
                 // tail rolled back: full only if tail didn't actually move
-                full_n = (tail_next == tail) && full;
+                full_n = 1'b0;
             end else if(head_next == head && tail_next == tail) begin
+                // nothing changed, keep current state
                 full_n = full;
             end else begin
+                // tail advanced into head: full
+                // head caught up to tail: empty
                 full_n = (tail_next != tail) && (head_next == head);
             end
         end else begin
-            full_n = 1'b0;
-        end
+            full_n = 1'b0; // head and tail not equal, definitely not full
+        end 
 
         //calculate available space
         free_slots = full_n ? 0 :

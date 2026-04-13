@@ -26,7 +26,7 @@
 `define CDB_SZ `N // This MUST match your superscalar width
 
 // sizes
-`define ROB_SZ 8
+`define ROB_SZ 16
 `define FLIST_SZ `ROB_SZ
 `define FB_SZ 8
 `define RS_SZ 8
@@ -477,6 +477,7 @@ typedef struct packed{
     LQ_IDX          lq_index;
     SQ_IDX          sq_index;
     logic [`SQ_SZ-1:0]   sq_valid_mask;//record when dispatch
+    SQ_IDX          sq_tail_position;
 
     logic [1:0]     current_head;
     logic [2:0]     current_count;

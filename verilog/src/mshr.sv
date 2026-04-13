@@ -53,6 +53,7 @@ module mshr #(
 
     // logic found_completed;
     logic [$clog2(ENTRIES)-1:0] completed_idx;
+    localparam int OFFSET_BITS = `DCACHE_OFFSET_BITS;
 
     assign miss_queue_full = (miss_count == ENTRIES) || (out_count == ENTRIES);
     //assign next_miss_returned   = found_completed;
@@ -169,7 +170,7 @@ module mshr #(
                mshr2mem_addr = {
                     next_miss_fifo[next_miss_head].miss_req_tag,
                     next_miss_fifo[next_miss_head].miss_req_set,
-                    3'b000
+                    {OFFSET_BITS{1'b0}}
                 };  
                 mshr_wait_for_trans = 1'b1;
 

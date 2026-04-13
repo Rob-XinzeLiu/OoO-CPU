@@ -8,8 +8,6 @@ copy_long passed
 
 copy passed
 
-crt failed
-
 evens_long passed
 
 evens passed
@@ -62,15 +60,13 @@ insertionsort passed
 
 matrix_mult_rec passed
 
-mergesort passed
+mergesort failed
 
-omegalul failed
+omegalul passed
 
 outer_product passed
 
 priority_queue passed
 
 quicksort failed
-
-sort_search passed
 

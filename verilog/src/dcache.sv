@@ -466,7 +466,9 @@ module Dcache
         end
     end
  
-    victim_cache vc (
+    victim_cache #(
+        .VC_LINES(`VC_LINES)
+    )vc (
         .clock                (clock),
         .reset                (reset),
 

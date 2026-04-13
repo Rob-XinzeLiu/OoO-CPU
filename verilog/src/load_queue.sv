@@ -363,7 +363,7 @@ module load_queue(
                 full_n = 1'b0;
             end else if(mispredicted) begin
                 // tail rolled back: full only if tail didn't actually move
-                full_n = (tail_next == tail) && full;
+                full_n = 1'b0;
             end else if(head_next == head && tail_next == tail) begin
                 // nothing changed, keep current state
                 full_n = full;
@@ -374,7 +374,7 @@ module load_queue(
             end
         end else begin
             full_n = 1'b0; // head and tail not equal, definitely not full
-        end     
+        end 
                                 
         free_slots = (full_n)? 0 : 
                         (head_next == tail_next) ? `LQ_SZ :

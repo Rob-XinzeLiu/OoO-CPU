@@ -28,6 +28,7 @@ module stage_dispatch (
     //for lsq
     input  LQ_IDX                           lq_index_in                 [`N-1:0],
     input  SQ_IDX                           sq_index_in                 [`N-1:0],
+    input  SQ_IDX                           sq_tail_in                  [`N-1:0],
     input  logic [1:0]                      lq_space_available                  ,
     input  logic [1:0]                      sq_space_available                  ,
     input  logic [`SQ_SZ-1:0]               sq_valid_mask               [`N-1:0],
@@ -322,6 +323,7 @@ module stage_dispatch (
                     dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
                     dispatch_pack[0].sq_index = sq_index_in[0];
                     dispatch_pack[0].lq_index = lq_index_in[0];
+                    dispatch_pack[0].sq_tail_position = sq_tail_in[0];
                     dispatch_pack[0].sq_valid_mask = sq_valid_mask[0];
                     dispatch_pack[0].c_type = f_d_pack[0].c_type;
                     dispatch_pack[0].current_head = f_d_pack[0].current_head;
@@ -441,6 +443,7 @@ module stage_dispatch (
                         dispatch_pack[i].predict_taken = f_d_pack[i].predict_taken;
                         dispatch_pack[i].sq_index = sq_index_in[i];
                         dispatch_pack[i].lq_index = lq_index_in[i];
+                        dispatch_pack[i].sq_tail_position = sq_tail_in[i];
                         dispatch_pack[i].sq_valid_mask = sq_valid_mask[i];
                         dispatch_pack[i].c_type = f_d_pack[i].c_type;
                         dispatch_pack[i].current_head = f_d_pack[i].current_head;
@@ -478,6 +481,7 @@ module stage_dispatch (
                     dispatch_pack[0].predict_taken = f_d_pack[0].predict_taken;
                     dispatch_pack[0].sq_index = sq_index_in[0];
                     dispatch_pack[0].lq_index = lq_index_in[0];
+                    dispatch_pack[0].sq_tail_position = sq_tail_in[0];
                     dispatch_pack[0].sq_valid_mask = sq_valid_mask[0]; 
                     dispatch_pack[0].c_type = f_d_pack[0].c_type;
                     dispatch_pack[0].current_head = f_d_pack[0].current_head;
@@ -595,6 +599,7 @@ module stage_dispatch (
                     dispatch_pack[1].predict_taken = f_d_pack[1].predict_taken;
                     dispatch_pack[1].sq_index = sq_index_in[1];
                     dispatch_pack[1].lq_index = lq_index_in[1];
+                    dispatch_pack[1].sq_tail_position = sq_tail_in[1];
                     dispatch_pack[1].sq_valid_mask = sq_valid_mask[1];
                     dispatch_pack[1].c_type = f_d_pack[1].c_type;
                     dispatch_pack[1].current_head = f_d_pack[1].current_head;

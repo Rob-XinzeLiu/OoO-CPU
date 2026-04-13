@@ -15,6 +15,7 @@ module rs(
     //from sq
     input logic [`SQ_SZ-1:0]                sq_valid_in                         ,
     input logic [`SQ_SZ-1:0]                sq_addr_ready_mask                  ,
+    input SQ_IDX                            sq_head_in                          ,
     //from cdb
     input X_C_PACKET       [`N-1:0]         cdb                                 ,    
     //etb tag input
@@ -57,6 +58,7 @@ module rs(
         ADDR                predict_addr;
         LQ_IDX              lq_index;
         SQ_IDX              sq_index;
+        SQ_IDX              sq_tail_position;
         logic [`SQ_SZ-1:0]  sq_valid_mask;
         CTYPE               c_type;
         logic [1:0]         current_head;
@@ -75,6 +77,7 @@ module rs(
     logic [`RS_SZ-1:0]      dispatch_mask;
 
     logic [`RS_SZ-1:0]      load_mask, load_issue_mask;
+    logic [`RS_SZ-1:0][`SQ_SZ-1:0] valid_older_mask;
     logic [`RS_SZ-1:0]      store_mask, store_issue_mask;
 
     logic [`RS_SZ-1:0]      mult_mask;//, next_mult_mask;
@@ -200,6 +203,7 @@ module rs(
                     next_rs_entry[i].predict_taken = dispatch_pack[0].predict_taken;
                     next_rs_entry[i].lq_index = dispatch_pack[0].lq_index;
                     next_rs_entry[i].sq_index = dispatch_pack[0].sq_index;
+                    next_rs_entry[i].sq_tail_position = dispatch_pack[0].sq_tail_position;
                     next_rs_entry[i].sq_valid_mask = dispatch_pack[0].sq_valid_mask;
                     next_rs_entry[i].busy = 1;
                     next_rs_entry[i].c_type = dispatch_pack[0].c_type;
@@ -243,6 +247,7 @@ module rs(
                     next_rs_entry[i].predict_taken = dispatch_pack[0].predict_taken;
                     next_rs_entry[i].lq_index = dispatch_pack[0].lq_index;
                     next_rs_entry[i].sq_index = dispatch_pack[0].sq_index;
+                    next_rs_entry[i].sq_tail_position = dispatch_pack[0].sq_tail_position;
                     next_rs_entry[i].sq_valid_mask = dispatch_pack[0].sq_valid_mask;
                     next_rs_entry[i].busy = 1;
                     next_rs_entry[i].c_type = dispatch_pack[0].c_type;
@@ -283,6 +288,7 @@ module rs(
                     next_rs_entry[i].predict_taken = dispatch_pack[1].predict_taken;
                     next_rs_entry[i].lq_index = dispatch_pack[1].lq_index;
                     next_rs_entry[i].sq_index = dispatch_pack[1].sq_index;
+                    next_rs_entry[i].sq_tail_position = dispatch_pack[1].sq_tail_position;
                     next_rs_entry[i].sq_valid_mask = dispatch_pack[1].sq_valid_mask;
                     next_rs_entry[i].busy = 1;
                     next_rs_entry[i].c_type = dispatch_pack[1].c_type;
@@ -373,15 +379,24 @@ module rs(
                 internal_rs_entry[j].t2_ready &&
                 internal_rs_entry[j].wr_mem;
 
+        end
+
+        for (int j = 0; j < `RS_SZ; j++) begin
+            valid_older_mask[j] = '0;
+            for (int k = 0; k < `SQ_SZ; k++) begin
+                if (sq_head_in <= internal_rs_entry[j].sq_tail_position)
+                    valid_older_mask[j][k] = (k >= sq_head_in && k < internal_rs_entry[j].sq_tail_position);
+                else
+                    valid_older_mask[j][k] = (k >= sq_head_in || k < internal_rs_entry[j].sq_tail_position);
+            end
+
             load_mask[j] =
                 internal_rs_entry[j].busy &&
                 internal_rs_entry[j].t1_ready &&
                 internal_rs_entry[j].t2_ready &&
                 internal_rs_entry[j].rd_mem &&
-                !(|(internal_rs_entry[j].sq_valid_mask & sq_valid_in & ~sq_addr_ready_mask));//all the older store's address is known
-                //need to consider retired sq entry, so we also input current sq valid
+                !(|(internal_rs_entry[j].sq_valid_mask & valid_older_mask[j] & ~sq_addr_ready_mask));
         end
-
 
 
         has_ready_mult = |mult_mask;

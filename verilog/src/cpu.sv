@@ -216,6 +216,7 @@ module cpu (
     logic [`SQ_SZ-1:0]   sq_valid_out_mask       [`N-1:0];
     logic [`SQ_SZ-1:0]   sq_ready_retire_out ;
     SQ_IDX               sq_tail_out             [`N-1:0];
+    SQ_IDX               sq_head_out                     ;
 
     // CDB_Arbiter
     typedef enum logic [3:0] {
@@ -404,6 +405,7 @@ module cpu (
         .lq_space_available(lq_space_available),
         .sq_space_available(sq_space_available),
         .sq_valid_mask(sq_valid_out_mask),
+        .sq_tail_in(sq_tail_out),
 
 
         // Output
@@ -790,6 +792,7 @@ module cpu (
         .cdb_gnt_alu(cdb_gnt_alu),
         .sq_valid_in(sq_valid_out),
         .sq_addr_ready_mask(sq_addr_ready_mask),
+        .sq_head_in(sq_head_out),
         
 
         // Output
@@ -843,7 +846,10 @@ module cpu (
     //                                              //
     //////////////////////////////////////////////////
 
-    Dcache dcache (
+    Dcache#( //CHANGE DEFS IN SYS DEFS FOR ASSOCITIVITY
+        .WAYS(`DCACHE_WAYS),
+        .SETS(`DCACHE_SETS)
+    ) dcache (
         .clock(clock),
         .reset(reset),
         .load_req_pack(load_packet),
@@ -913,6 +919,7 @@ module cpu (
         .BS_sq_tail_out(BS_sq_tail),
         .sq_space_available(sq_space_available),
         .sq_addr_ready_mask(sq_addr_ready_mask),
+        .sq_head_out(sq_head_out),
         .sq_index(sq_index),
         .sq_addr_out(sq_addr_out),
         .sq_addr_ready_out(sq_addr_ready_out),
