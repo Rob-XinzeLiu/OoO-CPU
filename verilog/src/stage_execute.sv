@@ -5,8 +5,6 @@ module stage_execute(
     input logic                             reset                               ,
     // from RS                             
     input S_X_PACKET                        s_x_pack                      [5:0],
-    //from cdb, data forwarding
-    input X_C_PACKET                [`N-1:0]        cdb                         ,
     //from lq
     input LQ_PACKET                         lq_in                               ,   
     //to complete stage
@@ -153,12 +151,6 @@ module stage_execute(
     assign mispredict_bmask_out = mispredicted_mask;
 
 
-
-
-    DATA [5:0] fwd_data_1, fwd_data_2;
-    logic [5:0] fwd_hit_1, fwd_hit_2;
-
-
     always_comb begin
         //default
         start_mult = '0;
@@ -177,29 +169,12 @@ module stage_execute(
         rs1_store = '0;
         rs2_store = '0;
         func_cond = '0;
-        fwd_data_1 = '0;
-        fwd_data_2 = '0;
-        fwd_hit_1 = '0;
-        fwd_hit_2 = '0;
         lq_execute_pack = '0;
         sq_execute_pack = '0;
         x_c_pack = '{default:'0};
         early_tag_bus = '{default:'0};
 
 
-        //data forwarding from cdb
-        for(int i = 0; i < 6; i++)begin
-            for(int j = 0; j < `N; j++)begin
-                if((cdb[j].complete_tag == s_x_pack[i].t1) && s_x_pack[i].t1 != 0) begin
-                    fwd_data_1[i] = cdb[j].result;
-                    fwd_hit_1[i] = 1;
-                end
-                if(cdb[j].complete_tag == s_x_pack[i].t2 && s_x_pack[i].t2 != 0) begin
-                    fwd_data_2[i] = cdb[j].result;
-                    fwd_hit_2[i] = 1;
-                end
-            end
-        end
 
         ///////////////////////////////////////////////////////////////////////
         //////////////////////                         ////////////////////////
@@ -208,29 +183,29 @@ module stage_execute(
         ///////////////////////////////////////////////////////////////////////
         //first pack decide mult 
         if (s_x_pack[0].valid) begin
-            rs1_mult = fwd_hit_1[0]? fwd_data_1[0] : s_x_pack[0].rs1_value;
-            rs2_mult = fwd_hit_2[0]? fwd_data_2[0] : s_x_pack[0].rs2_value;
+            rs1_mult = s_x_pack[0].rs1_value;
+            rs2_mult = s_x_pack[0].rs2_value;
             func_mult = s_x_pack[0].inst.r.funct3;
             start_mult = '1;
         end   
 
         //second pack decide load
         if (s_x_pack[1].valid) begin
-            rs1_load = fwd_hit_1[1]? fwd_data_1[1] : s_x_pack[1].rs1_value;
+            rs1_load =  s_x_pack[1].rs1_value;
         end
 
         //third pack decide alu1
         if (s_x_pack[2].valid) begin
             func1_alu = s_x_pack[2].alu_func;
             case(s_x_pack[2].opa_select) 
-                OPA_IS_RS1:  opa1_alu = fwd_hit_1[2]? fwd_data_1[2] : s_x_pack[2].rs1_value;
+                OPA_IS_RS1:  opa1_alu = s_x_pack[2].rs1_value;
                 OPA_IS_NPC:  opa1_alu = s_x_pack[2].NPC;    //npc
                 OPA_IS_PC:   opa1_alu = s_x_pack[2].PC;    //pc
                 OPA_IS_ZERO: opa1_alu = 0;
                 default:     opa1_alu = 32'hdeadface; // dead face
             endcase
             case(s_x_pack[2].opb_select) 
-                OPB_IS_RS2:   opb1_alu = fwd_hit_2[2]? fwd_data_2[2] : s_x_pack[2].rs2_value;
+                OPB_IS_RS2:   opb1_alu = s_x_pack[2].rs2_value;
                 OPB_IS_I_IMM: opb1_alu = `RV32_signext_Iimm(s_x_pack[2].inst);
                 OPB_IS_S_IMM: opb1_alu = `RV32_signext_Simm(s_x_pack[2].inst);
                 OPB_IS_B_IMM: opb1_alu = `RV32_signext_Bimm(s_x_pack[2].inst);
@@ -244,14 +219,14 @@ module stage_execute(
         if (s_x_pack[3].valid) begin
             func2_alu = s_x_pack[3].alu_func;
             case(s_x_pack[3].opa_select) 
-                OPA_IS_RS1:  opa2_alu = fwd_hit_1[3]? fwd_data_1[3] : s_x_pack[3].rs1_value;
+                OPA_IS_RS1:  opa2_alu = s_x_pack[3].rs1_value;
                 OPA_IS_NPC:  opa2_alu = s_x_pack[3].NPC;    //npc
                 OPA_IS_PC:   opa2_alu = s_x_pack[3].PC;    //pc
                 OPA_IS_ZERO: opa2_alu = 0;
                 default:     opa2_alu = 32'hdeadface; // dead face
             endcase
             case(s_x_pack[3].opb_select) 
-                OPB_IS_RS2:   opb2_alu = fwd_hit_2[3]? fwd_data_2[3] : s_x_pack[3].rs2_value;
+                OPB_IS_RS2:   opb2_alu = s_x_pack[3].rs2_value;
                 OPB_IS_I_IMM: opb2_alu = `RV32_signext_Iimm(s_x_pack[3].inst);
                 OPB_IS_S_IMM: opb2_alu = `RV32_signext_Simm(s_x_pack[3].inst);
                 OPB_IS_B_IMM: opb2_alu = `RV32_signext_Bimm(s_x_pack[3].inst);
@@ -264,15 +239,15 @@ module stage_execute(
         
         //fifth pack decide conditional branch
         if (s_x_pack[4].valid ) begin
-            rs1_cond = fwd_hit_1[4]? fwd_data_1[4] : s_x_pack[4].rs1_value;
-            rs2_cond = fwd_hit_2[4]? fwd_data_2[4] : s_x_pack[4].rs2_value;
+            rs1_cond =  s_x_pack[4].rs1_value;
+            rs2_cond =  s_x_pack[4].rs2_value;
             func_cond = s_x_pack[4].inst.b.funct3;
         end
 
         //sixth pack decide store
         if(s_x_pack[5].valid) begin
-            rs1_store = fwd_hit_1[5]? fwd_data_1[5] : s_x_pack[5].rs1_value;
-            rs2_store = fwd_hit_2[5]? fwd_data_2[5] : s_x_pack[5].rs2_value;
+            rs1_store = s_x_pack[5].rs1_value;
+            rs2_store = s_x_pack[5].rs2_value;
         end
 
 

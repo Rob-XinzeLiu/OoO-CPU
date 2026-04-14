@@ -155,8 +155,8 @@ module cpu (
     logic      [`N-1:0] write_enable;
     PRF_IDX    [`N-1:0] write_index;
     DATA       [`N-1:0] write_data;
-    DATA       [5:0]    rs1_value;
-    DATA       [5:0]    rs2_value;
+    DATA       [5:0]    rs1_value1;
+    DATA       [5:0]    rs2_value1;
     PRF_IDX    [5:0]    read_idx_1;
     PRF_IDX    [5:0]    read_idx_2;
 
@@ -164,6 +164,27 @@ module cpu (
         for(int i = 0; i < 6; i++) begin
             read_idx_1[i] = d_s_pack[i].t1;
             read_idx_2[i] = d_s_pack[i].t2;
+        end
+    end
+
+    //ex to issue forwarding
+    DATA       [5:0]    rs1_value;
+    DATA       [5:0]    rs2_value;
+
+    always_comb begin
+        for(int i = 0; i < 6; i++) begin
+            rs1_value[i] = rs1_value1[i];
+            rs2_value[i] = rs2_value1[i];
+            for(int j = 0; j < `N; j++) begin
+                if(x_c_pack[j].valid && read_idx_1[i] != '0 &&
+                read_idx_1[i] == x_c_pack[j].complete_tag) begin
+                    rs1_value[i] = x_c_pack[j].result;
+                end
+                if(x_c_pack[j].valid && read_idx_2[i] != '0 &&
+                read_idx_2[i] == x_c_pack[j].complete_tag) begin
+                    rs2_value[i] = x_c_pack[j].result;
+                end
+            end
         end
     end
 
@@ -214,7 +235,6 @@ module cpu (
     logic [2:0]          sq_funct3_out       [`SQ_SZ-1:0];
     logic [`SQ_SZ-1:0]   sq_valid_out                    ;
     logic [`SQ_SZ-1:0]   sq_valid_out_mask       [`N-1:0];
-    logic [`SQ_SZ-1:0]   sq_ready_retire_out ;
     SQ_IDX               sq_tail_out             [`N-1:0];
     SQ_IDX               sq_head_out                     ;
 
@@ -472,14 +492,7 @@ module cpu (
         if(reset) begin
             s_x_pack_reg <= '{default: '0};
         end else begin
-            for(int i = 0; i < 'd6; i++) begin
-                if(global_mispredict && 
-                (s_x_pack[i].bmask & global_mispredict_index)) begin
-                    s_x_pack_reg[i] <= '{default: '0};
-                end else begin
-                    s_x_pack_reg[i] <= s_x_pack[i];
-                end
-            end
+            s_x_pack_reg <= s_x_pack;
         end
     end
 
@@ -496,7 +509,6 @@ module cpu (
         .reset (reset),
         .s_x_pack(s_x_pack_reg),
         .lq_in(lq_out),
-        .cdb(cdb),
         
         // Output
         .x_c_pack(x_c_pack),
@@ -643,8 +655,8 @@ module cpu (
         .write_en(write_enable),
         .write_data(write_data),
         // Output
-        .read_out_1(rs1_value),
-        .read_out_2(rs2_value)
+        .read_out_1(rs1_value1),
+        .read_out_2(rs2_value1)
     );
 
     //////////////////////////////////////////////////
@@ -828,7 +840,6 @@ module cpu (
         .load_execute_pack(load_execute_pack),
         .dcache_can_accept_load(dcache_can_accept_load),
         .dcache_load_packet(cache_resp_data),
-        .sq_ready_retire_in(sq_ready_retire_out),
         .load_retire_pack(load_retire_pack),
 
         //output
@@ -928,7 +939,6 @@ module cpu (
         .sq_funct3_out(sq_funct3_out),
         .sq_valid_out(sq_valid_out),
         .sq_valid_out_mask(sq_valid_out_mask),
-        .sq_ready_retire_out(sq_ready_retire_out),
         .sq_tail_out(sq_tail_out)
     );
 

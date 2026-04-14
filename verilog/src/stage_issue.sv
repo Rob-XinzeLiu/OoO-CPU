@@ -51,13 +51,13 @@ module stage_issue(
             next_s_x_pack[i].lq_index = issue_pack[i].lq_index;
         end
 
-        if (resolved) begin
-                for (int i = 0; i < `N + 1; i++) begin
-                    if (next_s_x_pack[i].valid) begin
-                        next_s_x_pack[i].bmask = next_s_x_pack[i].bmask & ~(resolved_bmask_index);
-                    end
-                end
-            end
+        // if (resolved) begin
+        //         for (int i = 0; i < `N + 1; i++) begin
+        //             if (next_s_x_pack[i].valid) begin
+        //                 next_s_x_pack[i].bmask = next_s_x_pack[i].bmask & ~(resolved_bmask_index);
+        //             end
+        //         end
+        //     end
     end
 
 endmodule

@@ -101,7 +101,7 @@ rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
 # there should be no need to change anything for the final project
 
 # this is a global clock period variable used in the tcl script and referenced in testbenches
-export CLOCK_PERIOD = 30.0
+export CLOCK_PERIOD = 30
 
 # verilog file paths
 export INC = verilog/inc/   # tcl script also uses inc

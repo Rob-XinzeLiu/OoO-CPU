@@ -69,6 +69,15 @@ module store_queue (
     logic [`SQ_SZ-1:0] sq_valid_snapshot; // internal signal，update when dispatch
     logic head_moved;
 
+    logic can_retire;
+    assign can_retire = store_retire_pack[0].valid || store_retire_pack[1].valid;
+
+    logic direct_commit;
+    assign direct_commit = dcache_can_accept && can_retire 
+                        && sq[head].valid && sq[head].addr_ready && sq[head].data_ready
+                        && !sq[head].ready_retire;
+
+
     assign sq_head_out = head;
 
     always_comb begin
@@ -87,22 +96,44 @@ module store_queue (
         sq_funct3_out = '{default:'0};
         sq_tail_out = '{default:'0};
         sq_valid_out = '0;
-        sq_ready_retire_out = '0;
         head_moved = '0;
 
 
         //commit/retire logic
-        if(dcache_can_accept) begin
-            if(sq[head].valid && sq[head].ready_retire) begin
-                sq_out.valid = 1;
-                sq_out.addr = sq[head].addr;
-                sq_out.data = sq[head].data;
+       if (dcache_can_accept) begin
+            if (sq[head].valid && sq[head].ready_retire) begin
+                sq_out.valid  = 1;
+                sq_out.addr   = sq[head].addr;
+                sq_out.data   = sq[head].data;
                 sq_out.funct3 = sq[head].funct3;
-                sq_n[head] = 0;
+                sq_n[head]        = 0;
+                sq_n[head].ready_retire = 0;
                 head_next = head_next + 1;
-                head_moved = 1;
+            end else if (!sq[head].ready_retire
+                    && can_retire
+                    && sq[head].valid
+                    && sq[head].addr_ready
+                    && sq[head].data_ready) begin
+                sq_out.valid  = 1;
+                sq_out.addr   = sq[head].addr;
+                sq_out.data   = sq[head].data;
+                sq_out.funct3 = sq[head].funct3;
+                sq_n[head]        = 0;
+                head_next = head_next + 1;
             end
-        end    
+        end 
+
+        // set ready_retire，jump through head that directly retired this cycle
+        for (int i = 0; i < `N; i++) begin
+            if (store_retire_pack[i].valid
+            && !(direct_commit && store_retire_pack[i].sq_index == head)) begin
+                if (sq[store_retire_pack[i].sq_index].valid
+                && sq[store_retire_pack[i].sq_index].addr_ready
+                && sq[store_retire_pack[i].sq_index].data_ready) begin
+                    sq_n[store_retire_pack[i].sq_index].ready_retire = 1;
+                end
+            end
+        end
 
         //forwarding
         //use sq instead of sq_n to minimize critical path
@@ -118,19 +149,8 @@ module store_queue (
             sq_ready_retire_out[i] = sq[i].ready_retire;
         end
 
-        //set ready retire
-        for(int i = 0; i < `N; i++) begin
-            if(store_retire_pack[i].valid) begin
-                if(sq[store_retire_pack[i].sq_index].valid 
-                && sq[store_retire_pack[i].sq_index].addr_ready 
-                && sq[store_retire_pack[i].sq_index].data_ready) begin
-                    sq_n[store_retire_pack[i].sq_index].ready_retire = 1;
-                end
-            end
-        end
-
         //from execute stage, store the addr that will be stored into dcache later
-        if(store_execute_pack.valid) begin
+        if(store_execute_pack.valid && sq[store_execute_pack.sq_index].valid) begin
             //find the corresponding store queue entry
             sq_n[store_execute_pack.sq_index].addr = store_execute_pack.addr;
             sq_n[store_execute_pack.sq_index].addr_ready = 1;
