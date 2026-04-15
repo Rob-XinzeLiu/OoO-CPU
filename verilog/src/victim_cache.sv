@@ -78,7 +78,7 @@ module victim_cache #(
         begin
             tmp = old_block;
 
-            unique case (size)
+            case (size)
                 // BYTE store (1 byte)
                 // offset = which byte (0–7) inside the 8-byte cache line
                 // store_data[7:0] = the 1 byte we want to write
@@ -147,7 +147,7 @@ module victim_cache #(
                 // load hit: return already formatted data
                 if (req_is_load) begin
                     vc_load_resp_lq_index = lq_index;
-                    unique case (d_request_size)
+                    case (d_request_size)
                         BYTE: begin
                             vc_load_resp_data = d_req_unsigned ?
                                 {{24{1'b0}}, vc_entries[i].data.byte_level[d_request_offset]} :

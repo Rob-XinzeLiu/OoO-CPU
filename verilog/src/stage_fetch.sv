@@ -58,7 +58,7 @@ module stage_if (
     // Predecode to get ctype
     function automatic CTYPE predecode_ctype(input logic[31:0] inst);
         logic [6:0] opcode = inst[6:0]; 
-        unique case(opcode)
+        case(opcode)
             7'b1100011: predecode_ctype = C_BR;
             7'b1101111: predecode_ctype = C_JAL;
             7'b1100111: predecode_ctype = C_JALR;

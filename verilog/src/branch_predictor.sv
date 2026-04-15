@@ -173,7 +173,7 @@ typedef enum logic [1:0] {
             gBHT <= '0;
         end else begin
             if (conditional_branch_out.valid) begin
-                unique case (PHT_update_unit)
+                case (PHT_update_unit)
                     high_not_take: PHT[update_idx_PHT] <= conditional_branch_out.result? low_not_take:high_not_take;
                     low_not_take:  PHT[update_idx_PHT] <= conditional_branch_out.result? low_take:high_not_take;
                     low_take:      PHT[update_idx_PHT] <= conditional_branch_out.result? high_take:low_not_take;
@@ -181,7 +181,7 @@ typedef enum logic [1:0] {
 
                 endcase
 
-                unique case (gPHT_update_unit)
+                case (gPHT_update_unit)
                     high_not_take: gPHT[update_idx_gPHT] <= conditional_branch_out.result? low_not_take:high_not_take;
                     low_not_take:  gPHT[update_idx_gPHT] <= conditional_branch_out.result? low_take:high_not_take;
                     low_take:      gPHT[update_idx_gPHT] <= conditional_branch_out.result? high_take:low_not_take;
@@ -191,14 +191,14 @@ typedef enum logic [1:0] {
 
                 if (update_result_global != update_result_local) begin
                     if (conditional_branch_out.result == update_result_local) begin
-                        unique case (selector_update_unit)
+                        case (selector_update_unit)
                             high_local: selector[gBHT] <= high_local;
                             low_local:  selector[gBHT] <= high_local;
                             low_global: selector[gBHT] <= low_local;
                             high_global:selector[gBHT] <= low_global; 
                         endcase 
                     end else if(conditional_branch_out.result == update_result_global) begin
-                        unique case (selector_update_unit)
+                        case (selector_update_unit)
                             high_local: selector[gBHT] <= low_local;
                             low_local:  selector[gBHT] <= low_global;
                             low_global: selector[gBHT] <= high_global;

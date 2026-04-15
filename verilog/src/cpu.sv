@@ -310,16 +310,7 @@ module cpu (
     // This state controls the stall signal that artificially forces IF
     // to stall until the previous instruction has completed.
 
-    logic if_valid, start_valid_on_reset;
-
-
-    always_ff @(posedge clock) begin
-        // Start valid on reset. Other stages (ID,EX,MEM,WB) start as invalid
-        // Using a separate always_ff is necessary since if_valid is combinational
-        // Assigning if_valid = reset doesn't work as you'd hope :/
-        start_valid_on_reset <= reset;
-    end
-
+    logic if_valid;
     // valid bit will cycle through the pipeline and come back from the wb stage
     //make sure it goes low on mispredict
     assign if_valid = ! global_mispredict && !early_mistarget_pack.valid;

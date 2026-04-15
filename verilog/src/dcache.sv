@@ -290,7 +290,7 @@ module Dcache
                     cache_resp_data.lq_index = com_miss_req.lq_index;
                     
 
-                    unique case (com_miss_req.miss_req_size)
+                    case (com_miss_req.miss_req_size)
                         BYTE: begin
                             cache_resp_data.data = com_miss_req.miss_req_unsigned ?
                                 {{24{1'b0}}, com_miss_req.refill_data.byte_level[com_miss_req.miss_req_offset]} :
@@ -325,6 +325,7 @@ module Dcache
                         BYTE: merged_store_data.byte_level[com_miss_req.miss_req_offset] = com_miss_req.miss_req_data[7:0];
                         HALF: merged_store_data.half_level[com_miss_req.miss_req_offset[2:1]] = com_miss_req.miss_req_data[15:0];
                         WORD: merged_store_data.word_level[com_miss_req.miss_req_offset[2]] = com_miss_req.miss_req_data;
+                        DOUBLE: merged_store_data.word_level[com_miss_req.miss_req_offset[2]] = com_miss_req.miss_req_data;//just like a fefault
                     endcase
 
                     data_wdata[way_index_miss] = merged_store_data;

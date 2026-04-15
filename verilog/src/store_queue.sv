@@ -37,16 +37,12 @@ module store_queue (
     output logic                sq_addr_ready_out   [`SQ_SZ-1:0],
     output DATA                 sq_data_out         [`SQ_SZ-1:0],
     output logic                sq_data_ready_out   [`SQ_SZ-1:0],
-    output logic [2:0]          sq_funct3_out       [`SQ_SZ-1:0],//full word forwarding
-    output logic [`SQ_SZ-1:0]   sq_valid_out                    ,//also to rs
+    output logic [2:0]          sq_funct3_out       [`SQ_SZ-1:0],
+    output logic [`SQ_SZ-1:0]   sq_valid_out                    ,
     output logic [`SQ_SZ-1:0]   sq_valid_out_mask       [`N-1:0],
-    output logic [`SQ_SZ-1:0]   sq_ready_retire_out             ,
     output SQ_IDX               sq_tail_out             [`N-1:0]
-
-
 );
 
-    // Store Queue entry
     typedef struct packed {
         logic        valid;
         logic        ready_retire;
@@ -55,10 +51,9 @@ module store_queue (
         DATA         data;
         logic        data_ready;
         ROB_IDX      rob_index;
-        logic [2:0]  funct3;//write in width(SB/SH/SW) from funct3[1:0]
+        logic [2:0]  funct3;
     } SQ_ENTRY;
 
-    //signal define
     SQ_ENTRY sq         [`SQ_SZ-1:0];
     SQ_ENTRY sq_n       [`SQ_SZ-1:0];
 
@@ -66,179 +61,152 @@ module store_queue (
     SQ_IDX head, head_next;
     SQ_IDX tail, tail_next;
     SQ_CNT free_slots;
-    logic [`SQ_SZ-1:0] sq_valid_snapshot; // internal signal，update when dispatch
+    logic [`SQ_SZ-1:0] sq_valid_snapshot;
     logic head_moved;
-
-    logic can_retire;
-    assign can_retire = store_retire_pack[0].valid || store_retire_pack[1].valid;
-
-    logic direct_commit;
-    assign direct_commit = dcache_can_accept && can_retire 
-                        && sq[head].valid && sq[head].addr_ready && sq[head].data_ready
-                        && !sq[head].ready_retire;
-
 
     assign sq_head_out = head;
 
     always_comb begin
-        //default
-        sq_n = sq;
-        head_next = head;
-        tail_next = tail;
-        full_n = full;
+        sq_n               = sq;
+        head_next          = head;
+        tail_next          = tail;
+        full_n             = full;
         sq_addr_ready_mask = '0;
-        sq_out = '{default:'0};
-        sq_index = '{default: '0};
-        sq_addr_out = '{default: '0};
-        sq_data_out = '{default: '0};
-        sq_valid_out_mask = '{default: '0};
-        BS_sq_tail_out = '{default: '0};
-        sq_funct3_out = '{default:'0};
-        sq_tail_out = '{default:'0};
-        sq_valid_out = '0;
-        head_moved = '0;
+        sq_out             = '{default:'0};
+        sq_index           = '{default: '0};
+        sq_addr_out        = '{default: '0};
+        sq_data_out        = '{default: '0};
+        sq_valid_out_mask  = '{default: '0};
+        BS_sq_tail_out     = '{default: '0};
+        sq_funct3_out      = '{default:'0};
+        sq_tail_out        = '{default:'0};
+        sq_valid_out       = '0;
+        head_moved         = '0;
 
-
-        //commit/retire logic
-       if (dcache_can_accept) begin
+        //----------------------------------------------------
+        // commit/retire logic
+        //----------------------------------------------------
+        if (dcache_can_accept) begin
             if (sq[head].valid && sq[head].ready_retire) begin
                 sq_out.valid  = 1;
                 sq_out.addr   = sq[head].addr;
                 sq_out.data   = sq[head].data;
                 sq_out.funct3 = sq[head].funct3;
-                sq_n[head]        = 0;
-                sq_n[head].ready_retire = 0;
-                head_next = head_next + 1;
-            end else if (!sq[head].ready_retire
-                    && can_retire
-                    && sq[head].valid
-                    && sq[head].addr_ready
-                    && sq[head].data_ready) begin
-                sq_out.valid  = 1;
-                sq_out.addr   = sq[head].addr;
-                sq_out.data   = sq[head].data;
-                sq_out.funct3 = sq[head].funct3;
-                sq_n[head]        = 0;
-                head_next = head_next + 1;
+                sq_n[head]    = '0;
+                head_next     = head_next + 1;
+                head_moved    = 1'b1;
             end
-        end 
+        end
 
-        // set ready_retire，jump through head that directly retired this cycle
+        //----------------------------------------------------
+        // set ready_retire (two-cycle path, no combinational loop)
+        //----------------------------------------------------
         for (int i = 0; i < `N; i++) begin
-            if (store_retire_pack[i].valid
-            && !(direct_commit && store_retire_pack[i].sq_index == head)) begin
+            if (store_retire_pack[i].valid) begin
                 if (sq[store_retire_pack[i].sq_index].valid
-                && sq[store_retire_pack[i].sq_index].addr_ready
-                && sq[store_retire_pack[i].sq_index].data_ready) begin
+                 && sq[store_retire_pack[i].sq_index].addr_ready
+                 && sq[store_retire_pack[i].sq_index].data_ready) begin
                     sq_n[store_retire_pack[i].sq_index].ready_retire = 1;
                 end
             end
         end
 
-        //forwarding
-        //use sq instead of sq_n to minimize critical path
-        for(int i = 0; i < `SQ_SZ; i++) begin
-            sq_addr_out[i]       = sq[i].addr;
-            sq_data_out[i]       = sq[i].data;
-            sq_data_ready_out[i] = sq[i].data_ready;
-            sq_addr_ready_out[i] = sq[i].addr_ready;
+        //----------------------------------------------------
+        // forwarding outputs
+        //----------------------------------------------------
+        for (int i = 0; i < `SQ_SZ; i++) begin
+            sq_addr_out[i]        = sq[i].addr;
+            sq_data_out[i]        = sq[i].data;
+            sq_data_ready_out[i]  = sq[i].data_ready;
+            sq_addr_ready_out[i]  = sq[i].addr_ready;
             sq_addr_ready_mask[i] = sq[i].addr_ready;
-            sq_valid_snapshot[i] = sq[i].valid;
-            sq_valid_out[i]      = sq[i].valid;
-            sq_funct3_out[i]     = sq[i].funct3;
-            sq_ready_retire_out[i] = sq[i].ready_retire;
+            sq_valid_snapshot[i]  = sq[i].valid;
+            sq_valid_out[i]       = sq[i].valid;
+            sq_funct3_out[i]      = sq[i].funct3;
         end
 
-        //from execute stage, store the addr that will be stored into dcache later
-        if(store_execute_pack.valid && sq[store_execute_pack.sq_index].valid) begin
-            //find the corresponding store queue entry
-            sq_n[store_execute_pack.sq_index].addr = store_execute_pack.addr;
+        //----------------------------------------------------
+        // execute stage writeback
+        //----------------------------------------------------
+        if (store_execute_pack.valid && sq[store_execute_pack.sq_index].valid) begin
+            sq_n[store_execute_pack.sq_index].addr       = store_execute_pack.addr;
             sq_n[store_execute_pack.sq_index].addr_ready = 1;
             sq_n[store_execute_pack.sq_index].data_ready = 1;
-            sq_n[store_execute_pack.sq_index].data = store_execute_pack.data;
+            sq_n[store_execute_pack.sq_index].data       = store_execute_pack.data;
         end
 
-        if(mispredicted)  begin
+        //----------------------------------------------------
+        // mispredict recovery / dispatch
+        //----------------------------------------------------
+        if (mispredicted) begin
             tail_next = BS_sq_tail_in;
-            for(int i = 0; i < `SQ_SZ; i++) begin
-                if(full && tail == BS_sq_tail_in) begin
-                    // full and tail didn't move: clear everything
+            for (int i = 0; i < `SQ_SZ; i++) begin
+                if (full && tail == BS_sq_tail_in) begin
                     sq_n[i] = '{default:'0};
-                end else if(BS_sq_tail_in <= tail) begin
-                    // no wrap around: flush [BS_sq_tail_in, tail)
-                    if(i >= BS_sq_tail_in && i < tail)
+                end else if (BS_sq_tail_in <= tail) begin
+                    if (i >= BS_sq_tail_in && i < tail)
                         sq_n[i] = '{default:'0};
                 end else begin
-                    // wrap around: flush [BS_sq_tail_in, SQ_SZ) and [0, tail)
-                    if(i >= BS_sq_tail_in || i < tail)
+                    if (i >= BS_sq_tail_in || i < tail)
                         sq_n[i] = '{default:'0};
                 end
             end
         end else begin
-            //dispatch logic
-            for(int i = 0; i < `N; i++) begin
-                if(is_store[i]) begin
-                    sq_n[tail_next].valid = 1;
-                    sq_n[tail_next].funct3 = inst_in[i].s.funct3;
+            for (int i = 0; i < `N; i++) begin
+                if (is_store[i]) begin
+                    sq_n[tail_next].valid     = 1;
+                    sq_n[tail_next].funct3    = inst_in[i].s.funct3;
                     sq_n[tail_next].rob_index = rob_index[i];
                     sq_valid_snapshot[tail_next] = 1;
                     sq_index[i] = tail_next;
-                    tail_next = tail_next + 1;
+                    tail_next   = tail_next + 1;
                 end
-                //take snapshot
-                if(is_branch[i])begin
+                if (is_branch[i]) begin
                     BS_sq_tail_out[i] = tail_next;
                 end
-                //record sq tail for lq
-                if(is_load[i])begin
-                    sq_tail_out[i] = tail_next;
-                    sq_valid_out_mask[i] = sq_valid_snapshot;
+                if (is_load[i]) begin
+                    sq_tail_out[i]      = tail_next;
+                    sq_valid_out_mask[i]= sq_valid_snapshot;
                 end
             end
         end
 
-        if(head_next == tail_next) begin
-            if(head_moved) begin
-                // head swept through entries and caught up to tail: always empty
+        //----------------------------------------------------
+        // full / available space
+        //----------------------------------------------------
+        if (head_next == tail_next) begin
+            if (head_moved) begin
                 full_n = 1'b0;
-            end else if(mispredicted) begin
-                // tail rolled back: full only if tail didn't actually move
+            end else if (mispredicted) begin
                 full_n = 1'b0;
-            end else if(head_next == head && tail_next == tail) begin
-                // nothing changed, keep current state
+            end else if (head_next == head && tail_next == tail) begin
                 full_n = full;
             end else begin
-                // tail advanced into head: full
-                // head caught up to tail: empty
                 full_n = (tail_next != tail) && (head_next == head);
             end
         end else begin
-            full_n = 1'b0; // head and tail not equal, definitely not full
-        end 
+            full_n = 1'b0;
+        end
 
-        //calculate available space
         free_slots = full_n ? 0 :
-                    (head_next == tail_next) ? `SQ_SZ :
-                    (head_next > tail_next)  ? SQ_IDX'(head_next - tail_next) :
+                     (head_next == tail_next) ? `SQ_SZ :
+                     (head_next > tail_next)  ? SQ_IDX'(head_next - tail_next) :
                                                 SQ_IDX'(`SQ_SZ - (tail_next - head_next));
 
-        sq_space_available = (free_slots >= 2) ? 2 :
-                            (free_slots == 1) ? 1 : 0;
-
-
-
+        sq_space_available = (free_slots >= 2) ? 2'd2 :
+                             (free_slots == 1)  ? 2'd1 : 2'd0;
     end
 
     always_ff @(posedge clock) begin
-        if(reset) begin
+        if (reset) begin
             head <= 0;
             tail <= 0;
-            sq <= '{default:'0};
+            sq   <= '{default:'0};
             full <= '0;
-        end  else begin
+        end else begin
             head <= head_next;
             tail <= tail_next;
-            sq <= sq_n;
+            sq   <= sq_n;
             full <= full_n;
         end
     end
