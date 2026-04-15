@@ -140,6 +140,7 @@ module mshr #(
                 next_outstanding_table[next_out_tail].miss_req_unsigned = dcache_miss_req.miss_req_unsigned;
                 next_outstanding_table[next_out_tail].miss_req_data     = dcache_miss_req.miss_req_data;
                 next_outstanding_table[next_out_tail].lq_index          = dcache_miss_req.lq_index;
+                next_outstanding_table[next_out_tail].generation          = dcache_miss_req.generation;
                 next_outstanding_table[next_out_tail].refill_data       = '0;
 
                 next_out_tail  = next_out_tail + 1'd1;
@@ -158,6 +159,7 @@ module mshr #(
                 next_miss_fifo[next_miss_tail].miss_req_unsigned = dcache_miss_req.miss_req_unsigned;
                 next_miss_fifo[next_miss_tail].miss_req_data     = dcache_miss_req.miss_req_data;
                 next_miss_fifo[next_miss_tail].lq_index          = dcache_miss_req.lq_index;
+                next_miss_fifo[next_miss_tail].generation          = dcache_miss_req.generation;
 
                 next_miss_tail  = next_miss_tail + 1'd1;
                 next_miss_count = next_miss_count + 1'd1;
@@ -188,6 +190,7 @@ module mshr #(
                     next_outstanding_table[next_out_tail].miss_req_unsigned = next_miss_fifo[next_miss_head].miss_req_unsigned;
                     next_outstanding_table[next_out_tail].miss_req_data     = next_miss_fifo[next_miss_head].miss_req_data;
                     next_outstanding_table[next_out_tail].lq_index          = next_miss_fifo[next_miss_head].lq_index;
+                    next_outstanding_table[next_out_tail].generation        = next_miss_fifo[next_miss_head].generation;
                     next_outstanding_table[next_out_tail].refill_data       = '0; //will change
 
                     next_out_tail  = next_out_tail + 1'd1;
@@ -211,6 +214,7 @@ module mshr #(
                 next_outstanding_table[next_out_tail].miss_req_unsigned = next_miss_fifo[next_miss_head].miss_req_unsigned;
                 next_outstanding_table[next_out_tail].miss_req_data     = next_miss_fifo[next_miss_head].miss_req_data;
                 next_outstanding_table[next_out_tail].lq_index          = next_miss_fifo[next_miss_head].lq_index;
+                next_outstanding_table[next_out_tail].generation          = next_miss_fifo[next_miss_head].generation;
                 next_outstanding_table[next_out_tail].refill_data       = '0; //we zont care
 
                 next_out_tail  = next_out_tail + 1'd1;
@@ -247,6 +251,7 @@ module mshr #(
             com_miss_req.miss_req_data     = outstanding_table[out_head].miss_req_data;
             com_miss_req.refill_data       = outstanding_table[out_head].refill_data;
             com_miss_req.lq_index          = outstanding_table[out_head].lq_index;
+            com_miss_req.generation          = outstanding_table[out_head].generation;
 
             next_outstanding_table[next_out_head] = '0; // clear it
             next_out_head  = next_out_head + 1'd1;

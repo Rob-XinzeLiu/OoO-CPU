@@ -16,6 +16,7 @@ module victim_cache #(
     input  MEM_SIZE                       d_request_size,
     input  logic                          d_req_unsigned,
     input  LQ_IDX                         lq_index,
+    input  logic [1:0]                         generation,
     input logic                           wb_full,
     
     output logic                          vc_hit,
@@ -23,6 +24,7 @@ module victim_cache #(
     // formatted load-hit response back to dcache
     output DATA                           vc_load_resp_data,
     output LQ_IDX                         vc_load_resp_lq_index,
+    output logic [1:0]                    vc_load_resp_generation,
 
 
     // store update from dcache
@@ -120,7 +122,7 @@ module victim_cache #(
 
         vc_load_resp_data     = '0;
         vc_load_resp_lq_index = '0;
-
+        vc_load_resp_generation = '0;
         vc_wb_valid = 1'b0;
         vc_wb_tag   = '0;
         vc_wb_set   = '0;
@@ -147,6 +149,7 @@ module victim_cache #(
                 // load hit: return already formatted data
                 if (req_is_load) begin
                     vc_load_resp_lq_index = lq_index;
+                    vc_load_resp_generation = generation;
                     case (d_request_size)
                         BYTE: begin
                             vc_load_resp_data = d_req_unsigned ?

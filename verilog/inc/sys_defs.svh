@@ -195,6 +195,7 @@ typedef struct packed {
     logic                                     valid;
     DATA                                      data;
     LQ_IDX                                    lq_index;
+    logic [1:0]                               generation;
 } dcache_data_t;
 
 typedef enum logic {
@@ -214,6 +215,7 @@ typedef struct packed {
     logic                                     miss_req_unsigned;
     DATA                                      miss_req_data;
     LQ_IDX                                    lq_index;
+    logic [1:0]                               generation;
 } miss_request_t;
 
 typedef struct packed {
@@ -228,6 +230,7 @@ typedef struct packed {
     logic                                     miss_req_unsigned;
     DATA                                      miss_req_data;
     LQ_IDX                                    lq_index;
+    logic [1:0]                               generation;
 } miss_fifo_entry_t;
 
 `define MSHR_ENTRIES 16
@@ -245,6 +248,7 @@ typedef struct packed {
     logic                                     miss_req_unsigned;
     DATA                                      miss_req_data;
     LQ_IDX                                    lq_index;
+    logic [1:0]                               generation;
     MEM_BLOCK                                 refill_data;
 
 } outstanding_entry_t;
@@ -263,6 +267,7 @@ typedef struct packed {
     DATA                                      miss_req_data;
     MEM_BLOCK                                 refill_data;
     LQ_IDX                                    lq_index;
+    logic [1:0]                               generation;
 } completed_mshr_t;
 
 ///////////////////////////////
@@ -596,6 +601,7 @@ typedef struct packed{
     LQ_IDX          lq_index;
     ROB_IDX         rob_index;
     PRF_IDX         dest_tag;
+    logic [1:0]     generation;
 } LQ_PACKET;
 
 `endif // __SYS_DEFS_SVH__

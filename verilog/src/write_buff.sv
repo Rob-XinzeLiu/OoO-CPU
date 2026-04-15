@@ -16,11 +16,13 @@ module write_buffer #(
     input  logic                        dcache_miss_req_unsigned,
     input  DATA                         dcache_miss_req_store_data, // only valid for store misses
     input  LQ_IDX                       lq_index,
+    input  logic [1:0]                  generation,
 
     output logic                        wb_hit,
     output  ADDR                        wb_hit_addr,//REQUESTED ADDRESS FROM INSTRUCTION
     output LQ_IDX                       wb_hit_lq_index,
-    output DATA                        wb_load_data, 
+    output logic [1:0]                  wb_hit_generation,
+    output DATA                         wb_load_data, 
 
     input logic                         vcache_data_valid,
     input  MEM_BLOCK                    vcache_data,
@@ -68,6 +70,7 @@ module write_buffer #(
         wb_hit       = 1'b0;
         wb_load_data = '0;
         wb_hit_lq_index = '0;
+        wb_hit_generation = '0;
         wb_hit_addr  = '0;
 
         next_write_buffer = write_buffer;
@@ -95,6 +98,7 @@ module write_buffer #(
                     
                     if (req_is_load) begin
                         wb_hit_lq_index = lq_index;
+                        wb_hit_generation = generation;
                         case (dcache_miss_req_size)
 
                             BYTE: begin

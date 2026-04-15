@@ -62,6 +62,7 @@ module load_queue(
         ROB_IDX       rob_index;
         logic         ready_retire;
         logic         broadcasted;
+        logic [1:0]   generation;
     } LQ_ENTRY;
 
     LQ_ENTRY    lq      [`LQ_SZ-1:0];
@@ -152,7 +153,7 @@ module load_queue(
                 if (lq[LQ_IDX'(head+i)].valid && lq[LQ_IDX'(head+i)].ready_retire) begin
                     head_next              = LQ_IDX'(head + i + 1);
                     head_moved             = 1'b1;
-                    lq_n[LQ_IDX'(head+i)] = '0;
+                    lq_n[LQ_IDX'(head+i)].valid = '0;
                     if (head_next == tail_next)
                         retire_stop = 1'b1;
                 end else if (lq[LQ_IDX'(head+i)].valid && lq[LQ_IDX'(head+i)].broadcasted) begin
@@ -164,7 +165,7 @@ module load_queue(
                     if (found_retire) begin
                         head_next              = LQ_IDX'(head + i + 1);
                         head_moved             = 1'b1;
-                        lq_n[LQ_IDX'(head+i)] = '0;
+                        lq_n[LQ_IDX'(head+i)].valid = '0;
                         if (head_next == tail_next)
                             retire_stop = 1'b1;
                     end else begin
@@ -388,6 +389,7 @@ module load_queue(
                     load_packet.addr            = lq[dcache_req_idx].addr;
                     load_packet.lq_index        = dcache_req_idx;
                     load_packet.funct3          = lq[dcache_req_idx].funct3;
+                    load_packet.generation      = lq[dcache_req_idx].generation;
                     lq_n[dcache_req_idx].issued = 1'b1;
                     dcache_req_done             = 1'b1;
                 end
@@ -399,7 +401,8 @@ module load_queue(
         //----------------------------------------------------
         if (dcache_load_packet.valid
          && lq_n[dcache_load_packet.lq_index].valid
-         && lq_n[dcache_load_packet.lq_index].issued) begin
+         && lq_n[dcache_load_packet.lq_index].issued
+         && dcache_load_packet.generation == lq_n[dcache_load_packet.lq_index].generation) begin
             lq_n[dcache_load_packet.lq_index].data       = dcache_load_packet.data;
             lq_n[dcache_load_packet.lq_index].data_ready = 1'b1;
             lq_n[dcache_load_packet.lq_index].issued     = 1'b0;
@@ -420,25 +423,34 @@ module load_queue(
             tail_next = BS_lq_tail_in;
             for (int i = 0; i < `LQ_SZ; i++) begin
                 if (full && tail == BS_lq_tail_in) begin
-                    lq_n[i] = '{default:'0};
+                    lq_n[i].valid = '0;
                 end else if (BS_lq_tail_in <= tail) begin
                     if (i >= BS_lq_tail_in && i < tail)
-                        lq_n[i] = '{default:'0};
+                        lq_n[i].valid = '0;
                 end else begin
                     if (i >= BS_lq_tail_in || i < tail)
-                        lq_n[i] = '{default:'0};
+                        lq_n[i].valid = '0;
                 end
             end
         end else begin
             for (int i = 0; i < `N; i++) begin
                 if (is_load[i]) begin
-                    lq_n[tail_next]                   = '0;
-                    lq_n[tail_next].valid             = 1'b1;
-                    lq_n[tail_next].dest_tag          = dest_tag_in[i];
-                    lq_n[tail_next].funct3            = inst_in[i].i.funct3;
-                    lq_n[tail_next].old_sq_valid_mask = sq_valid_in_mask[i];
-                    lq_n[tail_next].sq_tail_position  = sq_tail_in[i];
-                    lq_n[tail_next].rob_index         = rob_index[i];
+                   lq_n[tail_next] = '{
+                        valid:             1'b1,
+                        dest_tag:          dest_tag_in[i],
+                        funct3:            inst_in[i].i.funct3,
+                        old_sq_valid_mask: sq_valid_in_mask[i],
+                        sq_tail_position:  sq_tail_in[i],
+                        rob_index:         rob_index[i],
+                        generation:        lq[tail_next].generation + 1,  
+                        addr:              '0,
+                        addr_ready:        1'b0,
+                        data:              '0,
+                        data_ready:        1'b0,
+                        issued:            1'b0,
+                        broadcasted:       1'b0,
+                        ready_retire:      1'b0
+                    };
                     lq_index[i]                       = tail_next;
                     tail_next                         = tail_next + 1;
                 end

@@ -130,6 +130,7 @@ module Dcache
     logic                    vc_hit;
     DATA                     vc_load_resp_data;
     LQ_IDX                         vc_load_resp_lq_index;
+    logic   [1:0]            vc_load_resp_generation;
 
     logic                          vc_wb_valid;
     logic [`DCACHE_TAG_BITS-1:0]   vc_wb_tag;
@@ -148,6 +149,7 @@ module Dcache
     logic wb_hit;
     ADDR wb_hit_addr;
     LQ_IDX wb_hit_lq_index;
+    logic [1:0] wb_hit_generation;
     DATA wb_load_data;
     logic wb_full;
  
@@ -288,6 +290,7 @@ module Dcache
                 if (com_miss_req.req_is_load) begin
                     cache_resp_data.valid   = 1'b1;
                     cache_resp_data.lq_index = com_miss_req.lq_index;
+                    cache_resp_data.generation = com_miss_req.generation;
                     
 
                     case (com_miss_req.miss_req_size)
@@ -397,11 +400,13 @@ module Dcache
                 miss_request.miss_req_unsigned = d_req_unsigned;
                 miss_request.miss_req_data     = !load_req_pack.valid ? store_req_pack.data : '0; 
                 miss_request.lq_index          = load_req_pack.lq_index;
+                miss_request.generation          = load_req_pack.generation;
             end
 
             if(hit && is_valid_load) begin
                 cache_resp_data.valid   = 1'b1;
                 cache_resp_data.lq_index = com_miss_req.dep_miss ? com_miss_req.lq_index : load_req_pack.lq_index;
+                cache_resp_data.generation = com_miss_req.dep_miss ? com_miss_req.generation : load_req_pack.generation;
                 case (d_request_size)
                     BYTE: begin
                         cache_resp_data.data = d_req_unsigned ?
@@ -425,10 +430,12 @@ module Dcache
             end else if (vc_hit && load_req_pack.valid) begin
                 cache_resp_data.valid   = 1'b1;
                 cache_resp_data.lq_index = vc_load_resp_lq_index;
+                cache_resp_data.generation = vc_load_resp_generation;
                 cache_resp_data.data = vc_load_resp_data;
             end else if(wb_hit && load_req_pack.valid) begin
                 cache_resp_data.valid   = 1'b1;
                 cache_resp_data.lq_index = wb_hit_lq_index;
+                cache_resp_data.generation = wb_hit_generation;
                 cache_resp_data.data = wb_load_data;
             end
 
@@ -482,11 +489,13 @@ module Dcache
         .d_request_size         (d_request_size),
         .d_req_unsigned         (d_req_unsigned),
         .lq_index             (load_req_pack.valid ? load_req_pack.lq_index : '0),
+        .generation           (load_req_pack.valid ? load_req_pack.generation : '0),
         .wb_full                (wb_full),
 
         .vc_hit                   (vc_hit),
         .vc_load_resp_data       (vc_load_resp_data),
         .vc_load_resp_lq_index   (vc_load_resp_lq_index),
+        .vc_load_resp_generation   (vc_load_resp_generation),
 
         .vc_store_data        (store_req_pack.valid ? store_req_pack.data : '0),
 
@@ -519,11 +528,13 @@ module Dcache
         .dcache_miss_req_unsigned(d_req_unsigned),
         .dcache_miss_req_store_data(store_req_pack.valid ? store_req_pack.data : '0),
         .lq_index(load_req_pack.valid ? load_req_pack.lq_index : '0),
+        .generation(load_req_pack.valid ? load_req_pack.generation : '0),
 
         //output
         .wb_hit(wb_hit),
         .wb_hit_addr(wb_hit_addr),
         .wb_hit_lq_index(wb_hit_lq_index),
+        .wb_hit_generation(wb_hit_generation),
         .wb_load_data(wb_load_data),
         // to mem
         .vcache_data_valid(vc_wb_valid),

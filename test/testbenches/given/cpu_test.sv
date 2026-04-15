@@ -496,13 +496,13 @@ module testbench;
     // OPTIONAL: Print our your data here
     // It will go to the $program.log file
     task print_custom_data;
-        // for (int i = 0; i < `N; i++) begin
-        //     if (verisimpleV.committed_insts[i].valid &&
-        //         verisimpleV.committed_insts[i].PC == 32'h1180) begin
-        //         $display("cycle=%0d time=%0t PC hit: %08x", 
-        //             clock_count, $realtime, verisimpleV.committed_insts[i].PC);
-        //     end
-        // end
+        for (int i = 0; i < `N; i++) begin
+            if (verisimpleV.committed_insts[i].valid &&
+                verisimpleV.committed_insts[i].PC == 32'h0268) begin
+                $display("cycle=%0d time=%0t PC hit: %08x", 
+                    clock_count, $realtime, verisimpleV.committed_insts[i].PC);
+            end
+        end
     endtask
 
 
