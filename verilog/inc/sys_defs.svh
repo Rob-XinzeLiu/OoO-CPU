@@ -28,7 +28,7 @@
 // sizes
 `define ROB_SZ 32
 `define FLIST_SZ `ROB_SZ
-`define FB_SZ 16
+`define FB_SZ 8
 `define RS_SZ 16
 `define ARCH_REG_SZ 32
 `define PHYS_REG_SZ_P6 32

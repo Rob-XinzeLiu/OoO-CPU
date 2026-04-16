@@ -2,18 +2,18 @@
 
 module load_queue(
 
-    input  logic                  clock,
-    input  logic                  reset,
- 
+    input  logic                  clock                         ,
+    input  logic                  reset                         ,
     //from dispatch stage
-    input  INST       [`N-1:0]           inst_in                ,
-    input  logic           [`N-1:0]        is_load              ,
-    input  logic             [`N-1:0]      is_branch            ,
-    input  PRF_IDX           [`N-1:0]     dest_tag_in           ,
+    input  INST [`N-1:0]         inst_in                        ,
+    input  logic [`N-1:0]        is_load                        ,
+    input  logic [`N-1:0]        is_branch                      ,
+    input  PRF_IDX [`N-1:0]      dest_tag_in                    ,
     //from rob
     input  ROB_IDX               rob_index              [`N-1:0],
     //from retire stage
-    input  LQ_PACKET             load_retire_pack       [`N-1:0],
+    input  logic                 load_retire_valid              ,
+    input  logic [1:0]           load_retire_num                ,
     //mispredict recovery
     input  logic                 mispredicted                   ,
     input  LQ_IDX                BS_lq_tail_in                  ,
@@ -60,7 +60,6 @@ module load_queue(
         SQ_IDX        sq_tail_position;
         logic         issued;
         ROB_IDX       rob_index;
-        logic         ready_retire;
         logic         broadcasted;
         logic [1:0]   generation;
     } LQ_ENTRY;
@@ -80,7 +79,9 @@ module load_queue(
     logic [2*`SQ_SZ-1:0] doubled          [`LQ_SZ-1:0];
     logic [2*`SQ_SZ-1:0] shifted          [`LQ_SZ-1:0];
     logic [`SQ_SZ-1:0]   shifted_trunc    [`LQ_SZ-1:0];
-    logic [`SQ_SZ-1:0]   prefix_or        [`LQ_SZ-1:0];
+    logic [`SQ_SZ-1:0]   reversed         [`LQ_SZ-1:0];
+    logic [`SQ_SZ-1:0]   reversed_neg     [`LQ_SZ-1:0];
+    logic [`SQ_SZ-1:0]   lowest_of_rev    [`LQ_SZ-1:0];
     logic [`SQ_SZ-1:0]   highest_mask     [`LQ_SZ-1:0];
     logic                fwd_hit_arr      [`LQ_SZ-1:0];
     DATA                 fwd_data_arr     [`LQ_SZ-1:0];
@@ -101,9 +102,7 @@ module load_queue(
     assign lq_out = lq_out_r;
 
     logic head_moved;
-    logic retire_stop;
     logic bcast_done;
-    logic found_retire;
 
     always_comb begin
         // defaults
@@ -119,7 +118,6 @@ module load_queue(
         BS_lq_tail_out  = '{default: '0};
         dcache_req_idx  = '0;
         dcache_req_done = '0;
-        found_retire    = '0;
 
         for (int i = 0; i < `LQ_SZ; i++) begin
             addr_match_mask[i]   = '0;
@@ -129,7 +127,9 @@ module load_queue(
             doubled[i]           = '0;
             shifted[i]           = '0;
             shifted_trunc[i]     = '0;
-            prefix_or[i]         = '0;
+            reversed[i]          = '0;
+            reversed_neg[i]      = '0;
+            lowest_of_rev[i]     = '0;
             highest_mask[i]      = '0;
             fwd_hit_arr[i]       = '0;
             fwd_data_arr[i]      = '0;
@@ -146,34 +146,14 @@ module load_queue(
         //----------------------------------------------------
         // retire logic
         //----------------------------------------------------
-        retire_stop = 1'b0;
-        for (int i = 0; i < `LQ_SZ; i++) begin
-            found_retire = 1'b0;
-            if (!retire_stop) begin
-                if (lq[LQ_IDX'(head+i)].valid && lq[LQ_IDX'(head+i)].ready_retire) begin
-                    head_next              = LQ_IDX'(head + i + 1);
-                    head_moved             = 1'b1;
-                    lq_n[LQ_IDX'(head+i)].valid = '0;
-                    if (head_next == tail_next)
-                        retire_stop = 1'b1;
-                end else if (lq[LQ_IDX'(head+i)].valid && lq[LQ_IDX'(head+i)].broadcasted) begin
-                    for (int j = 0; j < `N; j++) begin
-                        if (load_retire_pack[j].valid
-                         && load_retire_pack[j].lq_index == LQ_IDX'(head+i))
-                            found_retire = 1'b1;
-                    end
-                    if (found_retire) begin
-                        head_next              = LQ_IDX'(head + i + 1);
-                        head_moved             = 1'b1;
-                        lq_n[LQ_IDX'(head+i)].valid = '0;
-                        if (head_next == tail_next)
-                            retire_stop = 1'b1;
-                    end else begin
-                        retire_stop = 1'b1;
-                    end
-                end else begin
-                    retire_stop = 1'b1;
-                end
+        if(load_retire_valid)begin
+            if(load_retire_num==2)begin
+                lq_n[head].valid = '0;
+                lq_n[LQ_IDX'(head+1)].valid = '0;
+                head_next = head + 2;
+            end else begin
+                lq_n[head].valid = '0;
+                head_next = head + 1;
             end
         end
 
@@ -242,12 +222,19 @@ module load_queue(
                 shifted[i]       = doubled[i] >> lq[i].sq_tail_position;
                 shifted_trunc[i] = shifted[i][`SQ_SZ-1:0];
 
-                prefix_or[i] = shifted_trunc[i];
-                for (int j = `SQ_SZ-2; j >= 0; j--) begin
-                    prefix_or[i][j] = prefix_or[i][j+1] | shifted_trunc[i][j];
+                // bit-reverse shifted_trunc so that the youngest store (closest to tail)
+                // maps to the lowest bit
+                for (int k = 0; k < `SQ_SZ; k++) begin
+                    reversed[i][k] = shifted_trunc[i][`SQ_SZ-1-k];
                 end
-
-                highest_mask[i] = prefix_or[i] & ~(prefix_or[i] >> 1);
+                // x & (-x) extracts the lowest set bit in the reversed vector,
+                // which corresponds to the youngest matching store
+                reversed_neg[i] = ~reversed[i] + 1'b1;
+                lowest_of_rev[i] = reversed[i] & reversed_neg[i];
+                // bit-reverse back to recover the original index space
+                for (int k = 0; k < `SQ_SZ; k++) begin
+                    highest_mask[i][k] = lowest_of_rev[i][`SQ_SZ-1-k];
+                end
 
                 for (int j = 0; j < `SQ_SZ; j++) begin
                     if (highest_mask[i][j])
@@ -448,8 +435,7 @@ module load_queue(
                         data:              '0,
                         data_ready:        1'b0,
                         issued:            1'b0,
-                        broadcasted:       1'b0,
-                        ready_retire:      1'b0
+                        broadcasted:       1'b0
                     };
                     lq_index[i]                       = tail_next;
                     tail_next                         = tail_next + 1;

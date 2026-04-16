@@ -119,7 +119,8 @@ module cpu (
     logic       stall_fetch;
     RETIRE_PACKET [`N-1:0] commit_pack;
     SQ_PACKET       store_retire_pack [`N-1:0];
-    LQ_PACKET       load_retire_pack [`N-1:0];
+    logic load_retire_valid;
+    logic [1:0] load_retire_num;
 
 
     // ROB
@@ -623,7 +624,8 @@ module cpu (
         // Output
         .freelist_pack(freelist_pack),
         .store_retire_pack(store_retire_pack),
-        .load_retire_pack(load_retire_pack),
+        .load_retire_valid(load_retire_valid),
+        .load_retire_num(load_retire_num),
         .commit_pack(commit_pack),
         .stall_fetch(stall_fetch)
         //.stall_retire(stall_retire)
@@ -831,7 +833,8 @@ module cpu (
         .load_execute_pack(load_execute_pack),
         .dcache_can_accept_load(dcache_can_accept_load),
         .dcache_load_packet(cache_resp_data),
-        .load_retire_pack(load_retire_pack),
+        .load_retire_valid(load_retire_valid),
+        .load_retire_num(load_retire_num),
 
         //output
         .lq_index(lq_index),

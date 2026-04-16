@@ -1,48 +1,31 @@
-copy passed
+Clock period: =
++define+CLOCK_PERIOD=$(CLOCK_PERIOD) ns
 
-evens passed
-
-fib_rec passed
-
-fib passed
-
-halt passed
-
-insertion passed
-
-mult_orig passed
-
-parallel passed
-
-sampler passed
-
-saxpy passed
-
-alexnet failed
-
-backtrack passed
-
-basic_malloc passed
-
-bfs passed
-
-dft passed
-
-fc_forward passed
-
-graph passed
-
-insertionsort passed
-
-matrix_mult_rec passed
-
-mergesort passed
-
-outer_product passed
-
-priority_queue passed
-
-quicksort passed
-
-sort_search passed
-
+Program                  Cycles     Instrs        CPI        IPC   Time(ns)   TPI(ns/inst)
+-------                  ------     ------        ---        ---   --------   ------------
+copy                        379        132   2.871212   0.348285    3790.00      28.712121
+crt                      FAILED
+evens                       155         99   1.565657   0.638710    1550.00      15.656566
+fib_rec                   13790      11958   1.153203   0.867150  137900.00      11.532029
+fib                         342        150   2.280000   0.438596    3420.00      22.800000
+insertion                   652        599   1.088481   0.918711    6520.00      10.884808
+mult_orig                   476        326   1.460123   0.684874    4760.00      14.601227
+parallel                    218        200   1.090000   0.917431    2180.00      10.900000
+sampler                     436        110   3.963636   0.252294    4360.00      39.636364
+saxpy                       477        187   2.550802   0.392034    4770.00      25.508021
+alexnet                  606404     209069   2.900497   0.344769 6064040.00      29.004970
+backtrack                 20850       7202   2.895029   0.345420  208500.00      28.950292
+basic_malloc               3826        944   4.052966   0.246733   38260.00      40.529661
+bfs                        9828       3484   2.820896   0.354497   98280.00      28.208955
+dft                      143387      58015   2.471550   0.404604 1433870.00      24.715505
+fc_forward                 1428        666   2.144144   0.466387   14280.00      21.441441
+graph                     37299      11126   3.352418   0.298292  372990.00      33.524178
+insertionsort            112928      74611   1.513557   0.660695 1129280.00      15.135570
+matrix_mult_rec           33734      21677   1.556212   0.642586  337340.00      15.562117
+mergesort                 25352       9475   2.675673   0.373738  253520.00      26.756728
+outer_product            446839     391760   1.140594   0.876736 4468390.00      11.405937
+priority_queue             5949       1455   4.088660   0.244579   59490.00      40.886598
+quicksort                 57785      27035   2.137414   0.467855  577850.00      21.374145
+sort_search              162661     113558   1.432405   0.698127 1626610.00      14.324046
+-------                  ------     ------        ---        ---   --------   ------------
+AVERAGE(23)                                  2.313266   0.516657                 23.132664

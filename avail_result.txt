@@ -1,0 +1,15 @@
+Clock period: 10.0 ns
+
+
+Average Availability Stats over 23 programs (0 failed):
+Signal                           ==0 %     ==1 %     >=2 %
+----------------------------  --------  --------  --------
+can_fetch_num                    15.35      5.00     79.64
+dispatch_num                     17.01     12.48     70.51
+rob_space_avail                   4.18      1.17     94.65
+rs_empty_entries_num              1.09      3.41     95.49
+freelist_avail_num                0.19      0.00     99.81
+branch_stack_space_avail          0.90      1.70     97.41
+branch_avail_num                  0.52      1.85     97.63
+lq_space_available                7.37      7.95     84.68
+sq_space_available                2.41      3.48     94.11
