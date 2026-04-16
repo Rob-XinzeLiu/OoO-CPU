@@ -524,6 +524,7 @@ module Dcache
         .dcache_miss_addr(curr_req_addr),
         .dcache_miss_req_tag(d_request_tag),
         .dcache_miss_req_set(d_request_set),
+        .dcache_miss_req_offset(d_request_offset),
         .dcache_miss_req_size(d_request_size),
         .dcache_miss_req_unsigned(d_req_unsigned),
         .dcache_miss_req_store_data(store_req_pack.valid ? store_req_pack.data : '0),

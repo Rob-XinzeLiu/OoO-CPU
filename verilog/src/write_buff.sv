@@ -12,6 +12,8 @@ module write_buffer #(
     input  ADDR                         dcache_miss_addr,
     input  logic [`DCACHE_TAG_BITS-1:0] dcache_miss_req_tag,
     input  logic [`DCACHE_SET_BITS-1:0] dcache_miss_req_set,
+    input  logic [`DCACHE_OFFSET_BITS-1:0] dcache_miss_req_offset,
+
     input  MEM_SIZE                     dcache_miss_req_size,
     input  logic                        dcache_miss_req_unsigned,
     input  DATA                         dcache_miss_req_store_data, // only valid for store misses
@@ -59,12 +61,18 @@ module write_buffer #(
     logic do_dequeue;
     logic will_dequeue;
 
+    //localparam int OFFSET_BITS = `DCACHE_OFFSET_BITS;
+
+    
+
+   
     assign will_dequeue = write_buffer[head].valid && grant && (mem2proc_transaction_tag != 'd0);
     // Write buffer hit logic
     always_comb begin
         for(int j = 0; j < ENTRIES; ++j)begin
             debug_write_buff[j] = write_buffer[j];
         end
+
 
 
         wb_hit       = 1'b0;
@@ -91,60 +99,68 @@ module write_buffer #(
 
         if (dcache_miss_req_valid) begin
             for (int i = 0; i < ENTRIES; i++) begin
-                if (write_buffer[i].valid && (write_buffer[i].tag == dcache_miss_req_tag) &&
-                    (write_buffer[i].set == dcache_miss_req_set)) begin
-                    wb_hit       = 1'b1;
-                    wb_hit_addr  = dcache_miss_addr;
-                    
-                    if (req_is_load) begin
-                        wb_hit_lq_index = lq_index;
-                        wb_hit_generation = generation;
-                        case (dcache_miss_req_size)
+                if (next_write_buffer[i].valid &&
+                    (next_write_buffer[i].tag == dcache_miss_req_tag) &&
+                    (next_write_buffer[i].set == dcache_miss_req_set) &&
+                    (i != head)) begin
 
+                    if (req_is_load) begin
+                        wb_hit      = 1'b1;
+                        wb_hit_addr = dcache_miss_addr;
+                        wb_hit_lq_index   = lq_index;
+                        wb_hit_generation = generation;
+
+                        case (dcache_miss_req_size)
                             BYTE: begin
                                 if (dcache_miss_req_unsigned) begin
                                     wb_load_data = {24'b0,
-                                        write_buffer[i].data.byte_level[dcache_miss_addr[2:0]] // offset in addr
+                                        write_buffer[i].data.byte_level[dcache_miss_req_offset]
                                     };
                                 end else begin
-                                    wb_load_data = {{24{write_buffer[i].data.byte_level[dcache_miss_addr[2:0]][7]}},
-                                        write_buffer[i].data.byte_level[dcache_miss_addr[2:0]]
+                                    wb_load_data = {{24{next_write_buffer[i].data.byte_level[dcache_miss_req_offset][7]}},
+                                        write_buffer[i].data.byte_level[dcache_miss_req_offset]
                                     };
                                 end
                             end
+
                             HALF: begin
                                 if (dcache_miss_req_unsigned) begin
                                     wb_load_data = {16'b0,
-                                        write_buffer[i].data.half_level[dcache_miss_addr[2:1]]
+                                        write_buffer[i].data.half_level[dcache_miss_req_offset[`DCACHE_OFFSET_BITS-1:1]]
                                     };
                                 end else begin
-                                    wb_load_data = {{16{write_buffer[i].data.half_level[dcache_miss_addr[2:1]][15]}},
-                                        write_buffer[i].data.half_level[dcache_miss_addr[2:1]]
+                                    wb_load_data = {{16{next_write_buffer[i].data.half_level[dcache_miss_req_offset[`DCACHE_OFFSET_BITS-1:1]][15]}},
+                                        write_buffer[i].data.half_level[dcache_miss_req_offset[`DCACHE_OFFSET_BITS-1:1]]
                                     };
                                 end
                             end
+
                             WORD: begin
-                                wb_load_data = write_buffer[i].data.word_level[dcache_miss_addr[2]];
+                                wb_load_data = write_buffer[i].data.word_level[dcache_miss_req_offset[`DCACHE_OFFSET_BITS-1:2]];
                             end
+
                             default: begin
                                 wb_load_data = '0;
                             end
                         endcase
                     end
-                    if (!req_is_load) begin
+
+                    if (!req_is_load ) begin
+                        wb_hit      = 1'b1;
+                        wb_hit_addr = dcache_miss_addr;
                         case (dcache_miss_req_size)
                             BYTE: begin
-                                next_write_buffer[i].data.byte_level[dcache_miss_addr[2:0]] 
+                                next_write_buffer[i].data.byte_level[dcache_miss_req_offset]
                                     = dcache_miss_req_store_data[7:0];
                             end
 
                             HALF: begin
-                                next_write_buffer[i].data.half_level[dcache_miss_addr[2:1]] 
+                                next_write_buffer[i].data.half_level[dcache_miss_req_offset[`DCACHE_OFFSET_BITS-1:1]]
                                     = dcache_miss_req_store_data[15:0];
                             end
 
                             WORD: begin
-                                next_write_buffer[i].data.word_level[dcache_miss_addr[2]] 
+                                next_write_buffer[i].data.word_level[dcache_miss_req_offset[`DCACHE_OFFSET_BITS-1:2]]
                                     = dcache_miss_req_store_data;
                             end
 
@@ -171,6 +187,7 @@ module write_buffer #(
             wb2mem_data    = write_buffer[head].data;
             wb2mem_size    = DOUBLE;
             if (grant && mem2proc_transaction_tag != 'd0 ) begin
+                
                 next_write_buffer[head] = '0;
                 next_head = (head + 'd1) % ENTRIES;
                 do_dequeue = 1'b1;

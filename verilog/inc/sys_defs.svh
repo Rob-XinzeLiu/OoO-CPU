@@ -26,10 +26,10 @@
 `define CDB_SZ `N // This MUST match your superscalar width
 
 // sizes
-`define ROB_SZ 16
+`define ROB_SZ 32
 `define FLIST_SZ `ROB_SZ
-`define FB_SZ 8
-`define RS_SZ 8
+`define FB_SZ 16
+`define RS_SZ 16
 `define ARCH_REG_SZ 32
 `define PHYS_REG_SZ_P6 32
 `define PHYS_REG_SZ_R10K (32 + `ROB_SZ)
@@ -38,8 +38,8 @@
 `define BRANCH_STACK_DEPTH (2*`N)
 // worry about these later
 `define BRANCH_PRED_SZ xx
-`define LQ_SZ 4
-`define SQ_SZ 4
+`define LQ_SZ 8
+`define SQ_SZ 8
 
 // functional units (you should decide if you want more or fewer types of FUs)
 `define NUM_FU_ALU xx
