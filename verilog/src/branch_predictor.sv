@@ -37,12 +37,12 @@ typedef enum logic [1:0] {
         
     localparam local_pattern_size = 16;
     localparam local_pattern_index_size = $clog2(local_pattern_size);
-    localparam global_pattern_size = 64;
+    localparam global_pattern_size = 32;
     localparam global_pattern_index_size = $clog2(global_pattern_size);
     localparam local_branch_size = 32;
     localparam local_branch_index_size =$clog2(local_branch_size);
     localparam local_branch_history_size = 4; 
-    localparam global_branch_history_size = 6; 
+    localparam global_branch_history_size = 5; 
 
     logic select_pick;
 
@@ -206,8 +206,8 @@ typedef enum logic [1:0] {
                     end
 
                 end
-                gBHT <= {gBHT[4:0],conditional_branch_out.result};
-                BHT[update_idx_BHT] <= {BHT[update_idx_BHT][2:0],conditional_branch_out.result};
+                gBHT <= {gBHT[global_branch_history_size-2:0], conditional_branch_out.result};
+                BHT[update_idx_BHT] <= {BHT[update_idx_BHT][local_branch_history_size-2:0], conditional_branch_out.result};
             end
         end
     end
