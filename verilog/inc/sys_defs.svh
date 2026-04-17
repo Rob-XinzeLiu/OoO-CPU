@@ -35,7 +35,7 @@
 `define PHYS_REG_SZ_R10K (32 + `ROB_SZ)
 `define TAG_CNT $clog2(`PHYS_REG_SZ_R10K)
 `define MT_SIZE       (`ARCH_REG_SZ*($clog2(`PHYS_REG_SZ_R10K)))
-`define BRANCH_STACK_DEPTH (2*`N)
+`define BRANCH_STACK_DEPTH 8
 // worry about these later
 `define BRANCH_PRED_SZ xx
 `define LQ_SZ 8
@@ -62,7 +62,7 @@ typedef logic [$clog2(`BRANCH_STACK_DEPTH)-1:0]  BSTACK_IDX;
 typedef logic [$clog2(`BRANCH_STACK_DEPTH+1)-1:0]  BSTACK_CNT;
 typedef logic [$clog2(`PHYS_REG_SZ_R10K)-1:0] PRF_IDX;
 // number of mult stages (2, 4) (you likely don't need 8)
-`define MULT_STAGES 4
+`define MULT_STAGES 2
 
 ///////////////////////////////
 // ---- Basic Constants ---- //
@@ -77,7 +77,7 @@ typedef logic [$clog2(`PHYS_REG_SZ_R10K)-1:0] PRF_IDX;
 typedef logic [31:0] ADDR;
 typedef logic [31:0] DATA;
 typedef logic [4:0] REG_IDX;
-typedef logic [2*`N-1:0] B_MASK;
+typedef logic [8:0] B_MASK;
 typedef logic [$clog2($bits(B_MASK)+1)-1:0] BMASK_CNT;
 
 // the zero register
@@ -121,9 +121,9 @@ typedef union packed {
     logic      [63:0] dbbl_level;
 } MEM_BLOCK;
 
-`define FWD_NONE   // store to load fwd type
+//`define FWD_NONE   // store to load fwd type
 //`define FWD_WORD   // 
-//`define FWD_BYTE   // 
+`define FWD_BYTE   
 
 typedef enum logic [1:0] {
     BYTE   = 2'h0,

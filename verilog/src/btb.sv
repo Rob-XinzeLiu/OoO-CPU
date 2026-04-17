@@ -14,7 +14,6 @@ module btb (
     
     // Update from execute, for cond branch and jalr
     input logic     update_valid,   // Is this really a branch
-    input logic     update_taken,   // Did it take the branch.
     input ADDR      update_pc,
     input ADDR      update_target,
     input CTYPE     update_c_type,
@@ -117,28 +116,19 @@ module btb (
             end
             
             if(update_valid) begin
-                if(update_taken) begin
-                    if(btb_table[wr_index].tag != wr_tag) begin
-                        btb_table[wr_index].valid0 <= 1'b0;
-                        btb_table[wr_index].valid1 <= 1'b0;
-                    end
-                    btb_table[wr_index].tag <= wr_tag;
-                    if(update_pc[2] == 0) begin
-                        btb_table[wr_index].valid0 <= 1'b1;
-                        btb_table[wr_index].target0 <= update_target;
-                        btb_table[wr_index].c_type0 <= update_c_type;
-                    end else begin
-                        btb_table[wr_index].valid1 <= 1'b1;
-                        btb_table[wr_index].target1 <= update_target;
-                        btb_table[wr_index].c_type1 <= update_c_type;
-                    end
-                end else begin          // Predict taken but actually not-taken
-                    if(btb_table[wr_index].tag == wr_tag) begin
-                        if(update_pc[2] == 0 && btb_table[wr_index].valid0) 
-                            btb_table[wr_index].valid0 <= 1'b0;
-                        else if(update_pc[2] == 1 && btb_table[wr_index].valid1)    
-                            btb_table[wr_index].valid1 <= 1'b0;
-                    end
+                if(btb_table[wr_index].tag != wr_tag) begin
+                    btb_table[wr_index].valid0 <= 1'b0;
+                    btb_table[wr_index].valid1 <= 1'b0;
+                end
+                btb_table[wr_index].tag <= wr_tag;
+                if(update_pc[2] == 0) begin
+                    btb_table[wr_index].valid0  <= 1'b1;
+                    btb_table[wr_index].target0 <= update_target;
+                    btb_table[wr_index].c_type0 <= update_c_type;
+                end else begin
+                    btb_table[wr_index].valid1  <= 1'b1;
+                    btb_table[wr_index].target1 <= update_target;
+                    btb_table[wr_index].c_type1 <= update_c_type;
                 end
             end
         end

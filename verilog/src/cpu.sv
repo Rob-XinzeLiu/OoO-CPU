@@ -830,6 +830,7 @@ module cpu (
         .sq_valid_in_mask(sq_valid_out_mask),
         .sq_tail_in(sq_tail_out),
         .sq_funct3_in(sq_funct3_out),
+        .sq_head_in(sq_head_out),
         .load_execute_pack(load_execute_pack),
         .dcache_can_accept_load(dcache_can_accept_load),
         .dcache_load_packet(cache_resp_data),

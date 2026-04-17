@@ -77,7 +77,6 @@ typedef enum logic [1:0] {
 
         //input update
         .update_valid(mispredict_pack.valid),
-        .update_taken(mispredict_pack.take_branch),
         .update_pc(mispredict_pack.current_PC),
         .update_target(mispredict_pack.correct_next_pc),
         .update_c_type(mispredict_pack.c_type),

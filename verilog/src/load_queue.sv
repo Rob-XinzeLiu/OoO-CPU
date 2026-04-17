@@ -26,6 +26,7 @@ module load_queue(
     input logic [`SQ_SZ-1:0]     sq_valid_in_mask       [`N-1:0],
     input SQ_IDX                 sq_tail_in             [`N-1:0],
     input logic  [2:0]           sq_funct3_in         [`SQ_SZ-1:0],
+    input SQ_IDX                 sq_head_in                     ,
     //the address calculated from execute stage
     input LQ_PACKET              load_execute_pack              ,
     //dcache can accept load
@@ -103,6 +104,7 @@ module load_queue(
 
     logic head_moved;
     logic bcast_done;
+    logic is_older [`LQ_SZ-1:0][`SQ_SZ-1:0];
 
     always_comb begin
         // defaults
@@ -118,30 +120,29 @@ module load_queue(
         BS_lq_tail_out  = '{default: '0};
         dcache_req_idx  = '0;
         dcache_req_done = '0;
-
-        for (int i = 0; i < `LQ_SZ; i++) begin
-            addr_match_mask[i]   = '0;
-            conflict_mask[i]     = '0;
-            conflict_arr[i]      = '0;
-            fwd_mask_arr[i]      = '0;
-            doubled[i]           = '0;
-            shifted[i]           = '0;
-            shifted_trunc[i]     = '0;
-            reversed[i]          = '0;
-            reversed_neg[i]      = '0;
-            lowest_of_rev[i]     = '0;
-            highest_mask[i]      = '0;
-            fwd_hit_arr[i]       = '0;
-            fwd_data_arr[i]      = '0;
-            highest_idx[i]       = '0;
-            selected_idx[i]      = '0;
-            store_byte_mask[i]   = '0;
-            load_byte_mask[i]    = '0;
-            store_covers_load[i] = '0;
-            fwd_byte[i]          = '0;
-            fwd_half[i]          = '0;
-            mem_word[i]          = '0;
-        end
+        is_older = '{default: '0};
+        addr_match_mask  = '{default: '0};
+        conflict_mask    = '{default: '0};
+        conflict_arr     = '{default: '0};
+        fwd_mask_arr     = '{default: '0};
+        doubled          = '{default: '0};
+        shifted          = '{default: '0};
+        shifted_trunc    = '{default: '0};
+        reversed         = '{default: '0};
+        reversed_neg     = '{default: '0};
+        lowest_of_rev    = '{default: '0};
+        highest_mask     = '{default: '0};
+        fwd_hit_arr      = '{default: '0};
+        fwd_data_arr     = '{default: '0};
+        highest_idx      = '{default: '0};
+        selected_idx     = '{default: '0};
+        store_byte_mask  = '{default: '0};
+        load_byte_mask   = '{default: '0};
+        store_covers_load = '{default: '0};
+        fwd_byte         = '{default: '0};
+        fwd_half         = '{default: '0};
+        mem_word         = '{default: '0};
+        is_older         = '{default: '0};
 
         //----------------------------------------------------
         // retire logic
@@ -180,10 +181,37 @@ module load_queue(
 
         //----------------------------------------------------
         // step1: fwd_mask = older stores still in SQ
+        // We AND old_sq_valid_mask with sq_valid_in to filter
+        // out stores that have already left the SQ. However,
+        // since SQ is a circular queue, a slot that held an
+        // older store may have been reused by a younger store
+        // after the older one retired — in that case sq_valid_in
+        // would still be 1 for that slot, incorrectly including
+        // a younger store in fwd_mask. To guard against this,
+        // we additionally check that slot j falls within
+        // [sq_head_in, sq_tail_position) in circular order,
+        // which is the range that was occupied by older stores
+        // at dispatch time.
         //----------------------------------------------------
         for (int i = 0; i < `LQ_SZ; i++) begin
             if (lq[i].valid && lq[i].addr_ready && !lq[i].data_ready) begin
-                fwd_mask_arr[i] = lq[i].old_sq_valid_mask & sq_valid_in;
+                for (int j = 0; j < `SQ_SZ; j++) begin
+                    if (lq[i].old_sq_valid_mask[j] && sq_valid_in[j]) begin
+                        // Check if slot j is truly an older store by verifying
+                        // it lies within [sq_head_in, sq_tail_position) circularly.
+                        // If sq_head_in <= sq_tail_position: contiguous range.
+                        // Otherwise the valid range wraps around.
+                        if (sq_head_in <= lq[i].sq_tail_position)
+                            is_older[i][j] = (SQ_IDX'(j) >= sq_head_in)
+                                        && (SQ_IDX'(j) <  lq[i].sq_tail_position);
+                        else
+                            is_older[i][j] = (SQ_IDX'(j) >= sq_head_in)
+                                        || (SQ_IDX'(j) <  lq[i].sq_tail_position);
+
+                        if (is_older[i][j])
+                            fwd_mask_arr[i][j] = 1'b1;
+                    end
+                end
             end
         end
 

@@ -29,7 +29,7 @@ module store_queue (
     output logic [1:0]          sq_space_available              ,
     //to rs 
     output logic [`SQ_SZ-1:0]   sq_addr_ready_mask              ,
-    //to rs & rob
+    //to rs & rob & lq
     output  SQ_IDX              sq_index                [`N-1:0],
     output  SQ_IDX              sq_head_out                     ,
     //store to load forwarding
