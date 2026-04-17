@@ -1,46 +1,31 @@
-copy passed
+Clock period: =
++define+CLOCK_PERIOD=$(CLOCK_PERIOD) ns
 
-evens passed
-
-fib_rec passed
-
-fib passed
-
-insertion passed
-
-mult_orig passed
-
-parallel passed
-
-sampler passed
-
-saxpy passed
-
-alexnet failed
-
-backtrack passed
-
-basic_malloc passed
-
-bfs passed
-
-dft passed
-
-fc_forward passed
-
-graph passed
-
-insertionsort passed
-
-matrix_mult_rec passed
-
-mergesort passed
-
-outer_product passed
-
-priority_queue passed
-
-quicksort passed
-
-sort_search passed
-
+Program                  Cycles     Instrs        CPI        IPC   Time(ns)   TPI(ns/inst)
+-------                  ------     ------        ---        ---   --------   ------------
+copy                        170        132   1.287879   0.776470    1768.00      13.393939
+crt                      FAILED
+evens                       155         99   1.565657   0.638710    1612.00      16.282828
+fib_rec                   13786      11958   1.152868   0.867402  143374.40      11.989831
+fib                         227        150   1.513333   0.660793    2360.80      15.738667
+insertion                   616        599   1.028381   0.972402    6406.40      10.695159
+mult_orig                   356        326   1.092025   0.915730    3702.40      11.357055
+parallel                    216        200   1.080000   0.925926    2246.40      11.232000
+sampler                     436        110   3.963636   0.252294    4534.40      41.221818
+saxpy                       442        187   2.363636   0.423077    4596.80      24.581818
+alexnet                  602877     209069   2.883627   0.346785 6269920.80      29.989720
+backtrack                 20873       7202   2.898223   0.345039  217079.20      30.141516
+basic_malloc               3810        944   4.036017   0.247769   39624.00      41.974576
+bfs                        9660       3484   2.772675   0.360663  100464.00      28.835821
+dft                      141070      58015   2.431613   0.411250 1467128.00      25.288770
+fc_forward                 1405        666   2.109610   0.474021   14612.00      21.939940
+graph                     36973      11126   3.323117   0.300922  384519.20      34.560417
+insertionsort            100039      74611   1.340808   0.745819 1040405.60      13.944400
+matrix_mult_rec           33632      21677   1.551506   0.644535  349772.80      16.135665
+mergesort                 25089       9475   2.647916   0.377655  260925.60      27.538322
+outer_product            412924     391760   1.054023   0.948746 4294409.60      10.961838
+priority_queue             5937       1455   4.080412   0.245073   61744.80      42.436289
+quicksort                 54242      27035   2.006362   0.498415  564116.80      20.866166
+sort_search              154275     113558   1.358557   0.736075 1604460.00      14.128991
+-------                  ------     ------        ---        ---   --------   ------------
+AVERAGE(23)                                  2.153995   0.570242                 22.401545
