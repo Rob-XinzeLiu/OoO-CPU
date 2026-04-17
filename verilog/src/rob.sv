@@ -296,5 +296,104 @@ module rob(
         end
     end
 
+    `ifndef SYNTHESIS
+
+    assert property (@(posedge clock) disable iff (reset)
+    head_ptr < `ROB_SZ && tail_ptr < `ROB_SZ)
+    else $error("ROB: pointer out of range head=%0d tail=%0d", head_ptr, tail_ptr);
+
+    assert property (@(posedge clock) disable iff (reset)
+    full |-> (head_ptr == tail_ptr))
+    else $error("ROB: full=1 but head(%0d) != tail(%0d)", head_ptr, tail_ptr);
+
+    assert property (@(posedge clock) disable iff (reset)
+    (ROB_IDX'(next_head_ptr - head_ptr) <= `N))
+    else $error("ROB: head advanced more than N in one cycle");
+
+    assert property (@(posedge clock) disable iff (reset)
+        !mispredicted |-> (ROB_IDX'(next_tail_ptr - tail_ptr) <= `N))
+        else $error("ROB: tail advanced more than N without mispredict");
+
+
+    assert property (@(posedge clock) disable iff (reset)
+        !mispredicted |->
+        (ROB_IDX'(next_tail_ptr - tail_ptr) == 0 ||
+        ROB_IDX'(next_tail_ptr - tail_ptr) <= `N))
+        else $error("ROB: tail moved backward without misprediction");
+        assert property (@(posedge clock) disable iff (reset)
+        rob_commit[0].valid |-> rob_array[head_ptr].ready_retire)
+        else $error("ROB: committing entry[%0d] not ready", head_ptr);
+
+    assert property (@(posedge clock) disable iff (reset)
+        rob_commit[1].valid |->
+            rob_array[ROB_IDX'(head_ptr+1)].ready_retire)
+        else $error("ROB: committing entry[%0d] not ready", head_ptr+1);
+
+
+    assert property (@(posedge clock) disable iff (reset)
+        (retire_num == 2) |-> full || (head_ptr != tail_ptr))
+        else $error("ROB: retiring 2 from empty/single-entry ROB");
+
+
+    assert property (@(posedge clock) disable iff (reset)
+        (rob_array[head_ptr].valid && rob_array[head_ptr].halt && !halt_safe)
+        |-> !rob_commit[0].valid)
+        else $error("ROB: committed halt before halt_safe");
+        generate
+    for (genvar i = 0; i < `N; i++) begin : cdb_chk
+        assert property (@(posedge clock) disable iff (reset)
+            cdb[i].valid |-> rob_array[cdb[i].complete_index].valid)
+            else $error("ROB: CDB[%0d] writes to invalid entry %0d", i, cdb[i].complete_index);
+    end
+    endgenerate
+
+
+    assert property (@(posedge clock) disable iff (reset)
+        cond_branch_in.valid |-> rob_array[cond_branch_in.br_rob_idx].valid)
+        else $error("ROB: cond_branch writes invalid ROB entry %0d", cond_branch_in.br_rob_idx);
+
+
+    assert property (@(posedge clock) disable iff (reset)
+        sq_in.valid |-> (rob_array[sq_in.rob_index].valid &&
+                        rob_array[sq_in.rob_index].is_store))
+        else $error("ROB: sq_in writes non-store entry %0d", sq_in.rob_index);
+
+    assert property (@(posedge clock) disable iff (reset)
+        dispatch_2 |-> (rob_space_avail >= 2))
+        else $error("ROB: dispatch_2 but space_avail=%0d", rob_space_avail);
+
+    assert property (@(posedge clock) disable iff (reset)
+        dispatch_1 |-> !rob_array[tail_ptr].valid)
+        else $error("ROB: dispatch_1 overwrites valid entry at tail=%0d", tail_ptr);
+
+    assert property (@(posedge clock) disable iff (reset)
+        dispatch_1 |-> (rob_index[0] == tail_ptr))
+        else $error("ROB: rob_index[0] mismatch");
+
+    assert property (@(posedge clock) disable iff (reset)
+        mispredicted |-> (next_tail_ptr == rob_tail_in))
+        else $error("ROB: mispredict tail not restored correctly");
+
+    assert property (@(posedge clock) disable iff (reset)
+        mispredicted |-> !(dispatch_pack[0].valid))
+        else $error("ROB: dispatch issued same cycle as misprediction");
+
+        // rob_space_avail can only be 0/1/2
+    assert property (@(posedge clock) disable iff (reset)
+        rob_space_avail inside {0, 1, 2})
+        else $error("ROB: rob_space_avail illegal value %0d", rob_space_avail);
+
+    // if ROB is empty,  free_slots shoulde equal to ROB_SZ
+    assert property (@(posedge clock) disable iff (reset)
+        (!full && head_ptr == tail_ptr) |->
+        (free_slots == `ROB_SZ))
+        else $error("ROB: empty ROB but free_slots=%0d", free_slots);
+
+    // if ROB is full, free slots shouldn't have numbers 
+    assert property (@(posedge clock) disable iff (reset)
+        full |-> (free_slots == 0))
+        else $error("ROB: full but free_slots=%0d", free_slots);
+
+    `endif
     
 endmodule 
