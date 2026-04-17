@@ -37,12 +37,12 @@ typedef enum logic [1:0] {
         
     localparam local_pattern_size = 16;
     localparam local_pattern_index_size = $clog2(local_pattern_size);
-    localparam global_pattern_size = 32;
+    localparam global_pattern_size = 128;
     localparam global_pattern_index_size = $clog2(global_pattern_size);
     localparam local_branch_size = 32;
     localparam local_branch_index_size =$clog2(local_branch_size);
     localparam local_branch_history_size = 4; 
-    localparam global_branch_history_size = 5; 
+    localparam global_branch_history_size = 7; 
 
     logic select_pick;
 
@@ -165,10 +165,10 @@ typedef enum logic [1:0] {
 
     always_ff @(posedge clock) begin   
         if(reset) begin
-            for(int i=0; i < 32; i++) BHT[i] <= '0; 
-            for(int i=0; i < 16; i++) PHT[i] <= high_not_take;
-            for(int i=0; i < 64; i++) gPHT[i] <= high_not_take;
-            for(int i=0; i < 64; i++) selector[i] <= low_local;
+            for(int i=0; i < local_branch_size;   i++) BHT[i]      <= '0; 
+            for(int i=0; i < local_pattern_size;  i++) PHT[i]      <= high_not_take;
+            for(int i=0; i < global_pattern_size; i++) gPHT[i]     <= high_not_take;
+            for(int i=0; i < global_pattern_size; i++) selector[i] <= low_local;
             gBHT <= '0;
         end else begin
             if (conditional_branch_out.valid) begin
