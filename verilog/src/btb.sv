@@ -23,7 +23,7 @@ module btb (
     input ADDR      early_update_target,
     input CTYPE     early_update_c_type
 );
-    localparam SETS = 16;
+    localparam SETS = 32;
     localparam ADDR_WIDTH = 32;
     localparam BYTE_OFFSET = $clog2(8); // 2 insts
     localparam INDEX_BITS = $clog2(SETS);

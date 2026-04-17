@@ -36,7 +36,7 @@ typedef enum logic [1:0] {
     // parameter
     // -----------------------------------------------------------------------
     localparam local_branch_history_size  = 4;
-    localparam global_branch_history_size = 6;
+    localparam global_branch_history_size = 7;
     localparam local_branch_size          = 32;
 
     localparam local_pattern_size  = 1 << local_branch_history_size;
