@@ -62,7 +62,7 @@ typedef logic [$clog2(`BRANCH_STACK_DEPTH)-1:0]  BSTACK_IDX;
 typedef logic [$clog2(`BRANCH_STACK_DEPTH+1)-1:0]  BSTACK_CNT;
 typedef logic [$clog2(`PHYS_REG_SZ_R10K)-1:0] PRF_IDX;
 // number of mult stages (2, 4) (you likely don't need 8)
-`define MULT_STAGES 2
+`define MULT_STAGES 4
 
 ///////////////////////////////
 // ---- Basic Constants ---- //
@@ -77,7 +77,7 @@ typedef logic [$clog2(`PHYS_REG_SZ_R10K)-1:0] PRF_IDX;
 typedef logic [31:0] ADDR;
 typedef logic [31:0] DATA;
 typedef logic [4:0] REG_IDX;
-typedef logic [8:0] B_MASK;
+typedef logic [7:0] B_MASK;
 typedef logic [$clog2($bits(B_MASK)+1)-1:0] BMASK_CNT;
 
 // the zero register
@@ -122,8 +122,8 @@ typedef union packed {
 } MEM_BLOCK;
 
 //`define FWD_NONE   // store to load fwd type
-//`define FWD_WORD   // 
-`define FWD_BYTE   
+`define FWD_WORD   // 
+//`define FWD_BYTE   
 
 typedef enum logic [1:0] {
     BYTE   = 2'h0,
