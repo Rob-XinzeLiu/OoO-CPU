@@ -250,7 +250,8 @@ ALL_HEADERS = $(INC)*.svh
 # 	All headers must be in inc/ directly.
 
 # TODO: add more modules here, or rename the given ones
-MODULES = cpu mult rob rs psel_gen freelist victim_cache mshr dcache miss_path
+MODULES = cpu mult rob rs psel_gen freelist victim_cache mshr dcache miss_path \
+          maptable branch_stack ras
 
 MULT_FILES =		 $(SRC)mult.sv
 build/mult.simv:	 $(MULT_FILES)
@@ -301,6 +302,100 @@ MISS_PATH_FILES = \
 build/miss_path.simv:      $(MISS_PATH_FILES)
 build/miss_path.cov.simv:  $(MISS_PATH_FILES)
 synth/miss_path.vg:        $(MISS_PATH_FILES)
+
+MAPTABLE_FILES =          $(SRC)maptable.sv
+build/maptable.simv:      $(MAPTABLE_FILES)
+build/maptable.cov.simv:  $(MAPTABLE_FILES)
+synth/maptable.vg:        $(MAPTABLE_FILES)
+
+BRANCH_STACK_FILES =          $(SRC)branch_stack.sv
+build/branch_stack.simv:      $(BRANCH_STACK_FILES)
+build/branch_stack.cov.simv:  $(BRANCH_STACK_FILES)
+synth/branch_stack.vg:        $(BRANCH_STACK_FILES)
+
+RAS_FILES =          $(SRC)ras.sv
+build/ras.simv:      $(RAS_FILES)
+build/ras.cov.simv:  $(RAS_FILES)
+synth/ras.vg:        $(RAS_FILES)
+
+#####################################
+# ---- UVM Module Testbenches ---- #
+#####################################
+# UVM requires VCS flag: -ntb_opts uvm-1.2
+# Usage:
+#   make rob_uvm.pass                          <- run with default test (rob_rand_test)
+#   make rob_uvm.pass UVM_TEST=rob_directed_test
+#   make build/rob_uvm.simv                    <- compile only
+
+UVM_TEST ?= rob_rand_test
+VCS_UVM = $(VCS) -ntb_opts uvm-1.2
+
+ROB_UVM_FILES = $(SRC)rob.sv \
+                test/uvm/rob/rob_if.sv \
+                test/uvm/rob/rob_pkg.sv \
+                test/uvm/rob/rob_tb_top.sv
+
+build/rob_uvm.simv: $(ROB_UVM_FILES) | build
+	@$(call PRINT_COLOR, 5, compiling ROB UVM testbench)
+	$(VCS_UVM) +define+CLOCK_PERIOD=$(CLOCK_PERIOD) +incdir+$(INC) \
+	           $(filter-out $(ALL_HEADERS) $(IGNORE),$^) -o $@
+	@$(call PRINT_COLOR, 6, finished compiling $@)
+
+build/rob_uvm.out: build/rob_uvm.simv
+	@$(call PRINT_COLOR, 5, running ROB UVM testbench with +UVM_TESTNAME=$(UVM_TEST))
+	cd build && ./rob_uvm.simv +UVM_TESTNAME=$(UVM_TEST) \
+	            +UVM_VERBOSITY=UVM_LOW | tee rob_uvm.out
+
+rob_uvm.pass: build/rob_uvm.out
+	@$(call PRINT_COLOR, 6, Checking pass/fail:)
+	@GREP_COLOR="01;31" $(GREP) -E 'UVM_FATAL|UVM_ERROR|@@@ Failed' build/rob_uvm.out || \
+	 GREP_COLOR="01;32" $(GREP) -E '@@@ Passed' build/rob_uvm.out
+.PHONY: rob_uvm.pass
+
+rob_uvm.verdi: build/rob_uvm.simv
+	@$(call PRINT_COLOR, 5, running ROB UVM testbench in verdi)
+	cd build && ./rob_uvm.simv +UVM_TESTNAME=$(UVM_TEST) $(RUN_VERDI)
+.PHONY: rob_uvm.verdi
+
+# ---- LSQ + DCache combined UVM testbench ----
+# Tests: load_queue, store_queue, Dcache together with forwarding scenarios
+# Usage:
+#   make lsq_dc_uvm.pass
+#   make lsq_dc_uvm.pass UVM_TEST=lsq_dc_directed_test
+
+LSQ_DC_UVM_FILES = \
+	$(SRC)load_queue.sv \
+	$(SRC)store_queue.sv \
+	$(SRC)dcache.sv \
+	$(SRC)memDP.sv \
+	$(SRC)victim_cache.sv \
+	$(SRC)write_buff.sv \
+	$(SRC)mshr.sv \
+	test/uvm/lsq_dc/lsq_dc_if.sv \
+	test/uvm/lsq_dc/lsq_dc_pkg.sv \
+	test/uvm/lsq_dc/lsq_dc_tb_top.sv
+
+build/lsq_dc_uvm.simv: $(LSQ_DC_UVM_FILES) | build
+	@$(call PRINT_COLOR, 5, compiling LSQ+DCache UVM testbench)
+	$(VCS_UVM) +define+CLOCK_PERIOD=$(CLOCK_PERIOD) +incdir+$(INC) \
+	           $(filter-out $(ALL_HEADERS) $(IGNORE),$^) -o $@
+	@$(call PRINT_COLOR, 6, finished compiling $@)
+
+build/lsq_dc_uvm.out: build/lsq_dc_uvm.simv
+	@$(call PRINT_COLOR, 5, running LSQ+DCache UVM with +UVM_TESTNAME=$(UVM_TEST))
+	cd build && ./lsq_dc_uvm.simv +UVM_TESTNAME=$(UVM_TEST) \
+	            +UVM_VERBOSITY=UVM_LOW | tee lsq_dc_uvm.out
+
+lsq_dc_uvm.pass: build/lsq_dc_uvm.out
+	@$(call PRINT_COLOR, 6, Checking pass/fail:)
+	@GREP_COLOR="01;31" $(GREP) -E 'UVM_FATAL|UVM_ERROR|@@@ Failed' build/lsq_dc_uvm.out || \
+	 GREP_COLOR="01;32" $(GREP) -E '@@@ Passed' build/lsq_dc_uvm.out
+.PHONY: lsq_dc_uvm.pass
+
+lsq_dc_uvm.verdi: build/lsq_dc_uvm.simv
+	cd build && ./lsq_dc_uvm.simv +UVM_TESTNAME=$(UVM_TEST) $(RUN_VERDI)
+.PHONY: lsq_dc_uvm.verdi
+
 #################################
 # ---- Main CPU Definition ---- #
 #################################

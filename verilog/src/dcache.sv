@@ -473,6 +473,128 @@ module Dcache
             //miss_request <= miss_request; 
         end
     end
+
+`ifndef SYNTHESIS
+    logic [WAYS-1:0] assert_match_vec;
+    int unsigned     assert_data_we_count;
+
+    always_comb begin
+        assert_match_vec    = '0;
+        assert_data_we_count = 0;
+
+        for (int i = 0; i < WAYS; i++) begin
+            assert_match_vec[i] =
+                cache_tags[d_request_set][i].valid &&
+                (cache_tags[d_request_set][i].tag == d_request_tag);
+            if (data_we[i])
+                assert_data_we_count++;
+        end
+    end
+
+    // A set must not contain duplicate valid copies of the same tag.
+    // This is the high-value "multi-way hit" invariant.
+    property p_no_multi_way_hit;
+        @(posedge clock) disable iff (reset)
+            (cache_ready && req_valid && !(miss_returned && !com_miss_req.dep_miss))
+            |-> $onehot0(assert_match_vec);
+    endproperty
+    assert property (p_no_multi_way_hit)
+        else $error("Dcache assertion failed: multiple ways match set=%0d tag=0x%0h vec=%b",
+                    d_request_set, d_request_tag, assert_match_vec);
+
+    // If the combinational hit flag is raised, exactly one tag matched and
+    // hit_way must point to that matching way.
+    property p_hit_way_matches_tag;
+        @(posedge clock) disable iff (reset)
+            hit |-> ($onehot(assert_match_vec) && assert_match_vec[hit_way]);
+    endproperty
+    assert property (p_hit_way_matches_tag)
+        else $error("Dcache assertion failed: hit_way=%0d does not match tag vector %b",
+                    hit_way, assert_match_vec);
+
+    // The data array has one write port per way, but dcache logic should only
+    // update one cache line per cycle.
+    property p_at_most_one_data_write;
+        @(posedge clock) disable iff (reset)
+            assert_data_we_count <= 1;
+    endproperty
+    assert property (p_at_most_one_data_write)
+        else $error("Dcache assertion failed: more than one data way write enabled: data_we=%b",
+                    data_we);
+
+    // The LQ and SQ side should not present simultaneous requests. The cache
+    // prioritizes loads, so this catches upstream contract violations.
+    property p_no_simultaneous_load_store_req;
+        @(posedge clock) disable iff (reset)
+            !(load_req_pack.valid && store_req_pack.valid);
+    endproperty
+    assert property (p_no_simultaneous_load_store_req)
+        else $error("Dcache assertion failed: load and store requests valid in same cycle");
+
+    // Accept signals must be low when a non-dependent refill is being handled.
+    property p_no_accept_during_refill;
+        @(posedge clock) disable iff (reset)
+            (miss_returned && !com_miss_req.dep_miss)
+            |-> (!dcache_can_accept_load && !dcache_can_accept_store);
+    endproperty
+    assert property (p_no_accept_during_refill)
+        else $error("Dcache assertion failed: accepted core request while processing refill");
+
+    // Store accept is strictly more restrictive than load accept.
+    property p_store_accept_implies_load_accept;
+        @(posedge clock) disable iff (reset)
+            dcache_can_accept_store |-> dcache_can_accept_load;
+    endproperty
+    assert property (p_store_accept_implies_load_accept)
+        else $error("Dcache assertion failed: store accept high while load accept low");
+
+    // A miss request should only be emitted for an actual accepted cache miss
+    // that did not hit dcache, victim cache, or write buffer.
+    property p_miss_request_only_on_true_miss;
+        @(posedge clock) disable iff (reset)
+            miss_request.valid |->
+                (req_valid && cache_ready && !hit && !vc_hit && !wb_hit);
+    endproperty
+    assert property (p_miss_request_only_on_true_miss)
+        else $error("Dcache assertion failed: miss_request emitted without true miss");
+
+    property p_miss_request_fields_match_request;
+        @(posedge clock) disable iff (reset)
+            miss_request.valid |->
+                (miss_request.miss_req_tag    == d_request_tag    &&
+                 miss_request.miss_req_set    == d_request_set    &&
+                 miss_request.miss_req_offset == d_request_offset &&
+                 miss_request.miss_req_size   == d_request_size);
+    endproperty
+    assert property (p_miss_request_fields_match_request)
+        else $error("Dcache assertion failed: miss_request fields do not match current request");
+
+    // Any load response must correspond to a load-like source: core/dependent
+    // load hit, VC/WB load hit, or a returned load miss.
+    property p_response_has_load_source;
+        @(posedge clock) disable iff (reset)
+            cache_resp_data.valid |->
+                (is_valid_load || vc_hit || wb_hit ||
+                 (miss_returned && com_miss_req.valid && com_miss_req.req_is_load));
+    endproperty
+    assert property (p_response_has_load_source)
+        else $error("Dcache assertion failed: cache response without load source");
+
+    // LRU metadata should stay in range for every valid cache line.
+    generate
+        for (genvar as = 0; as < SETS; as++) begin : gen_assert_lru_set
+            for (genvar aw = 0; aw < WAYS; aw++) begin : gen_assert_lru_way
+                property p_lru_in_range;
+                    @(posedge clock) disable iff (reset)
+                        cache_tags[as][aw].valid |-> (cache_tags[as][aw].lru_val < WAYS);
+                endproperty
+                assert property (p_lru_in_range)
+                    else $error("Dcache assertion failed: invalid LRU value set=%0d way=%0d lru=%0d",
+                                as, aw, cache_tags[as][aw].lru_val);
+            end
+        end
+    endgenerate
+`endif
  
     victim_cache #(
         .VC_LINES(`VC_LINES)
