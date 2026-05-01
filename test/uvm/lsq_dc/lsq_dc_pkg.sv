@@ -14,25 +14,8 @@
 
 package lsq_dc_pkg;
     import uvm_pkg::*;
+    import sys_defs_pkg::*;
     `include "uvm_macros.svh"
-
-    // VCS keeps the sys_defs typedefs in $unit scope when the DUT files include
-    // sys_defs.svh. Package scope cannot see those names implicitly, so create
-    // local aliases for the hardware types used by the UVM components.
-    typedef $unit::ADDR             ADDR;
-    typedef $unit::DATA             DATA;
-    typedef $unit::PRF_IDX          PRF_IDX;
-    typedef $unit::ROB_IDX          ROB_IDX;
-    typedef $unit::LQ_IDX           LQ_IDX;
-    typedef $unit::SQ_IDX           SQ_IDX;
-    typedef $unit::MEM_TAG          MEM_TAG;
-    typedef $unit::MEM_BLOCK        MEM_BLOCK;
-    typedef $unit::MEM_COMMAND      MEM_COMMAND;
-    typedef $unit::BLOCK_ADDR       BLOCK_ADDR;
-    typedef $unit::INST             INST;
-    typedef $unit::LQ_PACKET        LQ_PACKET;
-    typedef $unit::SQ_PACKET        SQ_PACKET;
-    typedef $unit::completed_mshr_t completed_mshr_t;
 
     // =========================================================================
     // 1. Operation type
@@ -781,37 +764,25 @@ package lsq_dc_pkg;
             case (item.op)
 
                 OP_DISPATCH_LOAD: begin
-                    // Build inst word: LOAD (opcode 7'b000_0011, LW funct3=010)
-                    // Use an I-type load instruction as placeholder
-                    INST tmp_inst;
-                    tmp_inst = '0;
-                    tmp_inst.i.opcode = 7'b000_0011;
-                    tmp_inst.i.funct3 = item.funct3_v[0][2:0];
-                    vif.drv_cb.inst_in[0]    <= tmp_inst;
+                    vif.drv_cb.inst_in[0].i.opcode <= 7'b000_0011;
+                    vif.drv_cb.inst_in[0].i.funct3 <= item.funct3_v[0][2:0];
                     vif.drv_cb.is_load[0]    <= 1;
                     vif.drv_cb.dest_tag_in[0]<= PRF_IDX'(item.dest_tag_v[0]);
                     vif.drv_cb.rob_index[0]  <= ROB_IDX'(item.rob_idx_v[0]);
                 end
 
                 OP_DISPATCH_STORE: begin
-                    INST tmp_inst;
-                    tmp_inst = '0;
-                    tmp_inst.s.opcode = 7'b010_0011;
-                    tmp_inst.s.funct3 = item.funct3_v[0][2:0];
-                    vif.drv_cb.inst_in[0]   <= tmp_inst;
+                    vif.drv_cb.inst_in[0].s.opcode <= 7'b010_0011;
+                    vif.drv_cb.inst_in[0].s.funct3 <= item.funct3_v[0][2:0];
                     vif.drv_cb.is_store[0]  <= 1;
                     vif.drv_cb.rob_index[0] <= ROB_IDX'(item.rob_idx_v[0]);
                 end
 
                 OP_DISPATCH_BOTH: begin
-                    // Slot 0: load, Slot 1: store
-                    INST ld_inst, st_inst;
-                    ld_inst = '0; ld_inst.i.opcode = 7'b000_0011;
-                    ld_inst.i.funct3 = item.funct3_v[0][2:0];
-                    st_inst = '0; st_inst.s.opcode = 7'b010_0011;
-                    st_inst.s.funct3 = item.funct3_v[1][2:0];
-                    vif.drv_cb.inst_in[0]    <= ld_inst;
-                    vif.drv_cb.inst_in[1]    <= st_inst;
+                    vif.drv_cb.inst_in[0].i.opcode <= 7'b000_0011;
+                    vif.drv_cb.inst_in[0].i.funct3 <= item.funct3_v[0][2:0];
+                    vif.drv_cb.inst_in[1].s.opcode <= 7'b010_0011;
+                    vif.drv_cb.inst_in[1].s.funct3 <= item.funct3_v[1][2:0];
                     vif.drv_cb.is_load[0]    <= 1;
                     vif.drv_cb.is_store[1]   <= 1;
                     vif.drv_cb.dest_tag_in[0]<= PRF_IDX'(item.dest_tag_v[0]);
@@ -820,39 +791,30 @@ package lsq_dc_pkg;
                 end
 
                 OP_EXECUTE_LOAD: begin
-                    LQ_PACKET pkt;
-                    pkt           = '0;
-                    pkt.valid     = 1;
-                    pkt.addr      = ADDR'(item.ld_addr_v);
-                    pkt.lq_index  = LQ_IDX'(item.ld_lq_idx_v);
-                    pkt.dest_tag  = PRF_IDX'(item.ld_dest_tag_v);
-                    pkt.generation= item.ld_gen_v[1:0];
-                    pkt.funct3    = item.ld_funct3_v[2:0];
-                    vif.drv_cb.load_execute_pack <= pkt;
+                    vif.drv_cb.load_execute_pack.valid      <= 1;
+                    vif.drv_cb.load_execute_pack.addr       <= ADDR'(item.ld_addr_v);
+                    vif.drv_cb.load_execute_pack.lq_index   <= LQ_IDX'(item.ld_lq_idx_v);
+                    vif.drv_cb.load_execute_pack.dest_tag   <= PRF_IDX'(item.ld_dest_tag_v);
+                    vif.drv_cb.load_execute_pack.generation <= item.ld_gen_v[1:0];
+                    vif.drv_cb.load_execute_pack.funct3     <= item.ld_funct3_v[2:0];
                 end
 
                 OP_EXECUTE_STORE: begin
-                    SQ_PACKET pkt;
-                    pkt           = '0;
-                    pkt.valid     = 1;
-                    pkt.addr      = ADDR'(item.st_addr_v);
-                    pkt.data      = DATA'(item.st_data_v);
-                    pkt.sq_index  = SQ_IDX'(item.st_sq_idx_v);
-                    pkt.rob_index = ROB_IDX'(item.st_rob_idx_v);
-                    pkt.funct3    = item.st_funct3_v[2:0];
-                    vif.drv_cb.store_execute_pack <= pkt;
+                    vif.drv_cb.store_execute_pack.valid     <= 1;
+                    vif.drv_cb.store_execute_pack.addr      <= ADDR'(item.st_addr_v);
+                    vif.drv_cb.store_execute_pack.data      <= DATA'(item.st_data_v);
+                    vif.drv_cb.store_execute_pack.sq_index  <= SQ_IDX'(item.st_sq_idx_v);
+                    vif.drv_cb.store_execute_pack.rob_index <= ROB_IDX'(item.st_rob_idx_v);
+                    vif.drv_cb.store_execute_pack.funct3    <= item.st_funct3_v[2:0];
                 end
 
                 OP_RETIRE_STORE: begin
-                    SQ_PACKET pkt;
-                    pkt          = '0;
-                    pkt.valid    = 1;
-                    pkt.addr     = ADDR'(item.ret_addr_v);
-                    pkt.data     = DATA'(item.ret_data_v);
-                    pkt.sq_index = SQ_IDX'(item.ret_sq_idx_v);
-                    pkt.rob_index= ROB_IDX'(item.ret_rob_idx_v);
-                    pkt.funct3   = item.ret_funct3_v[2:0];
-                    vif.drv_cb.store_retire_pack[0] <= pkt;
+                    vif.drv_cb.store_retire_pack[0].valid     <= 1;
+                    vif.drv_cb.store_retire_pack[0].addr      <= ADDR'(item.ret_addr_v);
+                    vif.drv_cb.store_retire_pack[0].data      <= DATA'(item.ret_data_v);
+                    vif.drv_cb.store_retire_pack[0].sq_index  <= SQ_IDX'(item.ret_sq_idx_v);
+                    vif.drv_cb.store_retire_pack[0].rob_index <= ROB_IDX'(item.ret_rob_idx_v);
+                    vif.drv_cb.store_retire_pack[0].funct3    <= item.ret_funct3_v[2:0];
                 end
 
                 OP_RETIRE_LOAD: begin
@@ -936,10 +898,40 @@ package lsq_dc_pkg;
                 obs.lq_space_obs            = vif.mon_cb.lq_space_available;
                 obs.sq_space_obs            = vif.mon_cb.sq_space_available;
                 obs.cdb_req_obs             = vif.mon_cb.cdb_req_load;
-                obs.lq_out_obs              = vif.mon_cb.lq_out;
-                obs.miss_req_obs            = vif.mon_cb.miss_request;
+                obs.lq_out_obs.valid        = vif.mon_cb.lq_out.valid;
+                obs.lq_out_obs.addr         = vif.mon_cb.lq_out.addr;
+                obs.lq_out_obs.data         = vif.mon_cb.lq_out.data;
+                obs.lq_out_obs.funct3       = vif.mon_cb.lq_out.funct3;
+                obs.lq_out_obs.lq_index     = vif.mon_cb.lq_out.lq_index;
+                obs.lq_out_obs.rob_index    = vif.mon_cb.lq_out.rob_index;
+                obs.lq_out_obs.dest_tag     = vif.mon_cb.lq_out.dest_tag;
+                obs.lq_out_obs.generation   = vif.mon_cb.lq_out.generation;
+
+                obs.miss_req_obs.valid             = vif.mon_cb.miss_request.valid;
+                obs.miss_req_obs.miss_req_address  = vif.mon_cb.miss_request.miss_req_address;
+                obs.miss_req_obs.miss_req_tag      = vif.mon_cb.miss_request.miss_req_tag;
+                obs.miss_req_obs.miss_req_set      = vif.mon_cb.miss_request.miss_req_set;
+                obs.miss_req_obs.miss_req_offset   = vif.mon_cb.miss_request.miss_req_offset;
+                obs.miss_req_obs.req_is_load       = vif.mon_cb.miss_request.req_is_load;
+                obs.miss_req_obs.miss_req_size     = vif.mon_cb.miss_request.miss_req_size;
+                obs.miss_req_obs.miss_req_unsigned = vif.mon_cb.miss_request.miss_req_unsigned;
+                obs.miss_req_obs.miss_req_data     = vif.mon_cb.miss_request.miss_req_data;
+                obs.miss_req_obs.lq_index          = vif.mon_cb.miss_request.lq_index;
+                obs.miss_req_obs.generation        = vif.mon_cb.miss_request.generation;
                 obs.miss_req_valid_obs      = vif.mon_cb.miss_request.valid;
-                obs.com_miss_req_obs        = vif.mon_cb.com_miss_req;
+                obs.com_miss_req_obs.valid             = vif.mon_cb.com_miss_req.valid;
+                obs.com_miss_req_obs.dep_miss          = vif.mon_cb.com_miss_req.dep_miss;
+                obs.com_miss_req_obs.miss_req_address  = vif.mon_cb.com_miss_req.miss_req_address;
+                obs.com_miss_req_obs.miss_req_tag      = vif.mon_cb.com_miss_req.miss_req_tag;
+                obs.com_miss_req_obs.miss_req_set      = vif.mon_cb.com_miss_req.miss_req_set;
+                obs.com_miss_req_obs.miss_req_offset   = vif.mon_cb.com_miss_req.miss_req_offset;
+                obs.com_miss_req_obs.req_is_load       = vif.mon_cb.com_miss_req.req_is_load;
+                obs.com_miss_req_obs.miss_req_size     = vif.mon_cb.com_miss_req.miss_req_size;
+                obs.com_miss_req_obs.miss_req_unsigned = vif.mon_cb.com_miss_req.miss_req_unsigned;
+                obs.com_miss_req_obs.miss_req_data     = vif.mon_cb.com_miss_req.miss_req_data;
+                obs.com_miss_req_obs.refill_data       = vif.mon_cb.com_miss_req.refill_data;
+                obs.com_miss_req_obs.lq_index          = vif.mon_cb.com_miss_req.lq_index;
+                obs.com_miss_req_obs.generation        = vif.mon_cb.com_miss_req.generation;
                 obs.dcache_accept_load_obs  = vif.mon_cb.dcache_can_accept_load;
                 obs.dcache_accept_store_obs = vif.mon_cb.dcache_can_accept_store;
 

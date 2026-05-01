@@ -604,4 +604,80 @@ typedef struct packed{
     logic [1:0]     generation;
 } LQ_PACKET;
 
+// Package-scoped aliases for UVM code. The legacy typedefs above intentionally
+// remain in $unit scope so existing RTL does not need to import a package.
+package sys_defs_pkg;
+    typedef logic [31:0] ADDR;
+    typedef logic [31:0] DATA;
+    typedef logic [$clog2(`PHYS_REG_SZ_R10K)-1:0] PRF_IDX;
+    typedef logic [$clog2(`ROB_SZ)-1:0] ROB_IDX;
+    typedef logic [$clog2(`LQ_SZ)-1:0] LQ_IDX;
+    typedef logic [$clog2(`SQ_SZ)-1:0] SQ_IDX;
+    typedef logic [3:0] MEM_TAG;
+    typedef logic [$bits(ADDR)-`DCACHE_OFFSET_BITS-1:0] BLOCK_ADDR;
+
+    typedef union packed {
+        logic [7:0][7:0]  byte_level;
+        logic [3:0][15:0] half_level;
+        logic [1:0][31:0] word_level;
+        logic      [63:0] dbbl_level;
+    } MEM_BLOCK;
+
+    typedef enum logic [1:0] {
+        MEM_NONE  = 2'h0,
+        MEM_LOAD  = 2'h1,
+        MEM_STORE = 2'h2
+    } MEM_COMMAND;
+
+    typedef struct packed {
+        logic valid;
+        ADDR  addr;
+        DATA  data;
+        logic [2:0] funct3;
+        SQ_IDX sq_index;
+        ROB_IDX rob_index;
+    } SQ_PACKET;
+
+    typedef struct packed {
+        logic valid;
+        ADDR  addr;
+        DATA  data;
+        logic [2:0] funct3;
+        LQ_IDX lq_index;
+        ROB_IDX rob_index;
+        PRF_IDX dest_tag;
+        logic [1:0] generation;
+    } LQ_PACKET;
+
+    typedef struct packed {
+        logic                        valid;
+        ADDR                         miss_req_address;
+        logic [`DCACHE_TAG_BITS-1:0] miss_req_tag;
+        logic [`DCACHE_SET_BITS-1:0] miss_req_set;
+        logic [`DCACHE_OFFSET_BITS-1:0] miss_req_offset;
+        logic                        req_is_load;
+        logic [2:0]                  miss_req_size;
+        logic                        miss_req_unsigned;
+        DATA                         miss_req_data;
+        LQ_IDX                       lq_index;
+        logic [1:0]                  generation;
+    } miss_request_t;
+
+    typedef struct packed {
+        logic                        valid;
+        logic                        dep_miss;
+        ADDR                         miss_req_address;
+        logic [`DCACHE_TAG_BITS-1:0] miss_req_tag;
+        logic [`DCACHE_SET_BITS-1:0] miss_req_set;
+        logic [`DCACHE_OFFSET_BITS-1:0] miss_req_offset;
+        logic                        req_is_load;
+        logic [2:0]                  miss_req_size;
+        logic                        miss_req_unsigned;
+        DATA                         miss_req_data;
+        MEM_BLOCK                    refill_data;
+        LQ_IDX                       lq_index;
+        logic [1:0]                  generation;
+    } completed_mshr_t;
+endpackage : sys_defs_pkg
+
 `endif // __SYS_DEFS_SVH__
