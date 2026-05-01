@@ -1144,7 +1144,8 @@ package lsq_dc_pkg;
                     shadow_lq[lq_i].expected_data = load_from_block(
                         obs.com_miss_req_obs.refill_data,
                         obs.com_miss_req_obs.miss_req_offset,
-                        obs.com_miss_req_obs.miss_req_size
+                        {obs.com_miss_req_obs.miss_req_unsigned,
+                         obs.com_miss_req_obs.miss_req_size[1:0]}
                     );
                     shadow_lq[lq_i].expect_refill = 1;
                 end

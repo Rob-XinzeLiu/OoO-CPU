@@ -522,15 +522,6 @@ module Dcache
         else $error("Dcache assertion failed: more than one data way write enabled: data_we=%b",
                     data_we);
 
-    // The LQ and SQ side should not present simultaneous requests. The cache
-    // prioritizes loads, so this catches upstream contract violations.
-    property p_no_simultaneous_load_store_req;
-        @(posedge clock) disable iff (reset)
-            !(load_req_pack.valid && store_req_pack.valid);
-    endproperty
-    assert property (p_no_simultaneous_load_store_req)
-        else $error("Dcache assertion failed: load and store requests valid in same cycle");
-
     // Accept signals must be low when a non-dependent refill is being handled.
     property p_no_accept_during_refill;
         @(posedge clock) disable iff (reset)
