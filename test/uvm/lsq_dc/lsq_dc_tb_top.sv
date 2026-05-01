@@ -50,10 +50,10 @@ module lsq_dc_tb_top;
     logic         dc_can_accept_store;
 
     // SQ → LQ forwarding arrays
-    ADDR  [`SQ_SZ-1:0] sq_addr_fwd;
-    logic [`SQ_SZ-1:0] sq_addr_ready_fwd;
-    DATA  [`SQ_SZ-1:0] sq_data_fwd;
-    logic [`SQ_SZ-1:0] sq_data_ready_fwd;
+    ADDR               sq_addr_fwd       [`SQ_SZ-1:0];
+    logic              sq_addr_ready_fwd [`SQ_SZ-1:0];
+    DATA               sq_data_fwd       [`SQ_SZ-1:0];
+    logic              sq_data_ready_fwd [`SQ_SZ-1:0];
     logic [2:0]        sq_funct3_fwd [`SQ_SZ-1:0];
     logic [`SQ_SZ-1:0] sq_valid_fwd;
     logic [`SQ_SZ-1:0] sq_valid_mask_fwd [`N-1:0];
