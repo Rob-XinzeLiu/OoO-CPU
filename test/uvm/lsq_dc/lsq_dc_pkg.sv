@@ -717,7 +717,7 @@ package lsq_dc_pkg;
                 vif.drv_cb.mem2proc_data_tag        <= '0;
                 vif.drv_cb.mem2proc_data            <= '0;
 
-                if (vif.mshr2mem_command == MEM_LOAD && vif.mshr2mem_addr < `MEM_SIZE_IN_BYTES) begin
+                if (logic [1:0]'(vif.mshr2mem_command) == 2'h1 && vif.mshr2mem_addr < `MEM_SIZE_IN_BYTES) begin
                     if (refill_q.size() != 0) line = refill_q.pop_front();
                     else                      line = default_line(vif.mshr2mem_addr);
 
@@ -1327,7 +1327,8 @@ package lsq_dc_pkg;
             cg_access_shape   = new();
         endfunction
 
-        function void write(lsq_dc_obs_trans obs);
+        function void write(lsq_dc_obs_trans t);
+            lsq_dc_obs_trans obs = t;
             dispatch_loads  = obs.is_load_obs[0]  + obs.is_load_obs[1];
             dispatch_stores = obs.is_store_obs[0] + obs.is_store_obs[1];
             cdb_fired       = obs.lq_out_obs.valid;

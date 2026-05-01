@@ -18,8 +18,8 @@ interface lsq_dc_if (input logic clk);
     logic [`N-1:0]  is_load;        // slot i dispatches a load
     logic [`N-1:0]  is_store;       // slot i dispatches a store
     logic [`N-1:0]  is_branch;      // slot i dispatches a branch (snapshot trigger)
-    ROB_IDX rob_index   [`N-1:0];   // ROB tag assigned at dispatch
-    PRF_IDX dest_tag_in [`N-1:0];   // destination physical register (loads only)
+    ROB_IDX rob_index [`N-1:0];     // ROB tag assigned at dispatch
+    PRF_IDX [`N-1:0] dest_tag_in;   // destination physical register (loads only)
 
     // ---- Execute: load address fill ----
     LQ_PACKET  load_execute_pack;   // {valid, addr, lq_index, dest_tag, generation, ...}
