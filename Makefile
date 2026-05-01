@@ -328,7 +328,7 @@ synth/ras.vg:        $(RAS_FILES)
 #   make build/rob_uvm.simv                    <- compile only
 
 UVM_TEST ?= rob_rand_test
-VCS_UVM = $(VCS) -ntb_opts uvm-1.2
+VCS_UVM = $(VCS) -ntb_opts uvm-1.2 -timescale=1ns/100ps
 
 ROB_UVM_FILES = $(SRC)rob.sv \
                 test/uvm/rob/rob_if.sv \

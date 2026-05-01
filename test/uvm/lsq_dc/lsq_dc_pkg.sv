@@ -16,6 +16,24 @@ package lsq_dc_pkg;
     import uvm_pkg::*;
     `include "uvm_macros.svh"
 
+    // VCS keeps the sys_defs typedefs in $unit scope when the DUT files include
+    // sys_defs.svh. Package scope cannot see those names implicitly, so create
+    // local aliases for the hardware types used by the UVM components.
+    typedef $unit::ADDR             ADDR;
+    typedef $unit::DATA             DATA;
+    typedef $unit::PRF_IDX          PRF_IDX;
+    typedef $unit::ROB_IDX          ROB_IDX;
+    typedef $unit::LQ_IDX           LQ_IDX;
+    typedef $unit::SQ_IDX           SQ_IDX;
+    typedef $unit::MEM_TAG          MEM_TAG;
+    typedef $unit::MEM_BLOCK        MEM_BLOCK;
+    typedef $unit::MEM_COMMAND      MEM_COMMAND;
+    typedef $unit::BLOCK_ADDR       BLOCK_ADDR;
+    typedef $unit::INST             INST;
+    typedef $unit::LQ_PACKET        LQ_PACKET;
+    typedef $unit::SQ_PACKET        SQ_PACKET;
+    typedef $unit::completed_mshr_t completed_mshr_t;
+
     // =========================================================================
     // 1. Operation type
     // =========================================================================
