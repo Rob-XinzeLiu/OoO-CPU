@@ -396,6 +396,36 @@ lsq_dc_uvm.verdi: build/lsq_dc_uvm.simv
 	cd build && ./lsq_dc_uvm.simv +UVM_TESTNAME=$(UVM_TEST) $(RUN_VERDI)
 .PHONY: lsq_dc_uvm.verdi
 
+build/lsq_dc_uvm.cov.simv: $(LSQ_DC_UVM_FILES) | build
+	@$(call PRINT_COLOR, 5, compiling LSQ+DCache UVM coverage executable)
+	$(VCS_UVM) $(VCS_COVG) +define+CLOCK_PERIOD=$(CLOCK_PERIOD) +incdir+$(INC) \
+	           $(filter-out $(ALL_HEADERS) $(IGNORE),$^) -o $@
+	@$(call PRINT_COLOR, 6, finished compiling $@)
+
+build/lsq_dc_uvm.cov.out: build/lsq_dc_uvm.cov.simv
+	@$(call PRINT_COLOR, 5, running LSQ+DCache UVM coverage with +UVM_TESTNAME=$(UVM_TEST))
+	cd build && ./lsq_dc_uvm.cov.simv $(VCS_COVG) +UVM_TESTNAME=$(UVM_TEST) \
+	            +UVM_VERBOSITY=UVM_LOW | tee lsq_dc_uvm.cov.out
+	@$(call PRINT_COLOR, 2, created coverage dir build/lsq_dc_uvm.cov.simv.vdb)
+
+build/lsq_dc_uvm.cov.simv.vdb: build/lsq_dc_uvm.cov.out ;
+
+cov_report_lsq_dc_uvm: build/lsq_dc_uvm.cov.simv.vdb
+	@$(call PRINT_COLOR, 5, outputting LSQ+DCache UVM coverage report in $@)
+	module load vcs/2023.12-SP2-1 && cd build && urg -format text -dir lsq_dc_uvm.cov.simv.vdb -report ../$@
+	@$(call PRINT_COLOR, 2, coverage report is in $@)
+.PHONY: cov_report_lsq_dc_uvm
+
+lsq_dc_uvm.cov: cov_report_lsq_dc_uvm
+	@$(call PRINT_COLOR, 2, printing LSQ+DCache UVM coverage hierarchy - open '$<' for more)
+	cat $</hierarchy.txt
+.PHONY: lsq_dc_uvm.cov
+
+lsq_dc_uvm.cov.verdi: build/lsq_dc_uvm.cov.simv
+	@$(call PRINT_COLOR, 5, running LSQ+DCache UVM coverage in verdi)
+	cd build && ./lsq_dc_uvm.cov.simv +UVM_TESTNAME=$(UVM_TEST) $(RUN_VERDI) -cov -covdir lsq_dc_uvm.cov.simv.vdb
+.PHONY: lsq_dc_uvm.cov.verdi
+
 #################################
 # ---- Main CPU Definition ---- #
 #################################
