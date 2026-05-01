@@ -717,7 +717,7 @@ package lsq_dc_pkg;
                 vif.drv_cb.mem2proc_data_tag        <= '0;
                 vif.drv_cb.mem2proc_data            <= '0;
 
-                if (logic [1:0]'(vif.mshr2mem_command) == 2'h1 && vif.mshr2mem_addr < `MEM_SIZE_IN_BYTES) begin
+                if (vif.mshr2mem_command[1:0] == 2'h1 && vif.mshr2mem_addr < `MEM_SIZE_IN_BYTES) begin
                     if (refill_q.size() != 0) line = refill_q.pop_front();
                     else                      line = default_line(vif.mshr2mem_addr);
 
