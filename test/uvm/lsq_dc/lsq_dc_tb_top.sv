@@ -240,7 +240,6 @@ module lsq_dc_tb_top;
     initial begin
         uvm_config_db #(virtual lsq_dc_if)::set(
             uvm_root::get(), "uvm_test_top.*", "lsq_dc_vif", ifc);
-        ifc.apply_reset();
         run_test("lsq_dc_rand_test");
     end
 
