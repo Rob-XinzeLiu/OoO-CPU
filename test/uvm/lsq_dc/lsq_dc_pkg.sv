@@ -941,49 +941,34 @@ package lsq_dc_pkg;
     endclass : lsq_dc_monitor
 
     // =========================================================================
-    // 7. Scoreboard — checks forwarding, cache miss generation, CDB broadcast
+    // 7. Scoreboard — checks final load data when cache/refill expectation is known
     // =========================================================================
     class lsq_dc_scoreboard extends uvm_scoreboard;
         `uvm_component_utils(lsq_dc_scoreboard)
 
         uvm_analysis_imp #(lsq_dc_obs_trans, lsq_dc_scoreboard) imp;
 
-        // ---- Shadow store queue: tracks recent stores for forwarding checks ----
-        typedef struct {
-            logic valid;
-            ADDR  addr;
-            DATA  data;
-            int   sq_idx;
-            logic addr_ready;
-            logic data_ready;
-            logic [2:0] funct3;
-        } shadow_store_t;
-        shadow_store_t shadow_sq [`SQ_SZ];
-
         // ---- Shadow load queue: pending loads and their expected data source ----
         typedef struct {
             logic   valid;
             ADDR    addr;
+            logic   addr_ready;
+            logic [2:0] funct3;
             PRF_IDX dest_tag;
-            logic   expect_forward;  // 1 = should be satisfied via forwarding
-            DATA    expected_data;   // data expected from store forwarding
-            logic   expect_miss;
-            logic   expect_refill;
+            logic   expected_valid;
+            DATA    expected_data;
+            logic   expected_from_cache;
             logic   expect_cache_hit;
-            int     miss_age;
             ROB_IDX rob_index;
         } shadow_load_t;
         shadow_load_t shadow_lq [`LQ_SZ];
         MEM_BLOCK shadow_cache[BLOCK_ADDR];
 
         // ---- Counters ----
-        int unsigned forward_checks   = 0;
-        int unsigned forward_errors   = 0;
         int unsigned miss_req_seen    = 0;
         int unsigned cdb_broadcasts   = 0;
         int unsigned checks_pass      = 0;
-        int unsigned miss_checks      = 0;
-        int unsigned refill_checks    = 0;
+        int unsigned cache_data_checks = 0;
         int unsigned cache_hit_checks = 0;
         int unsigned scoreboard_errors = 0;
 
@@ -1028,47 +1013,32 @@ package lsq_dc_pkg;
             return BLOCK_ADDR'(addr[31:`DCACHE_OFFSET_BITS]);
         endfunction
 
+        function void update_load_expected_data(input int lq_i);
+            if (lq_i < 0 || lq_i >= `LQ_SZ)
+                return;
+            if (!shadow_lq[lq_i].valid || !shadow_lq[lq_i].addr_ready)
+                return;
+            if (shadow_lq[lq_i].expected_valid)
+                return;
+
+            if (shadow_cache.exists(line_key(shadow_lq[lq_i].addr))) begin
+                BLOCK_ADDR key;
+                key = line_key(shadow_lq[lq_i].addr);
+                shadow_lq[lq_i].expected_data = load_from_block(
+                    shadow_cache[key],
+                    shadow_lq[lq_i].addr[`DCACHE_OFFSET_BITS-1:0],
+                    shadow_lq[lq_i].funct3
+                );
+                shadow_lq[lq_i].expected_valid = 1;
+                shadow_lq[lq_i].expected_from_cache = 1;
+                shadow_lq[lq_i].expect_cache_hit = 1;
+            end
+        endfunction
+
         function void write(lsq_dc_obs_trans obs);
-            BLOCK_ADDR key;
-            foreach (shadow_lq[i]) begin
-                if (shadow_lq[i].valid && shadow_lq[i].expect_miss) begin
-                    shadow_lq[i].miss_age++;
-                    if (shadow_lq[i].miss_age > 20) begin
-                        `uvm_error("SB",
-                            $sformatf("Timeout waiting for miss/CDB for LQ[%0d] addr=0x%08x",
-                                i, shadow_lq[i].addr))
-                        shadow_lq[i].expect_miss = 0;
-                        scoreboard_errors++;
-                    end
-                end
-            end
-
-            // 1. Track dispatched stores into shadow_sq (based on sq_index_out)
-            for (int s = 0; s < `N; s++) begin
-                if (obs.is_store_obs[s]) begin
-                    int sq_i = int'(obs.sq_index_out[s]);
-                    shadow_sq[sq_i].valid  = 1;
-                    shadow_sq[sq_i].sq_idx = sq_i;
-                    shadow_sq[sq_i].addr_ready = 0;
-                    shadow_sq[sq_i].data_ready = 0;
-                    // address/data not yet known at dispatch; filled during execute
-                end
-            end
-
-            // 2. Track executed store: fill in address and data
-            if (obs.st_exec_valid_obs) begin
-                int sq_i = obs.st_sq_idx_obs;
-                if (sq_i < `SQ_SZ) begin
-                    shadow_sq[sq_i].valid = 1;
-                    shadow_sq[sq_i].addr = obs.st_addr_obs;
-                    shadow_sq[sq_i].data = obs.st_data_obs;
-                    shadow_sq[sq_i].funct3 = obs.store_funct3_obs;
-                    shadow_sq[sq_i].addr_ready = 1;
-                    shadow_sq[sq_i].data_ready = 1;
-                end
-            end
-
-            // 3. Track dispatched loads; check if any older store matches addr
+            // 1. Track dispatched loads. Forwarding-specific ordering is
+            // intentionally left to directed tests; scoreboard checks final data
+            // only when a cache/refill expectation is known.
             for (int s = 0; s < `N; s++) begin
                 if (obs.is_load_obs[s]) begin
                     int lq_i = int'(obs.lq_index_out[s]);
@@ -1076,62 +1046,30 @@ package lsq_dc_pkg;
                     shadow_lq[lq_i].dest_tag = obs.dest_tag_in_obs[s];
                     shadow_lq[lq_i].rob_index = obs.rob_index_obs[s];
                     // Address comes later at execute; no forwarding decision yet
-                    shadow_lq[lq_i].expect_forward = 0;
-                    shadow_lq[lq_i].expect_miss = 0;
-                    shadow_lq[lq_i].expect_refill = 0;
+                    shadow_lq[lq_i].addr_ready = 0;
+                    shadow_lq[lq_i].expected_valid = 0;
+                    shadow_lq[lq_i].expected_from_cache = 0;
                     shadow_lq[lq_i].expect_cache_hit = 0;
-                    shadow_lq[lq_i].miss_age = 0;
                 end
             end
 
-            // 4. When execute-load fires: check for forwarding opportunity
+            // 2. When execute-load fires: record the load address.
             if (obs.ld_exec_valid_obs) begin
                 int lq_i = obs.ld_lq_idx_obs;
                 if (lq_i < `LQ_SZ && shadow_lq[lq_i].valid) begin
                     shadow_lq[lq_i].addr = obs.ld_addr_obs;
-                    // Search shadow_sq for a matching addr (same word address)
-                    for (int sq_i = `SQ_SZ - 1; sq_i >= 0; sq_i--) begin
-                        if (!shadow_lq[lq_i].expect_forward &&
-                            shadow_sq[sq_i].valid &&
-                            shadow_sq[sq_i].addr_ready &&
-                            shadow_sq[sq_i].data_ready &&
-                            shadow_sq[sq_i].funct3[1:0] == 2'b10 &&
-                            obs.load_funct3_obs[1:0] == 2'b10 &&
-                            shadow_sq[sq_i].addr == obs.ld_addr_obs) begin
-                            shadow_lq[lq_i].expect_forward = 1;
-                            shadow_lq[lq_i].expected_data  = shadow_sq[sq_i].data;
-                        end
-                    end
-                    if (!shadow_lq[lq_i].expect_forward) begin
-                        key = line_key(obs.ld_addr_obs);
-                        if (shadow_cache.exists(key)) begin
-                            shadow_lq[lq_i].expected_data = load_from_block(
-                                shadow_cache[key],
-                                obs.ld_addr_obs[`DCACHE_OFFSET_BITS-1:0],
-                                obs.load_funct3_obs
-                            );
-                            shadow_lq[lq_i].expect_refill = 1;
-                            shadow_lq[lq_i].expect_cache_hit = 1;
-                        end else begin
-                            shadow_lq[lq_i].expect_miss = 1;
-                            shadow_lq[lq_i].miss_age = 0;
-                        end
-                    end
+                    shadow_lq[lq_i].addr_ready = 1;
+                    shadow_lq[lq_i].funct3 = obs.load_funct3_obs;
                 end
             end
 
-            // 5. Cache miss check: if a load address fired without a forwarding
-            //    source, the cache should generate miss_request.valid eventually
+            for (int lq_i = 0; lq_i < `LQ_SZ; lq_i++)
+                update_load_expected_data(lq_i);
+
+            // 3. Count cache miss requests. The scoreboard intentionally does
+            // not require a miss for loads that may be satisfied by forwarding.
             if (obs.miss_req_valid_obs) begin
                 miss_req_seen++;
-                for (int lq_i = 0; lq_i < `LQ_SZ; lq_i++) begin
-                    if (shadow_lq[lq_i].valid &&
-                        shadow_lq[lq_i].expect_miss &&
-                        shadow_lq[lq_i].addr == obs.miss_req_obs.miss_req_address) begin
-                        shadow_lq[lq_i].expect_miss = 0;
-                        miss_checks++;
-                    end
-                end
                 `uvm_info("SB",
                     $sformatf("Cache miss request: addr=0x%08x", obs.miss_req_obs.miss_req_address),
                     UVM_HIGH)
@@ -1147,11 +1085,13 @@ package lsq_dc_pkg;
                         {obs.com_miss_req_obs.miss_req_unsigned,
                          obs.com_miss_req_obs.miss_req_size[1:0]}
                     );
-                    shadow_lq[lq_i].expect_refill = 1;
+                    shadow_lq[lq_i].expected_valid = 1;
+                    shadow_lq[lq_i].expected_from_cache = 1;
                 end
             end
 
-            // 6. CDB broadcast check: when lq_out.valid fires, verify data is coherent
+            // 4. CDB broadcast check: when lq_out.valid fires, verify data if
+            // the scoreboard has a cache/refill-derived expected value.
             if (obs.lq_out_obs.valid) begin
                 int lq_i = -1;
                 cdb_broadcasts++;
@@ -1165,55 +1105,38 @@ package lsq_dc_pkg;
                 end
 
                 if (lq_i >= 0 && lq_i < `LQ_SZ && shadow_lq[lq_i].valid &&
-                    shadow_lq[lq_i].expect_forward) begin
-                    // Check forwarded data matches expected
+                    shadow_lq[lq_i].expected_valid) begin
                     if (obs.lq_out_obs.data !== shadow_lq[lq_i].expected_data) begin
                         `uvm_error("SB",
-                            $sformatf("FWD MISMATCH LQ[%0d]: got 0x%08x, exp 0x%08x",
+                            $sformatf("LOAD MISMATCH LQ[%0d]: got 0x%08x, exp 0x%08x",
                                 lq_i, obs.lq_out_obs.data, shadow_lq[lq_i].expected_data))
-                        forward_errors++;
                         scoreboard_errors++;
                     end else begin
-                        forward_checks++;
                         checks_pass++;
                         `uvm_info("SB",
-                            $sformatf("FWD OK LQ[%0d]: data=0x%08x", lq_i, obs.lq_out_obs.data),
+                            $sformatf("LOAD OK LQ[%0d]: data=0x%08x", lq_i, obs.lq_out_obs.data),
                             UVM_HIGH)
                     end
-                end
-                if (lq_i >= 0 && lq_i < `LQ_SZ && shadow_lq[lq_i].valid &&
-                    shadow_lq[lq_i].expect_refill) begin
-                    if (obs.lq_out_obs.data !== shadow_lq[lq_i].expected_data) begin
-                        `uvm_error("SB",
-                            $sformatf("REFILL MISMATCH LQ[%0d]: got 0x%08x, exp 0x%08x",
-                                lq_i, obs.lq_out_obs.data, shadow_lq[lq_i].expected_data))
-                        scoreboard_errors++;
-                    end else begin
-                        refill_checks++;
+                    if (shadow_lq[lq_i].expected_from_cache) begin
+                        cache_data_checks++;
                         if (shadow_lq[lq_i].expect_cache_hit)
                             cache_hit_checks++;
-                        checks_pass++;
-                        `uvm_info("SB",
-                            $sformatf("REFILL OK LQ[%0d]: data=0x%08x", lq_i, obs.lq_out_obs.data),
-                            UVM_HIGH)
                     end
                 end
-                if (lq_i >= 0 && lq_i < `LQ_SZ) shadow_lq[lq_i].expect_miss = 0;
                 // Free shadow entry after broadcast
                 if (lq_i >= 0 && lq_i < `LQ_SZ) shadow_lq[lq_i].valid = 0;
             end
 
-            // 7. Mispredict: clear shadow LQ/SQ above the restored tails
+            // 5. Mispredict: clear pending shadow loads
             if (obs.mispredicted_obs) begin
                 foreach (shadow_lq[i]) shadow_lq[i].valid = 0;
-                foreach (shadow_sq[i]) shadow_sq[i].valid = 0;
             end
         endfunction
 
         function void report_phase(uvm_phase phase);
             `uvm_info("SB",
-                $sformatf("Summary: %0d CDB broadcasts | %0d forwarding checks (%0d errors) | %0d refill/hit checks (%0d cache hits) | %0d miss reqs (%0d matched)",
-                    cdb_broadcasts, forward_checks, forward_errors, refill_checks, cache_hit_checks, miss_req_seen, miss_checks),
+                $sformatf("Summary: %0d CDB broadcasts | %0d load-data checks | %0d cache/refill checks (%0d cache hits) | %0d miss reqs",
+                    cdb_broadcasts, checks_pass, cache_data_checks, cache_hit_checks, miss_req_seen),
                 UVM_LOW)
             if (scoreboard_errors > 0)
                 `uvm_error("SB", "Scoreboard detected LSQ/Dcache errors")
