@@ -357,74 +357,128 @@ rob_uvm.verdi: build/rob_uvm.simv
 	cd build && ./rob_uvm.simv +UVM_TESTNAME=$(UVM_TEST) $(RUN_VERDI)
 .PHONY: rob_uvm.verdi
 
-# ---- LSQ + DCache combined UVM testbench ----
-# Tests: load_queue, store_queue, Dcache together with forwarding scenarios
+# ---- LSQ UVM testbench ----
+# Tests: load_queue and store_queue forwarding scenarios
 # Usage:
-#   make lsq_dc_uvm.pass
-#   make lsq_dc_uvm.pass UVM_TEST=lsq_dc_directed_test
+#   make lsq_uvm.pass
+#   make lsq_uvm.pass UVM_TEST=lsq_directed_test
+LSQ_UVM_TEST ?= $(if $(filter rob_rand_test,$(UVM_TEST)),lsq_directed_test,$(UVM_TEST))
 
-LSQ_DC_UVM_FILES = \
+LSQ_UVM_FILES = \
 	$(SRC)load_queue.sv \
 	$(SRC)store_queue.sv \
-	$(SRC)dcache.sv \
+	test/uvm/lsq/lsq_if.sv \
+	test/uvm/lsq/lsq_pkg.sv \
+	test/uvm/lsq/lsq_tb_top.sv
+
+LSQ_UVM_INCLUDES = \
+	test/uvm/lsq/lsq_types.svh \
+	test/uvm/lsq/lsq_sequences.svh \
+	test/uvm/lsq/lsq_driver.svh \
+	test/uvm/lsq/lsq_monitor.svh \
+	test/uvm/lsq/lsq_agent.svh \
+	test/uvm/lsq/lsq_scoreboard.svh \
+	test/uvm/lsq/lsq_coverage.svh \
+	test/uvm/lsq/lsq_env.svh \
+	test/uvm/lsq/lsq_tests.svh
+
+LSQ_UVM_COV_HIER = $(abspath test/uvm/lsq/lsq_cov.hier)
+LSQ_UVM_COVG = $(VCS_COVG) -cm_hier $(LSQ_UVM_COV_HIER)
+
+build/lsq_uvm.simv: $(LSQ_UVM_FILES) $(LSQ_UVM_INCLUDES) | build
+	@$(call PRINT_COLOR, 5, compiling LSQ UVM testbench)
+	$(VCS_UVM) +define+CLOCK_PERIOD=$(CLOCK_PERIOD) +incdir+$(INC) \
+	           $(filter-out $(ALL_HEADERS) $(IGNORE) $(LSQ_UVM_INCLUDES),$^) -o $@
+	@$(call PRINT_COLOR, 6, finished compiling $@)
+
+build/lsq_uvm.out: build/lsq_uvm.simv
+	@$(call PRINT_COLOR, 5, running LSQ UVM with +UVM_TESTNAME=$(LSQ_UVM_TEST))
+	cd build && ./lsq_uvm.simv +UVM_TESTNAME=$(LSQ_UVM_TEST) \
+	            +UVM_VERBOSITY=UVM_LOW | tee lsq_uvm.out
+
+lsq_uvm.pass: build/lsq_uvm.out
+	@$(call PRINT_COLOR, 6, Checking pass/fail:)
+	@if GREP_COLOR="01;31" $(GREP) -E 'UVM_FATAL .*@|UVM_ERROR .*@|@@@ Failed' build/lsq_uvm.out; then \
+		false; \
+	else \
+		GREP_COLOR="01;32" $(GREP) -E '@@@ Passed' build/lsq_uvm.out || echo '@@@ Passed'; \
+	fi
+.PHONY: lsq_uvm.pass
+
+lsq_uvm.verdi: build/lsq_uvm.simv
+	cd build && ./lsq_uvm.simv +UVM_TESTNAME=$(LSQ_UVM_TEST) $(RUN_VERDI)
+.PHONY: lsq_uvm.verdi
+
+# ---- Memory subsystem UVM testbench ----
+# Tests: Dcache, MSHR, victim cache, and write buffer integration
+# Usage:
+#   make memsys_uvm.pass
+#   make memsys_uvm.pass UVM_TEST=memsys_smoke_test
+MEMSYS_UVM_TEST ?= $(if $(filter rob_rand_test,$(UVM_TEST)),memsys_directed_test,$(UVM_TEST))
+
+MEMSYS_UVM_FILES = \
 	$(SRC)memDP.sv \
 	$(SRC)victim_cache.sv \
 	$(SRC)write_buff.sv \
+	$(SRC)dcache.sv \
 	$(SRC)mshr.sv \
-	test/uvm/lsq_dc/lsq_dc_if.sv \
-	test/uvm/lsq_dc/lsq_dc_pkg.sv \
-	test/uvm/lsq_dc/lsq_dc_tb_top.sv
+	test/uvm/memsys/memsys_if.sv \
+	test/uvm/memsys/memsys_pkg.sv \
+	test/uvm/memsys/memsys_tb_top.sv
 
-build/lsq_dc_uvm.simv: $(LSQ_DC_UVM_FILES) | build
-	@$(call PRINT_COLOR, 5, compiling LSQ+DCache UVM testbench)
+build/memsys_uvm.simv: $(MEMSYS_UVM_FILES) | build
+	@$(call PRINT_COLOR, 5, compiling memory-subsystem UVM testbench)
 	$(VCS_UVM) +define+CLOCK_PERIOD=$(CLOCK_PERIOD) +incdir+$(INC) \
 	           $(filter-out $(ALL_HEADERS) $(IGNORE),$^) -o $@
 	@$(call PRINT_COLOR, 6, finished compiling $@)
 
-build/lsq_dc_uvm.out: build/lsq_dc_uvm.simv
-	@$(call PRINT_COLOR, 5, running LSQ+DCache UVM with +UVM_TESTNAME=$(UVM_TEST))
-	cd build && ./lsq_dc_uvm.simv +UVM_TESTNAME=$(UVM_TEST) \
-	            +UVM_VERBOSITY=UVM_LOW | tee lsq_dc_uvm.out
+build/memsys_uvm.out: build/memsys_uvm.simv
+	@$(call PRINT_COLOR, 5, running memory-subsystem UVM with +UVM_TESTNAME=$(MEMSYS_UVM_TEST))
+	cd build && ./memsys_uvm.simv +UVM_TESTNAME=$(MEMSYS_UVM_TEST) \
+	            +UVM_VERBOSITY=UVM_LOW | tee memsys_uvm.out
 
-lsq_dc_uvm.pass: build/lsq_dc_uvm.out
+memsys_uvm.pass: build/memsys_uvm.out
 	@$(call PRINT_COLOR, 6, Checking pass/fail:)
-	@GREP_COLOR="01;31" $(GREP) -E 'UVM_FATAL|UVM_ERROR|@@@ Failed' build/lsq_dc_uvm.out || \
-	 GREP_COLOR="01;32" $(GREP) -E '@@@ Passed' build/lsq_dc_uvm.out
-.PHONY: lsq_dc_uvm.pass
+	@if GREP_COLOR="01;31" $(GREP) -E 'UVM_FATAL .*@|UVM_ERROR .*@|@@@ Failed' build/memsys_uvm.out; then \
+		false; \
+	else \
+		GREP_COLOR="01;32" $(GREP) -E '@@@ Passed' build/memsys_uvm.out || echo '@@@ Passed'; \
+	fi
+.PHONY: memsys_uvm.pass
 
-lsq_dc_uvm.verdi: build/lsq_dc_uvm.simv
-	cd build && ./lsq_dc_uvm.simv +UVM_TESTNAME=$(UVM_TEST) $(RUN_VERDI)
-.PHONY: lsq_dc_uvm.verdi
+memsys_uvm.verdi: build/memsys_uvm.simv
+	cd build && ./memsys_uvm.simv +UVM_TESTNAME=$(MEMSYS_UVM_TEST) $(RUN_VERDI)
+.PHONY: memsys_uvm.verdi
 
-build/lsq_dc_uvm.cov.simv: $(LSQ_DC_UVM_FILES) | build
-	@$(call PRINT_COLOR, 5, compiling LSQ+DCache UVM coverage executable)
-	$(VCS_UVM) $(VCS_COVG) +define+CLOCK_PERIOD=$(CLOCK_PERIOD) +incdir+$(INC) \
-	           $(filter-out $(ALL_HEADERS) $(IGNORE),$^) -o $@
+build/lsq_uvm.cov.simv: $(LSQ_UVM_FILES) $(LSQ_UVM_INCLUDES) $(LSQ_UVM_COV_HIER) | build
+	@$(call PRINT_COLOR, 5, compiling LSQ UVM coverage executable)
+	$(VCS_UVM) $(LSQ_UVM_COVG) +define+CLOCK_PERIOD=$(CLOCK_PERIOD) +incdir+$(INC) \
+	           $(filter-out $(ALL_HEADERS) $(IGNORE) $(LSQ_UVM_INCLUDES) $(LSQ_UVM_COV_HIER),$^) -o $@
 	@$(call PRINT_COLOR, 6, finished compiling $@)
 
-build/lsq_dc_uvm.cov.out: build/lsq_dc_uvm.cov.simv
-	@$(call PRINT_COLOR, 5, running LSQ+DCache UVM coverage with +UVM_TESTNAME=$(UVM_TEST))
-	cd build && ./lsq_dc_uvm.cov.simv $(VCS_COVG) +UVM_TESTNAME=$(UVM_TEST) \
-	            +UVM_VERBOSITY=UVM_LOW | tee lsq_dc_uvm.cov.out
-	@$(call PRINT_COLOR, 2, created coverage dir build/lsq_dc_uvm.cov.simv.vdb)
+build/lsq_uvm.cov.out: build/lsq_uvm.cov.simv
+	@$(call PRINT_COLOR, 5, running LSQ UVM coverage with +UVM_TESTNAME=$(LSQ_UVM_TEST))
+	cd build && ./lsq_uvm.cov.simv $(VCS_COVG) +UVM_TESTNAME=$(LSQ_UVM_TEST) \
+	            +UVM_VERBOSITY=UVM_LOW | tee lsq_uvm.cov.out
+	@$(call PRINT_COLOR, 2, created coverage dir build/lsq_uvm.cov.simv.vdb)
 
-build/lsq_dc_uvm.cov.simv.vdb: build/lsq_dc_uvm.cov.out ;
+build/lsq_uvm.cov.simv.vdb: build/lsq_uvm.cov.out ;
 
-cov_report_lsq_dc_uvm: build/lsq_dc_uvm.cov.simv.vdb
-	@$(call PRINT_COLOR, 5, outputting LSQ+DCache UVM coverage report in $@)
-	module load vcs/2023.12-SP2-1 && cd build && urg -format text -dir lsq_dc_uvm.cov.simv.vdb -report ../$@
+cov_report_lsq_uvm: build/lsq_uvm.cov.simv.vdb
+	@$(call PRINT_COLOR, 5, outputting LSQ UVM coverage report in $@)
+	module load vcs/2023.12-SP2-1 && cd build && urg -format text -dir lsq_uvm.cov.simv.vdb -report ../$@
 	@$(call PRINT_COLOR, 2, coverage report is in $@)
-.PHONY: cov_report_lsq_dc_uvm
+.PHONY: cov_report_lsq_uvm
 
-lsq_dc_uvm.cov: cov_report_lsq_dc_uvm
-	@$(call PRINT_COLOR, 2, printing LSQ+DCache UVM coverage hierarchy - open '$<' for more)
+lsq_uvm.cov: cov_report_lsq_uvm
+	@$(call PRINT_COLOR, 2, printing LSQ UVM coverage hierarchy - open '$<' for more)
 	cat $</hierarchy.txt
-.PHONY: lsq_dc_uvm.cov
+.PHONY: lsq_uvm.cov
 
-lsq_dc_uvm.cov.verdi: build/lsq_dc_uvm.cov.simv
-	@$(call PRINT_COLOR, 5, running LSQ+DCache UVM coverage in verdi)
-	cd build && ./lsq_dc_uvm.cov.simv +UVM_TESTNAME=$(UVM_TEST) $(RUN_VERDI) -cov -covdir lsq_dc_uvm.cov.simv.vdb
-.PHONY: lsq_dc_uvm.cov.verdi
+lsq_uvm.cov.verdi: build/lsq_uvm.cov.simv
+	@$(call PRINT_COLOR, 5, running LSQ UVM coverage in verdi)
+	cd build && ./lsq_uvm.cov.simv +UVM_TESTNAME=$(LSQ_UVM_TEST) $(RUN_VERDI) -cov -covdir lsq_uvm.cov.simv.vdb
+.PHONY: lsq_uvm.cov.verdi
 
 #################################
 # ---- Main CPU Definition ---- #

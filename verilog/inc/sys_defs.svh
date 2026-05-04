@@ -122,8 +122,8 @@ typedef union packed {
 } MEM_BLOCK;
 
 //`define FWD_NONE   // store to load fwd type
-`define FWD_WORD   // 
-//`define FWD_BYTE   
+//`define FWD_WORD   // 
+`define FWD_BYTE   
 
 typedef enum logic [1:0] {
     BYTE   = 2'h0,
